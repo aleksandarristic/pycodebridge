@@ -76,7 +76,7 @@
 - Pytest suite mirroring Go tests: config/path/state/audit/router/queue/codex.
 - Add small integration tests with fake codex output.
 
-14) TODO - Docs
+14) DONE - Docs
 - README with setup, config reference, commands, DM admin notes.
 - DISCORD.md with bot intents and invite setup.
 
@@ -94,4 +94,4 @@
 - 2026-01-29: Repo initialized and .venv created (Python 3.14.2).
 - 2026-01-29: Scaffolded Python package, config loader, util modules, state/audit/logging, and async codex runner skeleton.
 - 2026-01-29: Added pending task notes for remaining porting work.
-
+- 2026-01-29: Added DISCORD.md and refreshed README/AGENTS for the Python port.
