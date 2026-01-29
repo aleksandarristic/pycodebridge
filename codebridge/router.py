@@ -1,5 +1,6 @@
+import asyncio
 import re
-from typing import Optional
+from typing import Callable, Dict, Optional
 
 import discord
 
@@ -22,6 +23,7 @@ class Router:
         self.runner = runner
         self.queue = queue
         self.logger = logger
+        self._pins: Dict[str, int] = {}
 
     async def handle_message(self, client: discord.Client, message: discord.Message) -> None:
         if message.author.bot:
@@ -96,3 +98,49 @@ class Router:
             return user_id in self.cfg.discord.dm_admin_user_ids
         return user_id in self.cfg.discord.allowed_user_ids
 
+    def start_typing(self, channel: discord.abc.Messageable) -> Callable[[], None]:
+        if not hasattr(channel, "trigger_typing"):
+            return lambda: None
+        stop = asyncio.Event()
+
+        async def _loop() -> None:
+            while not stop.is_set():
+                try:
+                    await channel.trigger_typing()
+                except Exception:
+                    pass
+                try:
+                    await asyncio.wait_for(stop.wait(), timeout=8.0)
+                except asyncio.TimeoutError:
+                    continue
+
+        task = asyncio.create_task(_loop())
+
+        def _stop() -> None:
+            if not stop.is_set():
+                stop.set()
+            task.cancel()
+
+        return _stop
+
+    async def update_pinned_status(self, channel: discord.abc.Messageable, user_id: str, session: str) -> None:
+        if not isinstance(channel, discord.TextChannel):
+            return
+        text = f"User {user_id} current session: {session or 'default'}"
+        msg_id = self._pins.get(str(channel.id))
+        if msg_id:
+            try:
+                msg = await channel.fetch_message(msg_id)
+                await msg.edit(content=text)
+                return
+            except Exception:
+                self._pins.pop(str(channel.id), None)
+        try:
+            msg = await channel.send(text)
+        except Exception:
+            return
+        try:
+            await msg.pin()
+        except Exception:
+            pass
+        self._pins[str(channel.id)] = msg.id

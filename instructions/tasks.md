@@ -49,11 +49,11 @@
 - `ps`, `cancel`, `rerun` with job IDs.
 - Track active job + queued positions.
 
-9) IN PROGRESS - Discord bot wiring
+9) DONE - Discord bot wiring
 - discord.py client with required intents.
 - Message handler for channels and DMs.
 - Typing indicator keepalive while running.
-- PENDING: typing indicator keepalive task and status message management.
+- Typing indicator keepalive task and status message management.
 
 10) TODO - Command routing
 - Implement all commands from spec (start/resume/choose/stop/kill/quit/etc.).
@@ -101,3 +101,4 @@
 - 2026-01-29: Added DISCORD.md and refreshed README/AGENTS for the Python port.
 - 2026-01-29: Added requirements.txt / requirements-dev.txt with pinned versions.
 - 2026-01-29: Completed codex runner stderr streaming and exit status handling.
+- 2026-01-29: Added typing keepalive and pinned status helpers for Discord wiring.
