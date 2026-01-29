@@ -211,6 +211,11 @@
 - Store DM bound repo per user/channel and prefix DM responses with `[repo]`.
 - Add tests for binding, unbinding, repo override, and collision handling.
 
+42) TODO - Repo file upload/download support
+- Support uploading files into repos and downloading files from repos via adapters.
+- Define security constraints (path containment, size limits, allowed extensions) and audit logging.
+- Add command UX (e.g., `!c upload`, `!c download`) and adapter-specific handling.
+
 
 ---
 
