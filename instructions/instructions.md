@@ -69,6 +69,8 @@ pycodebridge/
     ...
 ```
 
+Architecture diagram (Mermaid): `docs/architecture.mmd`.
+
 ---
 
 ## Mapping model

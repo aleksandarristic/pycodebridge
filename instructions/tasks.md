@@ -136,7 +136,7 @@
 - Keep existing behavior and typing indicators intact under the adapter.
 - Add a config option/flag for selecting adapters (Discord only for now).
 
-27) TODO - Architecture diagram (Mermaid)
+27) DONE - Architecture diagram (Mermaid)
 - Create a Mermaid diagram describing core modules, adapters, and data flow.
 - Store it in `docs/architecture.mmd` (or similar) and reference from README.
 
@@ -164,3 +164,4 @@
 - 2026-01-29: Introduced a command registry with generated help text and registry tests.
 - 2026-01-29: Added transport-agnostic MessageEvent/ResponseSink contracts with Router refactor and transport tests.
 - 2026-01-29: Added Discord adapter + transport config for MessageEvent/ResponseSink routing.
+- 2026-01-29: Added Mermaid architecture diagram and doc references.

@@ -17,6 +17,7 @@
 ## Files to consult
 - `instructions/instructions.md` — full Python implementation spec.
 - `instructions/tasks.md` — task list and progress log (mark tasks with `- DONE`).
+- `docs/architecture.mmd` — mermaid architecture diagram.
 - `/home/leka/Code/codebridge/AGENTS.md` and `/home/leka/Code/codebridge/instructions` — Go reference for intended behavior.
 - `.codex/skills/README.md` and skill `SKILL.md` files — use when tasks match their descriptions.
 

@@ -1,0 +1,14 @@
+flowchart LR
+  subgraph Transport
+    Discord[Discord] --> Adapter[Discord adapter]
+    Adapter -->|MessageEvent| Router[Router]
+    Router -->|ResponseSink| Adapter
+  end
+
+  Router --> Queue[Queue Manager]
+  Router --> State[State Store]
+  Router --> Audit[Audit Logger]
+  Router --> CodexRunner[Codex Runner]
+  Router --> RepoFS[Repo filesystem]
+  CodexRunner --> CodexCLI[Codex CLI]
+  Config[config.yaml] --> Router

@@ -124,3 +124,4 @@ Enable with `discord.dm_admin_enabled: true`. Commands require the same `!c` pre
 - Full behavior/spec: `instructions/instructions.md`
 - Task log/plan: `instructions/tasks.md`
 - Intent summary for agents: `AGENTS.md`
+- Architecture diagram (Mermaid): `docs/architecture.mmd`
