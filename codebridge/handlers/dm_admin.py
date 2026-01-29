@@ -276,6 +276,21 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
     content = (event.content or "").strip()
     prefix = router._transport_prefix(event)
     if not content.startswith(prefix):
+        if not router._transport_user_allowed(event):
+            await sink.send(forbidden_message("You are not allowed to use this bot."))
+            return
+        bound_repo = router.get_dm_binding(event)
+        if not bound_repo:
+            await sink.send("No repo bound. Send `!c repos` to list and then `!c bind <repo>` to bind a repo. Send `!c help` for instructions.")
+            return
+        try:
+            repo_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, bound_repo)
+        except Exception as exc:
+            await sink.send(forbidden_message(f"Repo error: {exc}"))
+            return
+        session = router.current_session_for_user(event.author_id, event.channel_id)
+        prefixed_sink = _PrefixedSink(sink, bound_repo)
+        await router.handle_resume(event, prefixed_sink, bound_repo, repo_path, session, content)
         return
     cmdline = content[len(prefix) :].strip()
     if not cmdline:

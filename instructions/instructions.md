@@ -288,6 +288,7 @@ Follow behavior described in the Go spec (ported):
 - repo bootstrap `createrepo`, `clonerepo`, `copyrepo`, `spec`
 - DM admin commands (optional, gated by config) for repo management
 - DM repo binding commands in DMs: `bind`, `use`, `repo`, `unbind`, `status`
+- In DMs with a bound repo, messages without the `!c` prefix are treated as prompts.
 
 All invalid/forbidden actions should respond:
 

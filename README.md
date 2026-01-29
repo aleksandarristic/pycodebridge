@@ -127,6 +127,8 @@ Enable with `discord.dm_admin_enabled: true`. Commands require the same `!c` pre
 - `!c deleterepo <name>` (alias: `delete`)
 - `!c renamerepo <from> <to>` (alias: `rename`)
 
+When a repo is bound in DMs, any message without `!c` is treated as a prompt.
+
 ## Troubleshooting
 - No response: confirm Message Content intent is enabled and saved, and your user ID is allowlisted.
 - Repo error: ensure channel name matches `codex-<repo>` and `<code_root>/<repo>/.git` exists.
