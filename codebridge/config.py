@@ -22,7 +22,7 @@ DEFAULT_MAX_UPLOAD_MB = 200
 
 DEFAULT_START_PROMPT = (
     "Hello. This is a Discord-bridged Codex session for repo: {{REPO_NAME}}.\n"
-    "Operate inside this repo directory. Stream outputs plainly."
+    "Operate inside this repo directory. Stream outputs plainly. Be concise in your responses.\n"
 )
 
 DEFAULT_SPEC_PROMPT = (
@@ -31,6 +31,7 @@ DEFAULT_SPEC_PROMPT = (
     "Then create instructions/tasks.md with a numbered task list and a progress log section, "
     "following the pattern used in this repo.\n"
     "After writing the files, summarize what you produced."
+    "Be concise in your responses.\n"
 )
 
 

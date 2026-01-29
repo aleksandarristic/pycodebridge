@@ -254,13 +254,16 @@
   - Replace direct audit calls in Router with helper usage.
   - Add tests to ensure audit entries are still written correctly.
 
-59) TODO - Model selection and reporting (issue plan)
+59) DONE - Model selection and reporting (issue plan)
 - Owner: TBD
 - Subtasks:
-  - Add a command to show the current model in use for a session.
-  - Add a command to list available models from config and select one.
-  - Persist model choice per session and reflect it in status output.
-  - Add tests for model listing/selection and persistence.
+  - Always report the effective model for a session when starting/resuming (and include it in any "started/resumed" acknowledgement messages).
+  - Ensure model is included in status outputs (including per-session listings/pinned status where applicable).
+  - Support changing the model per session via `!c model [session] <model-id>`.
+  - If a job is currently running in the channel, `!c model ...` must be queued (not executed immediately) and take effect for subsequent runs.
+  - Provide a way to list available models (from config) and show which model is currently effective for each session.
+  - Provide a way to list available models by parsing output of the Codex `/models` command (and present them in a chat-friendly list).
+  - Persist model choice per session and cover the behavior with unit tests (status text + start/resume reporting + queued model changes).
 
 60) TODO - Clarify adapter contract usage (issue plan)
 - Owner: TBD
@@ -365,3 +368,4 @@
 - 2026-01-29: Added adapter contract fixtures and golden payload tests.
 - 2026-01-29: Introduced SessionCoordinator and added transition tests.
 - 2026-01-29: Added adapter integration harness tests for end-to-end flows.
+- 2026-01-29: Implemented session model reporting, queued `!c model` changes, and `!c models` via parsing Codex `/models` output.

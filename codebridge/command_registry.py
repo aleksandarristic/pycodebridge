@@ -6,7 +6,15 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Sequence, Tuple
 
 from .command_parse import parse_choose, parse_session_and_id, parse_session_and_prompt, parse_session_or_limit
-from .router_helpers import MAX_SESSIONS_PER_CHANNEL, count_active_sessions, normalize_session, session_exists
+from .model_parse import parse_models_from_lines
+from .router_helpers import (
+    DEFAULT_SESSION,
+    MAX_SESSIONS_PER_CHANNEL,
+    count_active_sessions,
+    existing_thread,
+    normalize_session,
+    session_exists,
+)
 from .transport import MessageEvent, ResponseSink
 from .util import path as pathutil
 
@@ -52,6 +60,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         ),
         CommandSpec("use", "use/select <session>", "set your sticky session", "Sessions", _cmd_use, aliases=("select",)),
         CommandSpec("model", "model [session] <id>", "set session model", "Sessions", _cmd_model),
+        CommandSpec("models", "models [session]", "list available models via /models", "Sessions", _cmd_models),
         CommandSpec("thread", "thread [session] <id>", "set thread id", "Sessions", _cmd_thread),
         CommandSpec("spec", "spec [session]", "capture repo spec and tasks", "Repo bootstrap", _cmd_spec),
         CommandSpec("createrepo", "createrepo", "create repo in code_root and git init", "Repo bootstrap", _cmd_createrepo),
@@ -249,8 +258,73 @@ async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, rep
             f"Session limit reached ({MAX_SESSIONS_PER_CHANNEL}). Stop or reuse an existing session.",
         )
         return
-    router.set_session_model(message.channel_id, session_name, repo_name, repo_path, model)
-    await router.reply(sink, f"Model for session '{session_name}' set to {model}")
+
+    async def apply_model() -> None:
+        router.set_session_model(message.channel_id, session_name, repo_name, repo_path, model)
+        await router.reply(sink, f"Model for session '{session_name}' set to {model}")
+        await router.update_pinned_status(sink, message.author_id, session_name)
+
+    if await router.has_active(message.channel_id):
+
+        async def job() -> None:
+            await apply_model()
+
+        pos, job_id, _ = await router.coordinator.enqueue(message.channel_id, session_name, job)
+        await router.reply(sink, f"Queued model change for session '{session_name}' to {model} as {job_id} (pos {pos}).")
+        return
+
+    await apply_model()
+
+
+async def _cmd_models(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    parts = rest.split()
+    session_name = router.current_session_for_user(message.author_id, message.channel_id) or DEFAULT_SESSION
+    if parts:
+        session_name = parts[0]
+    try:
+        session_name = normalize_session(session_name)
+    except ValueError as exc:
+        await router.reply_forbidden(sink, str(exc))
+        return
+
+    channel_id = message.channel_id
+    state = router.state.load()
+    if not session_exists(state, channel_id, session_name) and count_active_sessions(state, channel_id) >= MAX_SESSIONS_PER_CHANNEL:
+        await router.reply_forbidden(
+            sink,
+            f"Session limit reached ({MAX_SESSIONS_PER_CHANNEL}). Stop or reuse an existing session.",
+        )
+        return
+
+    model = router.session_model(channel_id, session_name)
+    prompt = "/models"
+    thread_id = existing_thread(state, channel_id, session_name)
+    if thread_id:
+        args = router.runner.build_resume_args(repo_path, thread_id, prompt, model)
+    else:
+        # If the session exists but thread id is missing, prefer resume --last to avoid creating a new session.
+        if session_exists(state, channel_id, session_name):
+            args = router.runner.build_resume_last_args(repo_path, prompt, model)
+        else:
+            args = router.runner.build_start_args(repo_path, prompt, model)
+
+    collected: list[str] = []
+
+    async def on_output(text: str) -> None:
+        collected.append(text)
+
+    async def job() -> None:
+        await router.run_codex(message, sink, repo_name, repo_path, session_name, model, args, on_output=on_output)
+        models = parse_models_from_lines(collected)
+        if not models:
+            await router.reply_forbidden(sink, "No models parsed from /models output.")
+            return
+        lines = [f"Available models ({len(models)}):"] + [f"- {m}" for m in models]
+        await router.reply(sink, "\n".join(lines))
+
+    pos, job_id, _ = await router.coordinator.enqueue(channel_id, session_name, job)
+    model_info = f"model {model}" if model else "default model"
+    await router.reply(sink, f"Queued /models for session '{session_name}' ({model_info}) as {job_id} (pos {pos}).")
 
 
 async def _cmd_thread(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

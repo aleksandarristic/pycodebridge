@@ -426,6 +426,7 @@ class Router:
         session: str,
         model: str,
         args: list[str],
+        on_output=None,
     ) -> None:
         """Run Codex with streaming callbacks and audit logging."""
         channel_id = event.channel_id
@@ -447,6 +448,7 @@ class Router:
                         env=self.cfg.codex.env,
                         on_jsonl=lambda line: self.on_jsonl(sink, channel_id, session, entry, line),
                         on_thread=lambda tid: self.on_thread(channel_id, session, repo_name, repo_path, model, entry, tid),
+                        on_output=on_output,
                         on_stderr=lambda line: self.append_audit_stderr(entry, line),
                         on_exit=lambda err, rc: self.on_exit(channel_id, session, repo_name, err, rc),
                     )
@@ -589,7 +591,10 @@ class Router:
 
     async def update_pinned_status(self, sink: ResponseSink, user_id: str, session: str) -> None:
         """Update or pin the current session status message."""
-        text = f"User {user_id} current session: {session or DEFAULT_SESSION}"
+        sess = session or DEFAULT_SESSION
+        model = self.session_model(sink.channel_id, sess)
+        model_info = f" model {model}" if model else ""
+        text = f"User {user_id} current session: {sess}{model_info}"
         await sink.update_pinned_status(user_id, session, text)
 
     def _contextual_sink(self, event: MessageEvent, sink: ResponseSink) -> ResponseSink:

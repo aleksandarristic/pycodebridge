@@ -66,6 +66,8 @@ async def handle_start(
         await router.run_codex(event, sink, repo_name, repo_path, session, model, args)
 
     pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, job)
+    model_info = f"model {model}" if model else "default model"
+    await router.reply(sink, f"Queued start for session '{session}' ({model_info}) as {job_id} (pos {pos}).")
     router.logger.info("enqueue.start", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
 
 
@@ -93,6 +95,8 @@ async def handle_resume(
         await router.run_codex(event, sink, repo_name, repo_path, session, model, args)
 
     pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, job)
+    model_info = f"model {model}" if model else "default model"
+    await router.reply(sink, f"Queued resume for session '{session}' ({model_info}) as {job_id} (pos {pos}).")
     router.logger.info("enqueue.resume", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
 
 

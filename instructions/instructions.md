@@ -174,7 +174,7 @@ codex:
   json: true
   start_prompt: |
     Hello. This is a Discord-bridged Codex session for repo: {{REPO_NAME}}.
-    Operate inside this repo directory. Stream outputs plainly.
+    Operate inside this repo directory. Stream outputs plainly. Be concise in your responses.
   model: ""  # legacy single-model override (prefer models/default_model)
   models: []
   default_model: ""
