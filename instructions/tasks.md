@@ -111,7 +111,7 @@
 - Keep docstrings concise and behavior-focused; avoid altering logic.
 - Run tests to confirm no regressions.
 
-22) TODO - Router refactor (1-2 day wins)
+22) DONE - Router refactor (1-2 day wins)
 - Split `codebridge/router.py` into handler modules (core, DM admin, repo helpers, git helpers).
 - Extract shared helper functions into a `router_helpers.py`.
 - Add unit tests for handler entry points where feasible.
@@ -136,6 +136,10 @@
 - Keep existing behavior and typing indicators intact under the adapter.
 - Add a config option/flag for selecting adapters (Discord only for now).
 
+27) TODO - Architecture diagram (Mermaid)
+- Create a Mermaid diagram describing core modules, adapters, and data flow.
+- Store it in `docs/architecture.mmd` (or similar) and reference from README.
+
 ---
 
 ## progress.log
@@ -155,3 +159,4 @@
 - 2026-01-29: Added clean shutdown handling for Ctrl-C to avoid tracebacks.
 - 2026-01-29: Switched to a typing context for reliable Discord typing indicators.
 - 2026-01-29: Added PEP8 docstrings across Python modules.
+- 2026-01-29: Split router handlers and helpers into dedicated modules.

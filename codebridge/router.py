@@ -2,13 +2,10 @@
 
 import asyncio
 import os
-import re
-import shlex
 import time
-from dataclasses import dataclass
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional
 
 import discord
 
@@ -20,41 +17,34 @@ from .state import Store, utc_now_iso
 from .util import path as pathutil
 from .command_parse import (
     parse_choose,
-    parse_log_count,
     parse_session_and_id,
     parse_session_and_prompt,
     parse_session_or_limit,
 )
+from .handlers import core as core_handlers
+from .handlers import dm_admin as dm_admin_handlers
+from .handlers import git_helpers as git_handlers
+from .handlers import repo_helpers as repo_handlers
 from .util.ansi import strip_control_codes
 from .util.chunk import chunk_text
 from .util.prompt import needs_user_input
-
-FORBIDDEN_PREFIX = "I'm sorry, Dave. I'm afraid I can't do that."
-DEFAULT_SESSION = "default"
-MAX_SESSIONS_PER_CHANNEL = 3
-SESSION_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
-
-HELPER_TIMEOUT = 30.0
-TESTS_TIMEOUT = 120.0
-HELPER_OUTPUT_LIMIT = 128 * 1024
-
-
-@dataclass
-class PendingConflict:
-    """Pending conflict for start vs existing session."""
-    repo_name: str
-    session: str
-    thread_id: str
-    user_id: str
-    expires_at: float
+from .router_helpers import (
+    DEFAULT_SESSION,
+    FORBIDDEN_PREFIX,
+    MAX_SESSIONS_PER_CHANNEL,
+    PendingConflict,
+    UsageStats,
+    count_active_sessions,
+    existing_thread,
+    forbidden_message,
+    normalize_session,
+    pending_key,
+    session_exists,
+    set_sticky,
+    usage_from_event,
+)
 
 
-@dataclass
-class UsageStats:
-    """Token usage counters per session."""
-    input_tokens: int = 0
-    output_tokens: int = 0
-    total_tokens: int = 0
 
 
 class Router:
@@ -88,7 +78,7 @@ class Router:
             if not self._dm_admin_allowed(str(message.author.id)):
                 await self.reply_forbidden(channel, "You are not allowed to use DM admin commands.")
                 return
-            await self.handle_dm_message(message)
+            await dm_admin_handlers.handle_dm_message(self, message)
             return
 
         if self.cfg.discord.guild_id and str(message.guild.id) != self.cfg.discord.guild_id:
@@ -384,196 +374,23 @@ class Router:
 
     async def handle_dm_message(self, message: discord.Message) -> None:
         """Handle an incoming DM admin message."""
-        content = (message.content or "").strip()
-        if not content.startswith(self.cfg.discord.prefix or "!c"):
-            return
-        cmdline = content[len(self.cfg.discord.prefix or "!c") :].strip()
-        if not cmdline:
-            return
-        fields = cmdline.split()
-        cmd = fields[0].lower()
-        rest = cmdline[len(fields[0]) :].strip()
-
-        entry = self.dm_audit_start(message, cmd, rest)
-
-        async def send(text: str) -> None:
-            await self.dm_reply(message.channel, entry, text)
-
-        async def send_forbidden(detail: str) -> None:
-            await self.dm_reply(message.channel, entry, forbidden_message(detail))
-
-        if cmd == "help":
-            await send(self.dm_help_text())
-            return
-        if cmd == "repos":
-            msg = await self.dm_list_repos()
-            await send(msg)
-            return
-        if cmd == "sessions":
-            msg = await self.dm_list_sessions()
-            await send(msg)
-            return
-        if cmd == "status":
-            await send(await self.dm_status())
-            return
-        if cmd == "config":
-            await send(self.config_text())
-            return
-        if cmd == "createrepo":
-            name = rest.strip()
-            if not name:
-                await send_forbidden("Usage: !c createrepo <name>")
-                return
-            err = await self.dm_create_repo(message, name, entry)
-            if err:
-                await send_forbidden(str(err))
-            return
-        if cmd == "clonerepo":
-            parts = rest.split(maxsplit=1)
-            if len(parts) < 2:
-                await send_forbidden("Usage: !c clonerepo <name> <url>")
-                return
-            err = await self.dm_clone_repo(message, parts[0], parts[1], entry)
-            if err:
-                await send_forbidden(str(err))
-            return
-        if cmd == "copyrepo":
-            parts = rest.split(maxsplit=1)
-            if len(parts) < 2:
-                await send_forbidden("Usage: !c copyrepo <from> <to>")
-                return
-            err = await self.dm_copy_repo(message, parts[0], parts[1], entry)
-            if err:
-                await send_forbidden(str(err))
-            return
-        if cmd in {"deleterepo", "delete"}:
-            name = rest.strip()
-            if not name:
-                await send_forbidden("Usage: !c deleterepo <name>")
-                return
-            err = await self.dm_delete_repo(message, name, entry)
-            if err:
-                await send_forbidden(str(err))
-            return
-        if cmd in {"renamerepo", "rename"}:
-            parts = rest.split(maxsplit=1)
-            if len(parts) < 2:
-                await send_forbidden("Usage: !c renamerepo <from> <to>")
-                return
-            err = await self.dm_rename_repo(message, parts[0], parts[1], entry)
-            if err:
-                await send_forbidden(str(err))
-            return
-
-        await send_forbidden("Unknown DM command. Try !c help.")
+        await dm_admin_handlers.handle_dm_message(self, message)
 
     async def handle_start(self, message: discord.Message, repo_name: str, repo_path: str, session: str) -> None:
         """Start a new Codex session for a channel/session."""
-        channel_id = str(message.channel.id)
-        session = normalize_session(session)
-        state = self.state.load()
-        if count_active_sessions(state, channel_id) >= MAX_SESSIONS_PER_CHANNEL:
-            if not session_exists(state, channel_id, session):
-                await self.reply_forbidden(message.channel, f"Session limit reached ({MAX_SESSIONS_PER_CHANNEL}). Stop or reuse an existing session.")
-                return
-        thread_id = existing_thread(state, channel_id, session)
-        if thread_id:
-            async with self._lock:
-                key = pending_key(channel_id, session)
-                self._pending[key] = PendingConflict(
-                    repo_name=repo_name,
-                    session=session,
-                    thread_id=thread_id,
-                    user_id=str(message.author.id),
-                    expires_at=time.time() + self.cfg.state.conflict_ttl_seconds,
-                )
-            await self.reply(message.channel, f"Session '{session}' already exists for this channel.\nChoose one:\n!c choose resume\n!c choose replace\n!c choose cancel")
-            return
-
-        model = self.session_model(channel_id, session)
-        args = self.runner.build_start_args(repo_path, self.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name), model)
-
-        async def job() -> None:
-            await self.run_codex(message, repo_name, repo_path, session, model, args)
-
-        pos, job_id, _ = await self.queue.enqueue(channel_id, session, job)
-        self.logger.info("enqueue.start", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
+        await core_handlers.handle_start(self, message, repo_name, repo_path, session)
 
     async def handle_resume(self, message: discord.Message, repo_name: str, repo_path: str, session: str, prompt: str) -> None:
         """Resume a Codex session with a prompt."""
-        channel_id = str(message.channel.id)
-        session = normalize_session(session)
-        state = self.state.load()
-        thread_id = existing_thread(state, channel_id, session)
-        model = self.session_model(channel_id, session)
-        if thread_id:
-            args = self.runner.build_resume_args(repo_path, thread_id, prompt, model)
-        else:
-            args = self.runner.build_resume_last_args(repo_path, prompt, model)
-
-        async def job() -> None:
-            await self.run_codex(message, repo_name, repo_path, session, model, args)
-
-        pos, job_id, _ = await self.queue.enqueue(channel_id, session, job)
-        self.logger.info("enqueue.resume", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
+        await core_handlers.handle_resume(self, message, repo_name, repo_path, session, prompt)
 
     async def handle_create_repo(self, message: discord.Message, repo_name: str, repo_path: str) -> None:
         """Create a new repo directory and git init."""
-        channel_id = str(message.channel.id)
-        if os.path.isdir(repo_path):
-            if os.path.isdir(os.path.join(repo_path, ".git")):
-                await self.reply_forbidden(message.channel, "Repo already exists; use !c start.")
-                self.logger.warning("createrepo.exists", extra={"channel_id": channel_id, "repo": repo_name, "path": repo_path})
-                return
-            await self.reply_forbidden(message.channel, "Directory already exists and is not a git repo.")
-            self.logger.warning("createrepo.exists_non_git", extra={"channel_id": channel_id, "repo": repo_name, "path": repo_path})
-            return
-        try:
-            os.makedirs(repo_path, exist_ok=False)
-        except Exception as exc:
-            await self.reply_forbidden(message.channel, f"Create repo dir: {exc}")
-            self.logger.error("createrepo.mkdir_failed", extra={"channel_id": channel_id, "repo": repo_name, "error": str(exc)})
-            return
-        _, err = await run_limited_command(repo_path, ["git", "init"])
-        if err:
-            await self.reply_forbidden(message.channel, f"git init failed: {err}")
-            self.logger.error("createrepo.git_init_failed", extra={"channel_id": channel_id, "repo": repo_name, "error": str(err)})
-            return
-        try:
-            self.seed_agents_template(repo_path)
-        except Exception as exc:
-            await self.reply_forbidden(message.channel, str(exc))
-            self.logger.error("createrepo.agents_failed", extra={"channel_id": channel_id, "repo": repo_name, "error": str(exc)})
-            return
-        await self.reply(message.channel, f"Created repo at {repo_path}")
-        self.logger.info("createrepo.ok", extra={"channel_id": channel_id, "repo": repo_name, "path": repo_path})
-
-        session_name = self.current_session_for_user(str(message.author.id), channel_id)
-        try:
-            session_name = normalize_session(session_name)
-        except ValueError as exc:
-            await self.reply_forbidden(message.channel, str(exc))
-            return
-        await self.handle_start(message, repo_name, repo_path, session_name)
+        await core_handlers.handle_create_repo(self, message, repo_name, repo_path)
 
     async def handle_clone_repo(self, message: discord.Message, repo_name: str, repo_path: str, raw_url: str) -> None:
         """Clone a GitHub repo into code_root for the channel name."""
-        channel_id = str(message.channel.id)
-        if os.path.exists(repo_path):
-            await self.reply_forbidden(message.channel, "Repo directory already exists.")
-            return
-        try:
-            clone_url = parse_github_clone_url(raw_url)
-        except ValueError as exc:
-            await self.reply_forbidden(message.channel, str(exc))
-            return
-        _, err = await run_limited_command(os.path.dirname(repo_path), ["git", "clone", clone_url, repo_path], timeout=HELPER_TIMEOUT * 2)
-        if err:
-            await self.reply_forbidden(message.channel, f"git clone failed: {err}")
-            self.logger.error("clonerepo.failed", extra={"channel_id": channel_id, "repo": repo_name, "url": clone_url, "error": str(err)})
-            return
-        await self.reply(message.channel, f"Cloned {clone_url} into {repo_path}")
-        self.logger.info("clonerepo.ok", extra={"channel_id": channel_id, "repo": repo_name, "url": clone_url, "path": repo_path})
+        await core_handlers.handle_clone_repo(self, message, repo_name, repo_path, raw_url)
 
     async def handle_copy_repo(
         self,
@@ -584,205 +401,43 @@ class Router:
         target_path: str,
     ) -> None:
         """Copy an existing repo into a new directory without .git."""
-        channel_id = str(message.channel.id)
-        if os.path.exists(target_path):
-            await self.reply_forbidden(message.channel, "Target repo directory already exists.")
-            return
-        try:
-            copy_dir_excluding_git(repo_path, target_path)
-        except Exception as exc:
-            await self.reply_forbidden(message.channel, f"Copy repo failed: {exc}")
-            self.logger.error("copyrepo.failed", extra={"channel_id": channel_id, "repo": repo_name, "target": target_path, "error": str(exc)})
-            return
-        _, err = await run_limited_command(target_path, ["git", "init"])
-        if err:
-            await self.reply_forbidden(message.channel, f"git init failed: {err}")
-            self.logger.error("copyrepo.git_init_failed", extra={"channel_id": channel_id, "repo": repo_name, "target": target_path, "error": str(err)})
-            return
-        await self.reply(message.channel, f"Copied repo to {target_path}. Continue in #codex-{new_name}")
-        self.logger.info("copyrepo.ok", extra={"channel_id": channel_id, "repo": repo_name, "target": target_path})
+        await core_handlers.handle_copy_repo(self, message, repo_name, repo_path, new_name, target_path)
 
     async def handle_spec(self, message: discord.Message, repo_name: str, repo_path: str, session: str) -> None:
         """Run the spec capture flow via Codex."""
-        channel_id = str(message.channel.id)
-        session = normalize_session(session)
-        try:
-            os.makedirs(os.path.join(repo_path, "instructions"), exist_ok=True)
-        except Exception as exc:
-            await self.reply_forbidden(message.channel, f"Create instructions dir: {exc}")
-            return
-        state = self.state.load()
-        if count_active_sessions(state, channel_id) >= MAX_SESSIONS_PER_CHANNEL and not session_exists(state, channel_id, session):
-            await self.reply_forbidden(message.channel, f"Session limit reached ({MAX_SESSIONS_PER_CHANNEL}). Stop or reuse an existing session.")
-            return
-        thread_id = existing_thread(state, channel_id, session)
-        model = self.session_model(channel_id, session)
-        prompt = self.spec_prompt(repo_name)
-        if thread_id:
-            args = self.runner.build_resume_args(repo_path, thread_id, prompt, model)
-        else:
-            args = self.runner.build_start_args(repo_path, prompt, model)
-
-        async def job() -> None:
-            await self.run_codex(message, repo_name, repo_path, session, model, args)
-
-        pos, job_id, _ = await self.queue.enqueue(channel_id, session, job)
-        self.logger.info("enqueue.spec", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
+        await core_handlers.handle_spec(self, message, repo_name, repo_path, session)
 
     async def handle_choose(self, message: discord.Message, repo_name: str, repo_path: str, session: str, choice: str) -> None:
         """Resolve a pending start conflict."""
-        channel_id = str(message.channel.id)
-        conflict = await self.consume_pending(channel_id, session)
-        if not conflict:
-            await self.reply(message.channel, "No pending conflict.")
-            return
-        choice = choice.lower()
-        if choice == "resume":
-            await self.reply(message.channel, f"Resuming existing session '{conflict.session}'...")
-            await self.handle_resume(message, repo_name, repo_path, conflict.session, "Resumed.")
-            return
-        if choice == "replace":
-            await self.reply(message.channel, f"Replacing session '{conflict.session}' with new start...")
-            await self.handle_start(message, repo_name, repo_path, conflict.session)
-            return
-        if choice == "cancel":
-            await self.reply(message.channel, "Cancelled.")
-            return
-        await self.reply(message.channel, "Unknown choice. Use resume|replace|cancel.")
+        await core_handlers.handle_choose(self, message, repo_name, repo_path, session, choice)
 
     async def handle_stop(self, channel: discord.abc.Messageable, session: str) -> None:
         """Send a stop signal to a running Codex process."""
-        channel_id = str(channel.id)
-        proc = await self.get_active(channel_id, session)
-        if proc is not None:
-            await proc.stop()
-            await asyncio.sleep(0.5)
-            await proc.interrupt()
-            await self.reply(channel, f"Sent stop (ESC then SIGINT) to session '{session or DEFAULT_SESSION}'.")
-            return
-        await self.reply(channel, "No running Codex process.")
+        await core_handlers.handle_stop(self, channel, session)
 
     async def handle_kill(self, channel: discord.abc.Messageable, session: str) -> None:
         """Force-kill a running Codex process."""
-        channel_id = str(channel.id)
-        proc = await self.get_active(channel_id, session)
-        if proc is not None:
-            await proc.kill()
-            await self.reply(channel, f"Sent kill to session '{session or DEFAULT_SESSION}'.")
-            return
-        await self.reply_forbidden(channel, "No running Codex process.")
+        await core_handlers.handle_kill(self, channel, session)
 
     async def handle_quit(self, channel: discord.abc.Messageable, session: str) -> None:
         """Send /quit to the Codex process."""
-        channel_id = str(channel.id)
-        proc = await self.get_active(channel_id, session)
-        if proc is not None:
-            await proc.write("/quit\n")
-            await self.reply(channel, f"Sent /quit to session '{session or DEFAULT_SESSION}'.")
-            return
-        await self.reply_forbidden(channel, "No running Codex process.")
+        await core_handlers.handle_quit(self, channel, session)
 
     async def handle_showrepo(self, channel: discord.abc.Messageable, repo_path: str) -> None:
         """Show a pruned repo tree for orientation."""
-        text = build_tree(repo_path, max_depth=3)
-        text = trim_output(text, 300, 6000)
-        for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
-            await self.reply(channel, chunk)
+        await repo_handlers.handle_showrepo(self, channel, repo_path)
 
     async def handle_showchanges(self, channel: discord.abc.Messageable, repo_path: str) -> None:
         """Show git status and diffstat for the repo."""
-        out, err = await run_limited_command(repo_path, ["git", "status", "--short", "--branch"])
-        out2, err2 = await run_limited_command(repo_path, ["git", "diff", "--stat"])
-        text = strip_control_codes(out + "\n" + out2)
-        text = trim_output(text, 200, 4000)
-        if err or err2:
-            text = f"showchanges error: {err or err2}\n{text}"
-        text = "```diff\n" + text + "\n```"
-        for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
-            await self.reply(channel, chunk)
+        await repo_handlers.handle_showchanges(self, channel, repo_path)
 
     async def handle_tests(self, channel: discord.abc.Messageable, repo_path: str) -> None:
         """Run tests for the repo (pytest -q)."""
-        out, err = await run_limited_command(repo_path, ["pytest", "-q"], timeout=TESTS_TIMEOUT)
-        text = strip_control_codes(out)
-        text = trim_output(text, 200, 6000)
-        if err:
-            reason = "Tests failed"
-            if isinstance(err, asyncio.TimeoutError):
-                reason = "Tests timed out"
-            text = f"{reason}: {err}\n{text}"
-        for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
-            await self.reply(channel, chunk)
+        await repo_handlers.handle_tests(self, channel, repo_path)
 
     async def handle_git(self, channel: discord.abc.Messageable, repo_path: str, rest: str) -> None:
         """Run safe git helper commands."""
-        fields = shlex.split(rest) if rest else []
-        if not fields:
-            await self.reply(channel, "Usage: !c git <status|log|branches|show|diff|pull|commit|push|merge> [args]")
-            return
-        sub = fields[0].lower()
-        args = fields[1:]
-        bad = find_unsafe_git_flag(args)
-        if bad:
-            await self.reply_forbidden(channel, f"Forbidden git flag: {bad}")
-            return
-        git_args: list[str] = []
-        wrap_diff = False
-        if sub == "status":
-            git_args = ["status", "--short", "--branch"]
-        elif sub == "log":
-            n = parse_log_count(args)
-            git_args = ["log", f"-n{n}", "--oneline"]
-        elif sub == "branches":
-            git_args = ["branch", "--all", "--list"]
-        elif sub == "show":
-            if not args:
-                await self.reply(channel, "Usage: !c git show <rev>")
-                return
-            git_args = ["show", args[0]] + args[1:]
-        elif sub == "diff":
-            if not args:
-                await self.reply_forbidden(channel, "Usage: !c git diff <args>")
-                return
-            git_args = ["diff"] + args
-            wrap_diff = True
-        elif sub == "pull":
-            if has_forbidden_flags(args):
-                await self.reply_forbidden(channel, "Forbidden flags detected (--force/-f/--rebase/--squash).")
-                return
-            git_args = ["pull", "--no-rebase"] + args
-        elif sub == "commit":
-            if not args:
-                await self.reply_forbidden(channel, "Usage: !c git commit <message>")
-                return
-            msg = " ".join(args)
-            git_args = ["commit", "-am", msg]
-        elif sub == "push":
-            if has_forbidden_flags(args):
-                await self.reply_forbidden(channel, "Forbidden flags detected (--force/-f/--rebase/--squash).")
-                return
-            git_args = ["push"] + args
-        elif sub == "merge":
-            if not args:
-                await self.reply_forbidden(channel, "Usage: !c git merge <branch>")
-                return
-            if has_forbidden_flags(args):
-                await self.reply_forbidden(channel, "Forbidden flags detected (--force/-f/--rebase/--squash).")
-                return
-            git_args = ["merge"] + args
-        else:
-            await self.reply_forbidden(channel, "Unknown git subcommand.")
-            return
-
-        out, err = await run_limited_command(repo_path, ["git"] + git_args)
-        text = strip_control_codes(out)
-        text = trim_output(text, 200, 4000)
-        if wrap_diff:
-            text = "```diff\n" + text + "\n```"
-        if err:
-            text = f"git {sub} error: {err}\n{text}"
-        for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
-            await self.reply(channel, chunk)
+        await git_handlers.handle_git(self, channel, repo_path, rest)
 
     async def handle_logs(self, channel: discord.abc.Messageable, session: str, limit: int) -> None:
         """Show recent audit log entries."""
@@ -1110,178 +765,6 @@ class Router:
             pass
         self._pins[str(channel.id)] = msg.id
 
-    def dm_help_text(self) -> str:
-        """Return DM admin help text."""
-        return (
-            "DM Admin:\n"
-            "help — show this help\n"
-            "repos — list repos under code_root\n"
-            "sessions — list sessions across channels\n"
-            "status — show queues and running jobs\n"
-            "config — show effective config\n"
-            "createrepo <name> — create repo\n"
-            "clonerepo <name> <url> — clone repo\n"
-            "copyrepo <from> <to> — copy repo\n"
-            "deleterepo <name> — delete repo\n"
-            "renamerepo <from> <to> — rename repo\n"
-        )
-
-    async def dm_reply(self, channel: discord.abc.Messageable, entry: Optional[Entry], msg: str) -> None:
-        """Send a DM reply and record it to audit logs."""
-        self.append_audit_discord(entry, msg)
-        await channel.send(msg)
-
-    def dm_audit_start(self, message: discord.Message, cmd: str, rest: str) -> Optional[Entry]:
-        """Start a DM audit entry for admin commands."""
-        meta = {
-            "command": cmd,
-            "args": rest,
-            "timestamp": utc_now_iso(),
-            "channel": f"dm-{message.author.id}",
-        }
-        return self.audit_start(f"dm-{message.author.id}", "admin", "dm", meta)
-
-    async def dm_list_repos(self) -> str:
-        """List repos under code_root with last modified time."""
-        base = self.cfg.codex.code_root
-        if not base or not os.path.isdir(base):
-            return "code_root does not exist."
-        entries = []
-        for name in sorted(os.listdir(base)):
-            path = os.path.join(base, name)
-            if not os.path.isdir(path):
-                continue
-            try:
-                mtime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(os.path.getmtime(path)))
-            except Exception:
-                mtime = "unknown"
-            entries.append(f"{name} (modified {mtime})")
-        return "\n".join(entries) if entries else "No repos found."
-
-    async def dm_list_sessions(self) -> str:
-        """List all sessions across channels."""
-        state = self.state.load()
-        lines = []
-        for channel_id, ch in state.channels.items():
-            for name, sess in ch.sessions.items():
-                lines.append(f"channel {channel_id} repo {sess.repo_name} session {name} last {sess.last_used_at}")
-        return "\n".join(lines) if lines else "No sessions found."
-
-    async def dm_status(self) -> str:
-        """Return a summary of queued/running jobs across channels."""
-        snapshots = await self.queue.snapshot_all()
-        lines = []
-        for channel_id, statuses in snapshots.items():
-            for st in statuses:
-                lines.append(f"{channel_id}: {st.job_id} [{st.status}] session:{st.session or DEFAULT_SESSION} pos:{st.position}")
-        return "\n".join(lines) if lines else "No queued or running jobs."
-
-    async def dm_create_repo(self, message: discord.Message, repo_name: str, entry: Optional[Entry]) -> Optional[Exception]:
-        """Create a new repo via DM admin command."""
-        try:
-            repo_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, repo_name)
-        except Exception as exc:
-            return exc
-        if os.path.isdir(repo_path):
-            if os.path.isdir(os.path.join(repo_path, ".git")):
-                return RuntimeError("Repo already exists.")
-            return RuntimeError("Directory already exists and is not a git repo.")
-        try:
-            os.makedirs(repo_path, exist_ok=False)
-        except Exception as exc:
-            return exc
-        _, err = await run_limited_command(repo_path, ["git", "init"])
-        if err:
-            return err
-        try:
-            self.seed_agents_template(repo_path)
-        except Exception as exc:
-            return exc
-        await self.dm_reply(message.channel, entry, f"Created repo at {repo_path}. Continue in #codex-{repo_name}")
-        self.logger.info("dm.createrepo.ok", extra={"user_id": str(message.author.id), "repo": repo_name, "path": repo_path})
-        return None
-
-    async def dm_clone_repo(self, message: discord.Message, repo_name: str, raw_url: str, entry: Optional[Entry]) -> Optional[Exception]:
-        """Clone a repo via DM admin command."""
-        try:
-            repo_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, repo_name)
-        except Exception as exc:
-            return exc
-        if os.path.exists(repo_path):
-            return RuntimeError("Repo directory already exists.")
-        try:
-            clone_url = parse_github_clone_url(raw_url)
-        except ValueError as exc:
-            return exc
-        _, err = await run_limited_command(os.path.dirname(repo_path), ["git", "clone", clone_url, repo_path], timeout=HELPER_TIMEOUT * 2)
-        if err:
-            return err
-        await self.dm_reply(message.channel, entry, f"Cloned {clone_url} into {repo_path}. Continue in #codex-{repo_name}")
-        self.logger.info("dm.clonerepo.ok", extra={"user_id": str(message.author.id), "repo": repo_name, "url": clone_url, "path": repo_path})
-        return None
-
-    async def dm_copy_repo(self, message: discord.Message, from_name: str, to_name: str, entry: Optional[Entry]) -> Optional[Exception]:
-        """Copy a repo via DM admin command."""
-        try:
-            src_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, from_name)
-            dst_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, to_name)
-        except Exception as exc:
-            return exc
-        if os.path.exists(dst_path):
-            return RuntimeError("Target repo directory already exists.")
-        try:
-            copy_dir_excluding_git(src_path, dst_path)
-        except Exception as exc:
-            return exc
-        _, err = await run_limited_command(dst_path, ["git", "init"])
-        if err:
-            return err
-        await self.dm_reply(message.channel, entry, f"Copied repo to {dst_path}. Continue in #codex-{to_name}")
-        self.logger.info("dm.copyrepo.ok", extra={"user_id": str(message.author.id), "repo": from_name, "target": dst_path})
-        return None
-
-    async def dm_delete_repo(self, message: discord.Message, repo_name: str, entry: Optional[Entry]) -> Optional[Exception]:
-        """Delete a repo via DM admin command."""
-        try:
-            repo_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, repo_name)
-        except Exception as exc:
-            return exc
-        if await self.repo_busy(repo_name):
-            return RuntimeError("Repo has active or queued jobs. Stop/kill them first.")
-        try:
-            for root, dirs, files in os.walk(repo_path, topdown=False):
-                for name in files:
-                    os.remove(os.path.join(root, name))
-                for name in dirs:
-                    os.rmdir(os.path.join(root, name))
-            os.rmdir(repo_path)
-        except Exception as exc:
-            return exc
-        self.state.update(lambda fs: prune_state_for_repo(fs, repo_name, repo_path))
-        await self.dm_reply(message.channel, entry, f"Deleted repo {repo_name}")
-        self.logger.info("dm.deleterepo.ok", extra={"user_id": str(message.author.id), "repo": repo_name})
-        return None
-
-    async def dm_rename_repo(self, message: discord.Message, from_name: str, to_name: str, entry: Optional[Entry]) -> Optional[Exception]:
-        """Rename a repo via DM admin command."""
-        try:
-            src_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, from_name)
-            dst_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, to_name)
-        except Exception as exc:
-            return exc
-        if await self.repo_busy(from_name):
-            return RuntimeError("Repo has active or queued jobs. Stop/kill them first.")
-        if os.path.exists(dst_path):
-            return RuntimeError("Target repo directory already exists.")
-        try:
-            os.rename(src_path, dst_path)
-        except Exception as exc:
-            return exc
-        self.state.update(lambda fs: rename_state_repo(fs, from_name, src_path, to_name, dst_path))
-        await self.dm_reply(message.channel, entry, f"Renamed repo {from_name} to {to_name}. Continue in #codex-{to_name}")
-        self.logger.info("dm.renamerepo.ok", extra={"user_id": str(message.author.id), "repo": from_name, "target": dst_path})
-        return None
-
     def seed_agents_template(self, repo_path: str) -> None:
         """Seed AGENTS.md from a template when configured."""
         tmpl = (self.cfg.repo_bootstrap.agents_template or "").strip()
@@ -1483,268 +966,3 @@ class Router:
             if sess:
                 return sess
         return DEFAULT_SESSION
-
-def forbidden_message(detail: str) -> str:
-    """Format a standard forbidden response message."""
-    return f"{FORBIDDEN_PREFIX}\n```text\n{detail}\n```"
-
-
-def normalize_session(name: str) -> str:
-    """Normalize and validate session name input."""
-    if not name:
-        return DEFAULT_SESSION
-    if not SESSION_RE.match(name):
-        raise ValueError("Invalid session name. Use 1-64 characters: letters, numbers, . _ -")
-    return name
-
-
-def pending_key(channel_id: str, session: str) -> str:
-    """Build a stable key for pending conflicts."""
-    return f"{channel_id}:{session or DEFAULT_SESSION}"
-
-
-def has_forbidden_flags(args: list[str]) -> bool:
-    """Return True if args include disallowed flags."""
-    for a in args:
-        if a in {"-f", "--force", "--force-with-lease", "--rebase", "--squash"}:
-            return True
-    return False
-
-
-def find_unsafe_git_flag(args: list[str]) -> Optional[str]:
-    """Return the first unsafe git flag, if any."""
-    for a in args:
-        flag = a
-        if flag.startswith("--") and "=" in flag:
-            flag = flag.split("=", 1)[0]
-        if flag.startswith("-C"):
-            return "-C"
-        if flag in {"--git-dir", "--work-tree", "-c", "--config-env", "--exec-path", "--upload-pack", "--receive-pack", "--upload-archive", "--namespace"}:
-            return flag
-    return None
-
-
-def usage_from_event(evt: Event) -> Optional[UsageStats]:
-    """Convert Codex usage event into UsageStats."""
-    if not evt.usage:
-        return None
-    usage = evt.usage or {}
-    return UsageStats(
-        input_tokens=int(usage.get("input_tokens") or usage.get("inputTokens") or 0),
-        output_tokens=int(usage.get("output_tokens") or usage.get("outputTokens") or 0),
-        total_tokens=int(usage.get("total_tokens") or usage.get("totalTokens") or 0),
-    )
-
-
-def count_active_sessions(state, channel_id: str) -> int:
-    """Count sessions for a channel in state."""
-    ch = state.channels.get(channel_id)
-    if not ch:
-        return 0
-    return len(ch.sessions)
-
-
-def session_exists(state, channel_id: str, session: str) -> bool:
-    """Return True if a session exists for the channel."""
-    ch = state.channels.get(channel_id)
-    if not ch:
-        return False
-    return session in ch.sessions
-
-
-def existing_thread(state, channel_id: str, session: str) -> str:
-    """Return the thread id for a session, if any."""
-    ch = state.channels.get(channel_id)
-    if not ch:
-        return ""
-    sess = ch.sessions.get(session or DEFAULT_SESSION)
-    if not sess:
-        return ""
-    return sess.thread_id
-
-
-def set_sticky(fs, channel_id: str, user_id: str, session: str) -> None:
-    """Set sticky session selection for a user in state."""
-    ch = fs.channels.get(channel_id)
-    if ch is None:
-        from .state import ChannelState
-
-        ch = ChannelState()
-    if ch.sticky is None:
-        ch.sticky = {}
-    ch.sticky[user_id] = session
-    fs.channels[channel_id] = ch
-
-
-def prune_state_for_repo(fs, repo_name: str, repo_path: str) -> None:
-    """Remove state entries referencing a repo."""
-    for channel_id, ch in list(fs.channels.items()):
-        changed = False
-        for sess_name, sess in list(ch.sessions.items()):
-            if sess.repo_name == repo_name or sess.repo_path == repo_path:
-                del ch.sessions[sess_name]
-                changed = True
-        if changed:
-            for user_id, sess_name in list(ch.sticky.items()):
-                if sess_name not in ch.sessions:
-                    del ch.sticky[user_id]
-            if not ch.sessions and not ch.sticky:
-                del fs.channels[channel_id]
-            else:
-                fs.channels[channel_id] = ch
-
-
-def rename_state_repo(fs, from_name: str, from_path: str, to_name: str, to_path: str) -> None:
-    """Update state entries after a repo rename."""
-    for channel_id, ch in fs.channels.items():
-        changed = False
-        for sess_name, sess in ch.sessions.items():
-            if sess.repo_name == from_name or sess.repo_path == from_path:
-                sess.repo_name = to_name
-                sess.repo_path = to_path
-                changed = True
-        if changed:
-            fs.channels[channel_id] = ch
-
-
-def build_tree(repo_path: str, max_depth: int = 3) -> str:
-    """Build a pruned repo tree listing."""
-    lines: list[str] = []
-    base = Path(repo_path)
-    if not base.exists():
-        return "Repo path not found."
-
-    def walk(path: Path, depth: int) -> None:
-        if depth > max_depth:
-            return
-        try:
-            entries = sorted(path.iterdir(), key=lambda p: p.name)
-        except Exception:
-            return
-        for entry in entries:
-            name = entry.name
-            if name.startswith("."):
-                continue
-            if name in {".git", "node_modules", "vendor"}:
-                continue
-            rel = entry.relative_to(base)
-            lines.append(str(rel))
-            if entry.is_dir():
-                walk(entry, depth + 1)
-
-    walk(base, 1)
-    return "\n".join(lines) if lines else "(empty)"
-
-
-def parse_github_clone_url(raw: str) -> str:
-    """Normalize GitHub clone URL inputs."""
-    raw = raw.strip()
-    if not raw:
-        raise ValueError("GitHub URL required")
-    if raw.startswith("git@github.com:"):
-        path = raw.replace("git@github.com:", "", 1)
-        return normalize_github_path(path)
-    if raw.startswith("github.com/") or raw.startswith("www.github.com/"):
-        raw = "https://" + raw
-    if raw.startswith("https://github.com/") or raw.startswith("https://www.github.com/"):
-        path = raw.split("github.com/", 1)[1]
-        return normalize_github_path(path)
-    raise ValueError("Only github.com URLs are supported")
-
-
-def normalize_github_path(path: str) -> str:
-    """Normalize a GitHub path to an HTTPS clone URL."""
-    path = path.strip().strip("/")
-    if path.endswith(".git"):
-        path = path[: -len(".git")]
-    parts = path.split("/")
-    if len(parts) < 2 or not parts[0] or not parts[1]:
-        raise ValueError("Invalid GitHub repo path")
-    owner = parts[0]
-    repo = parts[1]
-    return f"https://github.com/{owner}/{repo}.git"
-
-
-def copy_dir_excluding_git(src: str, dst: str) -> None:
-    """Copy a directory excluding .git."""
-    if not os.path.isdir(src):
-        raise ValueError("source is not a directory")
-    os.makedirs(dst, exist_ok=True)
-    for root, dirs, files in os.walk(src):
-        rel = os.path.relpath(root, src)
-        if rel == ".git" or rel.startswith(".git" + os.sep):
-            dirs[:] = []
-            continue
-        if ".git" in dirs:
-            dirs.remove(".git")
-        target_dir = dst if rel == "." else os.path.join(dst, rel)
-        os.makedirs(target_dir, exist_ok=True)
-        for name in files:
-            src_path = os.path.join(root, name)
-            dst_path = os.path.join(target_dir, name)
-            if os.path.islink(src_path):
-                continue
-            copy_file(src_path, dst_path)
-
-
-def copy_file(src: str, dst: str) -> None:
-    """Copy a file to a destination path, creating directories."""
-    os.makedirs(os.path.dirname(dst), exist_ok=True)
-    with open(src, "rb") as fsrc:
-        data = fsrc.read()
-    with open(dst, "wb") as fdst:
-        fdst.write(data)
-
-
-def trim_output(text: str, max_lines: int, max_bytes: int) -> str:
-    """Trim output by line and byte limits for Discord safety."""
-    lines = text.split("\n")
-    if len(lines) > max_lines:
-        lines = lines[:max_lines] + ["...(truncated)"]
-    joined = "\n".join(lines)
-    if len(joined) > max_bytes:
-        joined = joined[:max_bytes] + "\n...(truncated)"
-    return joined
-
-
-async def run_limited_command(repo_path: str, args: list[str], timeout: float = HELPER_TIMEOUT) -> Tuple[str, Optional[Exception]]:
-    """Run a helper command with time/output limits."""
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *args,
-            cwd=repo_path,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-    except Exception as exc:
-        return "", exc
-    stdout_chunks: list[bytes] = []
-    stderr_chunks: list[bytes] = []
-
-    async def _read_stream(stream: asyncio.StreamReader, chunks: list[bytes]) -> None:
-        size = 0
-        while True:
-            data = await stream.read(4096)
-            if not data:
-                break
-            chunks.append(data)
-            size += len(data)
-            if size > HELPER_OUTPUT_LIMIT:
-                break
-
-    try:
-        await asyncio.wait_for(
-            asyncio.gather(_read_stream(proc.stdout, stdout_chunks), _read_stream(proc.stderr, stderr_chunks)),
-            timeout=timeout,
-        )
-        await asyncio.wait_for(proc.wait(), timeout=timeout)
-    except Exception as exc:
-        if proc.returncode is None:
-            proc.kill()
-            await proc.wait()
-        return b"".join(stdout_chunks + stderr_chunks).decode("utf-8", errors="replace"), exc
-
-    out = b"".join(stdout_chunks + stderr_chunks).decode("utf-8", errors="replace")
-    if proc.returncode != 0:
-        return out, RuntimeError(f"exit {proc.returncode}")
-    return out, None

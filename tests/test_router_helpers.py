@@ -1,6 +1,6 @@
 import pytest
 
-from codebridge.router import normalize_session, parse_github_clone_url
+from codebridge.router_helpers import normalize_session, parse_github_clone_url
 
 
 def test_normalize_session():
