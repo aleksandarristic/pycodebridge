@@ -66,6 +66,10 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 ### `runtime`
 - `log_level` (default `info`) — `debug|info|warn|error`.
 
+### `audit`
+- `redact` (default `false`) — redact secrets from audit logs before writing.
+- `redact_patterns` (default `[]`) — optional regex patterns to redact.
+
 ### `transport`
 - `adapter` (default `discord`) — transport adapter to use (`discord` supported today; `slack`/`telegram` scaffold only).
 

@@ -41,7 +41,12 @@ async def main() -> None:
     logger = logmod.setup_logging(cfg.runtime.log_level, cfg.state.log_dir)
 
     state_store = Store(cfg.state.data_dir, cfg.state.lock_timeout_seconds)
-    audit_logger = AuditLogger(cfg.state.log_dir)
+    redactor = None
+    if cfg.audit.redact:
+        from codebridge.audit import Redactor
+
+        redactor = Redactor(cfg.audit.redact_patterns)
+    audit_logger = AuditLogger(cfg.state.log_dir, redactor=redactor)
     runner = Runner(cfg.codex.binary, cfg.codex.sandbox, cfg.codex.env)
     queue = Manager()
     router = Router(cfg, state_store, audit_logger, runner, queue, logger)

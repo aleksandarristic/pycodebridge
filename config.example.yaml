@@ -36,6 +36,10 @@ state:
 runtime:
   log_level: "info"
 
+audit:
+  redact: false
+  redact_patterns: []
+
 transport:
   adapter: "discord"
   # adapter: "slack"  # scaffold only

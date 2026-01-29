@@ -194,12 +194,12 @@
 - Add an "Integrations" section in `README.md`.
 - List supported/scaffolded integrations and link to docs (e.g., `DISCORD.md`, `SLACK.md`, `TELEGRAM.md`).
 
-39) TODO - Audit log redaction toggle
+39) DONE - Audit log redaction toggle
 - Add an optional config to redact secrets from audit logs (tokens/keys/passwords) before writing.
 - Document the redaction option and any limitations.
 - Add tests for redaction patterns.
 
-40) TODO - DM command collision resolution
+40) DONE - DM command collision resolution
 - Review DM admin command namespace vs per-repo DM commands (e.g., /bind, /repo, /use, /unbind).
 - Define a precedence/namespace strategy to avoid collisions (admin-only prefix, reserved commands, or routing by adapter).
 - Add a context status command that works in non-repo and repo context (e.g., /status or !c /status) to show current repo binding and active session.
@@ -249,3 +249,4 @@
 - 2026-01-29: Completed Telegram adapter wiring with long polling and config updates.
 - 2026-01-29: Added README integrations section with adapter doc links.
 - 2026-01-29: Added DM repo binding commands, state storage, and tests.
+- 2026-01-29: Added audit log redaction toggle and DM command collision resolution.

@@ -24,22 +24,29 @@ class Entry:
     _codex_file: Optional[Any] = None
     _discord_file: Optional[Any] = None
     _stderr_file: Optional[Any] = None
+    _redact: Optional["Redactor"] = None
 
     def append_codex_line(self, line: str) -> None:
         """Append a raw JSONL line from Codex output."""
         if self._codex_file:
+            if self._redact:
+                line = self._redact.apply_text(line)
             self._codex_file.write(line + "\n")
             self._codex_file.flush()
 
     def append_discord_out(self, text: str) -> None:
         """Append text sent to Discord for this request."""
         if self._discord_file:
+            if self._redact:
+                text = self._redact.apply_text(text)
             self._discord_file.write(text + "\n")
             self._discord_file.flush()
 
     def append_stderr(self, text: str) -> None:
         """Append stderr text from Codex process."""
         if self._stderr_file:
+            if self._redact:
+                text = self._redact.apply_text(text)
             self._stderr_file.write(text + "\n")
             self._stderr_file.flush()
 
@@ -67,11 +74,12 @@ class Summary:
 
 class Logger:
     """Audit logger managing per-channel/session/thread directories."""
-    def __init__(self, base_dir: str) -> None:
+    def __init__(self, base_dir: str, redactor: Optional["Redactor"] = None) -> None:
         if not base_dir:
             raise ValueError("log dir is required")
         os.makedirs(base_dir, exist_ok=True)
         self.base_dir = base_dir
+        self._redactor = redactor
 
     def start(self, channel_id: str, session: str, thread_id: str, request: Any) -> Entry:
         """Start a new audit entry and return its writer."""
@@ -85,6 +93,8 @@ class Logger:
 
         seq = _next_seq(entry_dir)
         request_path = os.path.join(entry_dir, f"{seq}.request.json")
+        if self._redactor:
+            request = self._redactor.apply_obj(request)
         _write_json(request_path, request)
 
         codex_path = os.path.join(entry_dir, f"{seq}.codex.jsonl")
@@ -100,6 +110,7 @@ class Logger:
             discord_path=discord_path,
             stderr_path=stderr_path,
         )
+        entry._redact = self._redactor
         entry._codex_file = open(codex_path, "w", encoding="utf-8")
         entry._discord_file = open(discord_path, "w", encoding="utf-8")
         entry._stderr_file = open(stderr_path, "w", encoding="utf-8")
@@ -145,6 +156,34 @@ class Logger:
         return summaries
 
 
+class Redactor:
+    """Redact secrets from text and JSON-like payloads."""
+
+    def __init__(self, patterns: Optional[list[str]] = None) -> None:
+        if patterns is None or len(patterns) == 0:
+            patterns = _default_redaction_patterns()
+        self._regexes = [re.compile(p) for p in patterns]
+
+    def apply_text(self, text: str) -> str:
+        """Redact secrets in a plain string."""
+        if not text:
+            return text
+        for rx in self._regexes:
+            text = rx.sub("<redacted>", text)
+        return text
+
+    def apply_obj(self, obj: Any) -> Any:
+        """Redact secrets in a JSON-like object."""
+        if isinstance(obj, dict):
+            return {k: self.apply_obj(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [self.apply_obj(v) for v in obj]
+        if isinstance(obj, str):
+            return self.apply_text(obj)
+        return obj
+
+
+
 def _next_seq(entry_dir: str) -> str:
     """Allocate the next sequence number for an entry directory."""
     latest_path = os.path.join(entry_dir, ".latest")
@@ -183,3 +222,13 @@ def _safe_segment(val: str, fallback: str) -> str:
         return val
     digest = hashlib.sha1(val.encode("utf-8")).hexdigest()[:12]
     return f"{fallback}-{digest}"
+
+
+def _default_redaction_patterns() -> list[str]:
+    return [
+        r"sk-[A-Za-z0-9]{20,}",
+        r"ghp_[A-Za-z0-9]{20,}",
+        r"xox[bap]-[A-Za-z0-9-]{10,}",
+        r"xapp-[A-Za-z0-9-]{10,}",
+        r"(?i)(token|secret|password)\\s*[:=]\\s*[^\\s]+",
+    ]

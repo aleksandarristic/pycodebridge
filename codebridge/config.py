@@ -17,6 +17,7 @@ DEFAULT_TELEGRAM_TOKEN_ENV = "TELEGRAM_TOKEN"
 DEFAULT_LOCK_TIMEOUT_SECONDS = 600
 DEFAULT_CONFLICT_TTL_SECONDS = 60
 DEFAULT_TRANSPORT_ADAPTER = "discord"
+DEFAULT_AUDIT_REDACT = False
 
 DEFAULT_START_PROMPT = (
     "Hello. This is a Discord-bridged Codex session for repo: {{REPO_NAME}}.\n"
@@ -88,6 +89,13 @@ class RuntimeConfig:
 
 
 @dataclass
+class AuditConfig:
+    """Audit logging configuration."""
+    redact: bool = DEFAULT_AUDIT_REDACT
+    redact_patterns: List[str] = field(default_factory=list)
+
+
+@dataclass
 class TransportConfig:
     """Transport adapter configuration."""
     adapter: str = DEFAULT_TRANSPORT_ADAPTER
@@ -108,6 +116,7 @@ class Config:
     codex: CodexConfig = field(default_factory=CodexConfig)
     state: StateConfig = field(default_factory=StateConfig)
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
+    audit: AuditConfig = field(default_factory=AuditConfig)
     transport: TransportConfig = field(default_factory=TransportConfig)
     repo_bootstrap: RepoBootstrapConfig = field(default_factory=RepoBootstrapConfig)
 
@@ -197,6 +206,10 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     runtime = raw.get("runtime", {}) or {}
     cfg.runtime.log_level = runtime.get("log_level", cfg.runtime.log_level)
 
+    audit = raw.get("audit", {}) or {}
+    cfg.audit.redact = bool(audit.get("redact", cfg.audit.redact))
+    cfg.audit.redact_patterns = list(audit.get("redact_patterns", cfg.audit.redact_patterns) or [])
+
     transport = raw.get("transport", {}) or {}
     cfg.transport.adapter = transport.get("adapter", cfg.transport.adapter)
 
@@ -241,6 +254,7 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.state.conflict_ttl_seconds = DEFAULT_CONFLICT_TTL_SECONDS
     if not cfg.runtime.log_level:
         cfg.runtime.log_level = DEFAULT_LOG_LEVEL
+    cfg.audit.redact = bool(cfg.audit.redact)
     if not cfg.transport.adapter:
         cfg.transport.adapter = DEFAULT_TRANSPORT_ADAPTER
     if not cfg.state.log_dir and cfg.state.data_dir:
