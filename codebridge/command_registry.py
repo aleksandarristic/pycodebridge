@@ -7,9 +7,10 @@ from typing import Any, Awaitable, Callable, Dict, Iterable, List, Sequence, Tup
 
 from .command_parse import parse_choose, parse_session_and_id, parse_session_and_prompt, parse_session_or_limit
 from .router_helpers import MAX_SESSIONS_PER_CHANNEL, count_active_sessions, normalize_session, session_exists
+from .transport import MessageEvent, ResponseSink
 from .util import path as pathutil
 
-CommandHandler = Callable[[Any, Any, str, str, str], Awaitable[None]]
+CommandHandler = Callable[[Any, MessageEvent, ResponseSink, str, str, str], Awaitable[None]]
 
 GROUP_ORDER = (
     "General",
@@ -103,7 +104,8 @@ def render_help(specs: Sequence[CommandSpec]) -> str:
 async def dispatch(
     registry: Dict[str, CommandSpec],
     router: Any,
-    message: Any,
+    message: MessageEvent,
+    sink: ResponseSink,
     repo_name: str,
     repo_path: str,
     cmd: str,
@@ -113,7 +115,7 @@ async def dispatch(
     spec = registry.get(cmd)
     if not spec:
         return False
-    await spec.handler(router, message, repo_name, repo_path, rest)
+    await spec.handler(router, message, sink, repo_name, repo_path, rest)
     return True
 
 
@@ -135,95 +137,95 @@ def _ordered_groups(grouped: Dict[str, List[CommandSpec]]) -> Iterable[str]:
             yield group
 
 
-async def _cmd_help(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
-    await router.send_help(message.channel)
+async def _cmd_help(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    await router.send_help(sink)
 
 
-async def _cmd_status(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
-    await router.send_status(message.channel, repo_name, repo_path)
+async def _cmd_status(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    await router.send_status(sink, repo_name, repo_path)
 
 
-async def _cmd_stats(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
-    session = rest.strip() or router.current_session_for_user(str(message.author.id), str(message.channel.id))
+async def _cmd_stats(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    session = rest.strip() or router.current_session_for_user(message.author_id, message.channel_id)
     try:
         session = normalize_session(session)
     except ValueError as exc:
-        await router.reply_forbidden(message.channel, str(exc))
+        await router.reply_forbidden(sink, str(exc))
         return
-    await router.handle_stats(message.channel, session)
+    await router.handle_stats(sink, session)
 
 
-async def _cmd_peek(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
-    session = rest.strip() or router.current_session_for_user(str(message.author.id), str(message.channel.id))
+async def _cmd_peek(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    session = rest.strip() or router.current_session_for_user(message.author_id, message.channel_id)
     try:
         session = normalize_session(session)
     except ValueError as exc:
-        await router.reply_forbidden(message.channel, str(exc))
+        await router.reply_forbidden(sink, str(exc))
         return
-    await router.handle_peek(message.channel, session)
+    await router.handle_peek(sink, session)
 
 
-async def _cmd_config(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
-    await router.reply(message.channel, router.config_text())
+async def _cmd_config(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    await router.reply(sink, router.config_text())
 
 
-async def _cmd_start(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
+async def _cmd_start(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     session_name, _ = parse_session_and_prompt(rest)
     if not session_name:
-        session_name = router.current_session_for_user(str(message.author.id), str(message.channel.id))
+        session_name = router.current_session_for_user(message.author_id, message.channel_id)
     try:
         session_name = normalize_session(session_name)
     except ValueError as exc:
-        await router.reply_forbidden(message.channel, str(exc))
+        await router.reply_forbidden(sink, str(exc))
         return
-    await router.handle_start(message, repo_name, repo_path, session_name)
+    await router.handle_start(message, sink, repo_name, repo_path, session_name)
 
 
-async def _cmd_resume(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
+async def _cmd_resume(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     session_name, prompt = parse_session_and_prompt(rest)
     if not session_name:
-        session_name = router.current_session_for_user(str(message.author.id), str(message.channel.id))
+        session_name = router.current_session_for_user(message.author_id, message.channel_id)
     try:
         session_name = normalize_session(session_name)
     except ValueError as exc:
-        await router.reply_forbidden(message.channel, str(exc))
+        await router.reply_forbidden(sink, str(exc))
         return
-    await router.handle_resume(message, repo_name, repo_path, session_name, prompt)
+    await router.handle_resume(message, sink, repo_name, repo_path, session_name, prompt)
 
 
-async def _cmd_choose(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
+async def _cmd_choose(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     choice, sess = parse_choose(rest)
     if not choice:
-        await router.reply_forbidden(message.channel, "Usage: !c choose [session] resume|replace|cancel")
+        await router.reply_forbidden(sink, "Usage: !c choose [session] resume|replace|cancel")
         return
     if sess:
         try:
             _ = normalize_session(sess)
         except ValueError as exc:
-            await router.reply_forbidden(message.channel, str(exc))
+            await router.reply_forbidden(sink, str(exc))
             return
-    await router.handle_choose(message, repo_name, repo_path, sess, choice)
+    await router.handle_choose(message, sink, repo_name, repo_path, sess, choice)
 
 
-async def _cmd_use(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
+async def _cmd_use(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     parts = rest.split()
     if not parts:
-        await router.reply_forbidden(message.channel, "Usage: !c use <session>")
+        await router.reply_forbidden(sink, "Usage: !c use <session>")
         return
     try:
         session_name = normalize_session(parts[0])
     except ValueError as exc:
-        await router.reply_forbidden(message.channel, str(exc))
+        await router.reply_forbidden(sink, str(exc))
         return
-    await router.handle_select_session(message, session_name)
+    await router.handle_select_session(message, sink, session_name)
 
 
-async def _cmd_model(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
+async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     if not rest:
-        await router.reply_forbidden(message.channel, "Usage: !c model [session] <model-id>")
+        await router.reply_forbidden(sink, "Usage: !c model [session] <model-id>")
         return
     parts = rest.split()
-    session_name = router.current_session_for_user(str(message.author.id), str(message.channel.id))
+    session_name = router.current_session_for_user(message.author_id, message.channel_id)
     if len(parts) == 1:
         model = parts[0]
     else:
@@ -232,133 +234,133 @@ async def _cmd_model(router: Any, message: Any, repo_name: str, repo_path: str, 
     try:
         session_name = normalize_session(session_name)
     except ValueError as exc:
-        await router.reply_forbidden(message.channel, str(exc))
+        await router.reply_forbidden(sink, str(exc))
         return
     if not model:
-        await router.reply_forbidden(message.channel, "Model id required.")
+        await router.reply_forbidden(sink, "Model id required.")
         return
     state = router.state.load()
-    if not session_exists(state, str(message.channel.id), session_name) and count_active_sessions(
-        state, str(message.channel.id)
+    if not session_exists(state, message.channel_id, session_name) and count_active_sessions(
+        state, message.channel_id
     ) >= MAX_SESSIONS_PER_CHANNEL:
         await router.reply_forbidden(
-            message.channel,
+            sink,
             f"Session limit reached ({MAX_SESSIONS_PER_CHANNEL}). Stop or reuse an existing session.",
         )
         return
-    router.set_session_model(str(message.channel.id), session_name, repo_name, repo_path, model)
-    await router.reply(message.channel, f"Model for session '{session_name}' set to {model}")
+    router.set_session_model(message.channel_id, session_name, repo_name, repo_path, model)
+    await router.reply(sink, f"Model for session '{session_name}' set to {model}")
 
 
-async def _cmd_thread(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
+async def _cmd_thread(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     session_name, thread_id = parse_session_and_id(rest)
     if not thread_id:
-        await router.reply_forbidden(message.channel, "Usage: !c thread [session] <id>")
+        await router.reply_forbidden(sink, "Usage: !c thread [session] <id>")
         return
     if session_name:
         try:
             session_name = normalize_session(session_name)
         except ValueError as exc:
-            await router.reply_forbidden(message.channel, str(exc))
+            await router.reply_forbidden(sink, str(exc))
             return
-    await router.handle_thread(message.channel, session_name, repo_name, repo_path, thread_id)
+    await router.handle_thread(sink, session_name, repo_name, repo_path, thread_id)
 
 
-async def _cmd_spec(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
-    session = rest.strip() or router.current_session_for_user(str(message.author.id), str(message.channel.id))
+async def _cmd_spec(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    session = rest.strip() or router.current_session_for_user(message.author_id, message.channel_id)
     try:
         session = normalize_session(session)
     except ValueError as exc:
-        await router.reply_forbidden(message.channel, str(exc))
+        await router.reply_forbidden(sink, str(exc))
         return
-    await router.handle_spec(message, repo_name, repo_path, session)
+    await router.handle_spec(message, sink, repo_name, repo_path, session)
 
 
-async def _cmd_createrepo(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
+async def _cmd_createrepo(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     try:
         target_path = pathutil.resolve_repo_path_for_create(router.cfg.codex.code_root, repo_name)
     except Exception as exc:
-        await router.reply_forbidden(message.channel, f"Repo error: {exc}")
+        await router.reply_forbidden(sink, f"Repo error: {exc}")
         return
-    await router.handle_create_repo(message, repo_name, target_path)
+    await router.handle_create_repo(message, sink, repo_name, target_path)
 
 
-async def _cmd_clonerepo(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
+async def _cmd_clonerepo(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     url = rest.strip()
     if not url:
-        await router.reply_forbidden(message.channel, "Usage: !c clonerepo <github-url>")
+        await router.reply_forbidden(sink, "Usage: !c clonerepo <github-url>")
         return
     try:
         target_path = pathutil.resolve_repo_path_for_create(router.cfg.codex.code_root, repo_name)
     except Exception as exc:
-        await router.reply_forbidden(message.channel, f"Repo error: {exc}")
+        await router.reply_forbidden(sink, f"Repo error: {exc}")
         return
-    await router.handle_clone_repo(message, repo_name, target_path, url)
+    await router.handle_clone_repo(message, sink, repo_name, target_path, url)
 
 
-async def _cmd_copyrepo(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
+async def _cmd_copyrepo(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     new_name = rest.strip()
     if not new_name:
-        await router.reply_forbidden(message.channel, "Usage: !c copyrepo <new-repo-name>")
+        await router.reply_forbidden(sink, "Usage: !c copyrepo <new-repo-name>")
         return
     try:
         target_path = pathutil.resolve_repo_path_for_create(router.cfg.codex.code_root, new_name)
     except Exception as exc:
-        await router.reply_forbidden(message.channel, f"Repo error: {exc}")
+        await router.reply_forbidden(sink, f"Repo error: {exc}")
         return
-    await router.handle_copy_repo(message, repo_name, repo_path, new_name, target_path)
+    await router.handle_copy_repo(message, sink, repo_name, repo_path, new_name, target_path)
 
 
-async def _cmd_stop(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
+async def _cmd_stop(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     session = rest.strip()
     if session:
         try:
             session = normalize_session(session)
         except ValueError as exc:
-            await router.reply_forbidden(message.channel, str(exc))
+            await router.reply_forbidden(sink, str(exc))
             return
-    await router.handle_stop(message.channel, session)
+    await router.handle_stop(sink, session)
 
 
-async def _cmd_kill(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
+async def _cmd_kill(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     session = rest.strip()
     if session:
         try:
             session = normalize_session(session)
         except ValueError as exc:
-            await router.reply_forbidden(message.channel, str(exc))
+            await router.reply_forbidden(sink, str(exc))
             return
-    await router.handle_kill(message.channel, session)
+    await router.handle_kill(sink, session)
 
 
-async def _cmd_quit(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
+async def _cmd_quit(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     session = rest.strip()
     if session:
         try:
             session = normalize_session(session)
         except ValueError as exc:
-            await router.reply_forbidden(message.channel, str(exc))
+            await router.reply_forbidden(sink, str(exc))
             return
-    await router.handle_quit(message.channel, session)
+    await router.handle_quit(sink, session)
 
 
-async def _cmd_showrepo(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
-    await router.handle_showrepo(message.channel, repo_path)
+async def _cmd_showrepo(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    await router.handle_showrepo(sink, repo_path)
 
 
-async def _cmd_showchanges(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
-    await router.handle_showchanges(message.channel, repo_path)
+async def _cmd_showchanges(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    await router.handle_showchanges(sink, repo_path)
 
 
-async def _cmd_tests(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
-    await router.handle_tests(message.channel, repo_path)
+async def _cmd_tests(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    await router.handle_tests(sink, repo_path)
 
 
-async def _cmd_git(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
-    await router.handle_git(message.channel, repo_path, rest)
+async def _cmd_git(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    await router.handle_git(sink, repo_path, rest)
 
 
-async def _cmd_logs(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
+async def _cmd_logs(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     session_name, limit = parse_session_or_limit(rest)
     if limit <= 0:
         limit = 5
@@ -366,22 +368,22 @@ async def _cmd_logs(router: Any, message: Any, repo_name: str, repo_path: str, r
         try:
             session_name = normalize_session(session_name)
         except ValueError as exc:
-            await router.reply_forbidden(message.channel, str(exc))
+            await router.reply_forbidden(sink, str(exc))
             return
-    await router.handle_logs(message.channel, session_name, limit)
+    await router.handle_logs(sink, session_name, limit)
 
 
-async def _cmd_ps(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
-    await router.handle_ps(message.channel)
+async def _cmd_ps(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    await router.handle_ps(sink)
 
 
-async def _cmd_cancel(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
+async def _cmd_cancel(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     job_id = rest.strip()
     if not job_id:
-        await router.reply_forbidden(message.channel, "Usage: !c cancel <job-id>")
+        await router.reply_forbidden(sink, "Usage: !c cancel <job-id>")
         return
-    await router.handle_cancel(message.channel, job_id)
+    await router.handle_cancel(sink, job_id)
 
 
-async def _cmd_rerun(router: Any, message: Any, repo_name: str, repo_path: str, rest: str) -> None:
-    await router.handle_rerun(message.channel)
+async def _cmd_rerun(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    await router.handle_rerun(sink)

@@ -52,6 +52,7 @@ pycodebridge/
     audit.py
     state.py
     logging.py
+    transport.py
     util/
       __init__.py
       ansi.py
@@ -124,6 +125,15 @@ Stream the agent’s text output to Discord by parsing JSONL events and extracti
   - otherwise: treat as prompt to Codex in that channel session
 
 Send Codex output back to the same channel.
+
+---
+
+## Transport abstraction
+
+- The Router consumes a platform-agnostic `MessageEvent` plus a `ResponseSink` interface.
+- `MessageEvent` carries normalized channel/user metadata and the raw content.
+- `ResponseSink` exposes `send()`, `typing()` and `update_pinned_status()` for platform adapters.
+- Discord-specific wiring lives in an adapter that translates discord.py messages into `MessageEvent` and `ResponseSink`.
 
 ---
 

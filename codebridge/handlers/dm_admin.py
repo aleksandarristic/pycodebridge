@@ -6,8 +6,6 @@ import os
 import time
 from typing import TYPE_CHECKING, Optional
 
-import discord
-
 from ..audit import Entry
 from ..router_helpers import (
     DEFAULT_SESSION,
@@ -20,6 +18,7 @@ from ..router_helpers import (
     run_limited_command,
 )
 from ..state import utc_now_iso
+from ..transport import MessageEvent, ResponseSink
 from ..util import path as pathutil
 
 if TYPE_CHECKING:
@@ -43,21 +42,21 @@ def dm_help_text() -> str:
     )
 
 
-async def dm_reply(router: "Router", channel: discord.abc.Messageable, entry: Optional[Entry], msg: str) -> None:
+async def dm_reply(router: "Router", sink: ResponseSink, entry: Optional[Entry], msg: str) -> None:
     """Send a DM reply and record it to audit logs."""
-    router.append_audit_discord(entry, msg)
-    await channel.send(msg)
+    router.append_audit_output(entry, msg)
+    await sink.send(msg)
 
 
-def dm_audit_start(router: "Router", message: discord.Message, cmd: str, rest: str) -> Optional[Entry]:
+def dm_audit_start(router: "Router", event: MessageEvent, cmd: str, rest: str) -> Optional[Entry]:
     """Start a DM audit entry for admin commands."""
     meta = {
         "command": cmd,
         "args": rest,
         "timestamp": utc_now_iso(),
-        "channel": f"dm-{message.author.id}",
+        "channel": f"dm-{event.author_id}",
     }
-    return router.audit_start(f"dm-{message.author.id}", "admin", "dm", meta)
+    return router.audit_start(f"dm-{event.author_id}", "admin", "dm", meta)
 
 
 async def dm_list_repos(router: "Router") -> str:
@@ -98,7 +97,13 @@ async def dm_status(router: "Router") -> str:
     return "\n".join(lines) if lines else "No queued or running jobs."
 
 
-async def dm_create_repo(router: "Router", message: discord.Message, repo_name: str, entry: Optional[Entry]) -> Optional[Exception]:
+async def dm_create_repo(
+    router: "Router",
+    event: MessageEvent,
+    sink: ResponseSink,
+    repo_name: str,
+    entry: Optional[Entry],
+) -> Optional[Exception]:
     """Create a new repo via DM admin command."""
     try:
         repo_path = pathutil.resolve_repo_path_for_create(router.cfg.codex.code_root, repo_name)
@@ -119,12 +124,19 @@ async def dm_create_repo(router: "Router", message: discord.Message, repo_name: 
         router.seed_agents_template(repo_path)
     except Exception as exc:
         return exc
-    await dm_reply(router, message.channel, entry, f"Created repo at {repo_path}. Continue in #codex-{repo_name}")
-    router.logger.info("dm.createrepo.ok", extra={"user_id": str(message.author.id), "repo": repo_name, "path": repo_path})
+    await dm_reply(router, sink, entry, f"Created repo at {repo_path}. Continue in #codex-{repo_name}")
+    router.logger.info("dm.createrepo.ok", extra={"user_id": event.author_id, "repo": repo_name, "path": repo_path})
     return None
 
 
-async def dm_clone_repo(router: "Router", message: discord.Message, repo_name: str, raw_url: str, entry: Optional[Entry]) -> Optional[Exception]:
+async def dm_clone_repo(
+    router: "Router",
+    event: MessageEvent,
+    sink: ResponseSink,
+    repo_name: str,
+    raw_url: str,
+    entry: Optional[Entry],
+) -> Optional[Exception]:
     """Clone a repo via DM admin command."""
     try:
         repo_path = pathutil.resolve_repo_path_for_create(router.cfg.codex.code_root, repo_name)
@@ -139,12 +151,19 @@ async def dm_clone_repo(router: "Router", message: discord.Message, repo_name: s
     _, err = await run_limited_command(os.path.dirname(repo_path), ["git", "clone", clone_url, repo_path], timeout=HELPER_TIMEOUT * 2)
     if err:
         return err
-    await dm_reply(router, message.channel, entry, f"Cloned {clone_url} into {repo_path}. Continue in #codex-{repo_name}")
-    router.logger.info("dm.clonerepo.ok", extra={"user_id": str(message.author.id), "repo": repo_name, "url": clone_url, "path": repo_path})
+    await dm_reply(router, sink, entry, f"Cloned {clone_url} into {repo_path}. Continue in #codex-{repo_name}")
+    router.logger.info("dm.clonerepo.ok", extra={"user_id": event.author_id, "repo": repo_name, "url": clone_url, "path": repo_path})
     return None
 
 
-async def dm_copy_repo(router: "Router", message: discord.Message, from_name: str, to_name: str, entry: Optional[Entry]) -> Optional[Exception]:
+async def dm_copy_repo(
+    router: "Router",
+    event: MessageEvent,
+    sink: ResponseSink,
+    from_name: str,
+    to_name: str,
+    entry: Optional[Entry],
+) -> Optional[Exception]:
     """Copy a repo via DM admin command."""
     try:
         src_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, from_name)
@@ -160,12 +179,18 @@ async def dm_copy_repo(router: "Router", message: discord.Message, from_name: st
     _, err = await run_limited_command(dst_path, ["git", "init"])
     if err:
         return err
-    await dm_reply(router, message.channel, entry, f"Copied repo to {dst_path}. Continue in #codex-{to_name}")
-    router.logger.info("dm.copyrepo.ok", extra={"user_id": str(message.author.id), "repo": from_name, "target": dst_path})
+    await dm_reply(router, sink, entry, f"Copied repo to {dst_path}. Continue in #codex-{to_name}")
+    router.logger.info("dm.copyrepo.ok", extra={"user_id": event.author_id, "repo": from_name, "target": dst_path})
     return None
 
 
-async def dm_delete_repo(router: "Router", message: discord.Message, repo_name: str, entry: Optional[Entry]) -> Optional[Exception]:
+async def dm_delete_repo(
+    router: "Router",
+    event: MessageEvent,
+    sink: ResponseSink,
+    repo_name: str,
+    entry: Optional[Entry],
+) -> Optional[Exception]:
     """Delete a repo via DM admin command."""
     try:
         repo_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, repo_name)
@@ -183,12 +208,19 @@ async def dm_delete_repo(router: "Router", message: discord.Message, repo_name: 
     except Exception as exc:
         return exc
     router.state.update(lambda fs: prune_state_for_repo(fs, repo_name, repo_path))
-    await dm_reply(router, message.channel, entry, f"Deleted repo {repo_name}")
-    router.logger.info("dm.deleterepo.ok", extra={"user_id": str(message.author.id), "repo": repo_name})
+    await dm_reply(router, sink, entry, f"Deleted repo {repo_name}")
+    router.logger.info("dm.deleterepo.ok", extra={"user_id": event.author_id, "repo": repo_name})
     return None
 
 
-async def dm_rename_repo(router: "Router", message: discord.Message, from_name: str, to_name: str, entry: Optional[Entry]) -> Optional[Exception]:
+async def dm_rename_repo(
+    router: "Router",
+    event: MessageEvent,
+    sink: ResponseSink,
+    from_name: str,
+    to_name: str,
+    entry: Optional[Entry],
+) -> Optional[Exception]:
     """Rename a repo via DM admin command."""
     try:
         src_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, from_name)
@@ -204,14 +236,14 @@ async def dm_rename_repo(router: "Router", message: discord.Message, from_name: 
     except Exception as exc:
         return exc
     router.state.update(lambda fs: rename_state_repo(fs, from_name, src_path, to_name, dst_path))
-    await dm_reply(router, message.channel, entry, f"Renamed repo {from_name} to {to_name}. Continue in #codex-{to_name}")
-    router.logger.info("dm.renamerepo.ok", extra={"user_id": str(message.author.id), "repo": from_name, "target": dst_path})
+    await dm_reply(router, sink, entry, f"Renamed repo {from_name} to {to_name}. Continue in #codex-{to_name}")
+    router.logger.info("dm.renamerepo.ok", extra={"user_id": event.author_id, "repo": from_name, "target": dst_path})
     return None
 
 
-async def handle_dm_message(router: "Router", message: discord.Message) -> None:
+async def handle_dm_message(router: "Router", event: MessageEvent, sink: ResponseSink) -> None:
     """Handle an incoming DM admin message."""
-    content = (message.content or "").strip()
+    content = (event.content or "").strip()
     if not content.startswith(router.cfg.discord.prefix or "!c"):
         return
     cmdline = content[len(router.cfg.discord.prefix or "!c") :].strip()
@@ -221,13 +253,13 @@ async def handle_dm_message(router: "Router", message: discord.Message) -> None:
     cmd = fields[0].lower()
     rest = cmdline[len(fields[0]) :].strip()
 
-    entry = dm_audit_start(router, message, cmd, rest)
+    entry = dm_audit_start(router, event, cmd, rest)
 
     async def send(text: str) -> None:
-        await dm_reply(router, message.channel, entry, text)
+        await dm_reply(router, sink, entry, text)
 
     async def send_forbidden(detail: str) -> None:
-        await dm_reply(router, message.channel, entry, forbidden_message(detail))
+        await dm_reply(router, sink, entry, forbidden_message(detail))
 
     if cmd == "help":
         await send(dm_help_text())
@@ -251,7 +283,7 @@ async def handle_dm_message(router: "Router", message: discord.Message) -> None:
         if not name:
             await send_forbidden("Usage: !c createrepo <name>")
             return
-        err = await dm_create_repo(router, message, name, entry)
+        err = await dm_create_repo(router, event, sink, name, entry)
         if err:
             await send_forbidden(str(err))
         return
@@ -260,7 +292,7 @@ async def handle_dm_message(router: "Router", message: discord.Message) -> None:
         if len(parts) < 2:
             await send_forbidden("Usage: !c clonerepo <name> <url>")
             return
-        err = await dm_clone_repo(router, message, parts[0], parts[1], entry)
+        err = await dm_clone_repo(router, event, sink, parts[0], parts[1], entry)
         if err:
             await send_forbidden(str(err))
         return
@@ -269,7 +301,7 @@ async def handle_dm_message(router: "Router", message: discord.Message) -> None:
         if len(parts) < 2:
             await send_forbidden("Usage: !c copyrepo <from> <to>")
             return
-        err = await dm_copy_repo(router, message, parts[0], parts[1], entry)
+        err = await dm_copy_repo(router, event, sink, parts[0], parts[1], entry)
         if err:
             await send_forbidden(str(err))
         return
@@ -278,7 +310,7 @@ async def handle_dm_message(router: "Router", message: discord.Message) -> None:
         if not name:
             await send_forbidden("Usage: !c deleterepo <name>")
             return
-        err = await dm_delete_repo(router, message, name, entry)
+        err = await dm_delete_repo(router, event, sink, name, entry)
         if err:
             await send_forbidden(str(err))
         return
@@ -287,7 +319,7 @@ async def handle_dm_message(router: "Router", message: discord.Message) -> None:
         if len(parts) < 2:
             await send_forbidden("Usage: !c renamerepo <from> <to>")
             return
-        err = await dm_rename_repo(router, message, parts[0], parts[1], entry)
+        err = await dm_rename_repo(router, event, sink, parts[0], parts[1], entry)
         if err:
             await send_forbidden(str(err))
         return

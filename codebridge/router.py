@@ -1,12 +1,10 @@
-"""Discord/Codex command router and handlers."""
+"""Codex command router and handlers."""
 
 import asyncio
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
-
-import discord
+from typing import Any, Dict, Optional
 
 from . import config as cfgmod
 from .audit import Entry, Logger as AuditLogger
@@ -14,6 +12,7 @@ from .codex import Event, Options, Runner, display_texts, parse_event
 from .queue import Manager
 from .session_service import SessionService
 from .state import Store, utc_now_iso
+from .transport import MessageEvent, ResponseSink
 from .util import path as pathutil
 from .handlers import core as core_handlers
 from .handlers import dm_admin as dm_admin_handlers
@@ -25,7 +24,6 @@ from .util.chunk import chunk_text
 from .util.prompt import needs_user_input
 from .router_helpers import (
     DEFAULT_SESSION,
-    FORBIDDEN_PREFIX,
     MAX_SESSIONS_PER_CHANNEL,
     PendingConflict,
     UsageStats,
@@ -49,35 +47,35 @@ class Router:
         self.runner = runner
         self.queue = queue
         self.logger = logger
-        self._pins: Dict[str, int] = {}
         self._usage: Dict[str, Dict[str, UsageStats]] = {}
         self.sessions = SessionService(state, cfg)
         self._command_registry, self._command_specs = command_registry.build_registry()
 
-    async def handle_message(self, client: discord.Client, message: discord.Message) -> None:
-        """Handle an incoming Discord message."""
-        if message.author.bot:
+    async def handle_message(self, event: MessageEvent, sink: ResponseSink) -> None:
+        """Handle an incoming message event."""
+        if event.author_is_bot:
             return
 
-        channel = message.channel
-        is_dm = isinstance(channel, (discord.DMChannel, discord.GroupChannel))
-        channel_name = channel.name if hasattr(channel, "name") and channel.name else str(channel.id)
+        channel_name = event.channel_name or event.channel_id
 
-        if is_dm:
+        if event.is_dm:
             if not self.cfg.discord.dm_admin_enabled:
                 return
-            if not self._dm_admin_allowed(str(message.author.id)):
-                await self.reply_forbidden(channel, "You are not allowed to use DM admin commands.")
+            if not self._dm_admin_allowed(event.author_id):
+                await self.reply_forbidden(sink, "You are not allowed to use DM admin commands.")
                 return
-            await dm_admin_handlers.handle_dm_message(self, message)
+            await dm_admin_handlers.handle_dm_message(self, event, sink)
+            return
+        if not event.guild_id:
+            await self.reply_forbidden(sink, "This bot only works in guild channels.")
             return
 
-        if self.cfg.discord.guild_id and str(message.guild.id) != self.cfg.discord.guild_id:
-            await self.reply_forbidden(channel, "This bot is not configured for this guild.")
+        if self.cfg.discord.guild_id and event.guild_id != self.cfg.discord.guild_id:
+            await self.reply_forbidden(sink, "This bot is not configured for this guild.")
             return
 
-        if self.cfg.discord.allowed_user_ids and str(message.author.id) not in self.cfg.discord.allowed_user_ids:
-            await self.reply_forbidden(channel, "You are not allowed to use this bot.")
+        if self.cfg.discord.allowed_user_ids and event.author_id not in self.cfg.discord.allowed_user_ids:
+            await self.reply_forbidden(sink, "You are not allowed to use this bot.")
             return
 
         rexp = self.cfg.channel_regex()
@@ -87,7 +85,7 @@ class Router:
 
         repo_name = match.group(1)
         prefix = self.cfg.discord.prefix or "!c"
-        content = (message.content or "").strip()
+        content = (event.content or "").strip()
         if not content.startswith(prefix):
             if not self.cfg.discord.allow_plain_prompts:
                 return
@@ -97,10 +95,10 @@ class Router:
             try:
                 repo_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, repo_name)
             except Exception as exc:
-                await self.reply_forbidden(channel, f"Repo error: {exc}")
+                await self.reply_forbidden(sink, f"Repo error: {exc}")
                 return
-            session = self.current_session_for_user(str(message.author.id), str(channel.id))
-            await self.handle_resume(message, repo_name, repo_path, session, prompt)
+            session = self.current_session_for_user(event.author_id, event.channel_id)
+            await self.handle_resume(event, sink, repo_name, repo_path, session, prompt)
             return
 
         cmdline = content[len(prefix) :].strip()
@@ -114,15 +112,15 @@ class Router:
             try:
                 repo_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, repo_name)
             except Exception as exc:
-                await self.reply_forbidden(channel, f"Repo error: {exc}")
+                await self.reply_forbidden(sink, f"Repo error: {exc}")
                 return
-            await self.handle_create_repo(message, repo_name, repo_path)
+            await self.handle_create_repo(event, sink, repo_name, repo_path)
             return
 
         try:
             repo_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, repo_name)
         except Exception as exc:
-            await self.reply_forbidden(channel, f"Repo error: {exc}")
+            await self.reply_forbidden(sink, f"Repo error: {exc}")
             return
 
         if len(fields) >= 2 and fields[1] == "/quit":
@@ -130,28 +128,29 @@ class Router:
             try:
                 session_name = normalize_session(session_name)
             except ValueError as exc:
-                await self.reply_forbidden(channel, str(exc))
+                await self.reply_forbidden(sink, str(exc))
                 return
-            await self.handle_quit(channel, session_name)
+            await self.handle_quit(sink, session_name)
             return
         if cmdline.startswith("/"):
-            await self.handle_resume(message, repo_name, repo_path, DEFAULT_SESSION, cmdline)
+            await self.handle_resume(event, sink, repo_name, repo_path, DEFAULT_SESSION, cmdline)
             return
         if len(fields) >= 2 and fields[1].startswith("/"):
             session_name = fields[0]
             try:
                 session_name = normalize_session(session_name)
             except ValueError as exc:
-                await self.reply_forbidden(channel, str(exc))
+                await self.reply_forbidden(sink, str(exc))
                 return
             prompt = cmdline[len(fields[0]) :].strip()
-            await self.handle_resume(message, repo_name, repo_path, session_name, prompt)
+            await self.handle_resume(event, sink, repo_name, repo_path, session_name, prompt)
             return
 
         if await command_registry.dispatch(
             self._command_registry,
             self,
-            message,
+            event,
+            sink,
             repo_name,
             repo_path,
             cmd,
@@ -159,180 +158,207 @@ class Router:
         ):
             return
 
-        await self.handle_resume(message, repo_name, repo_path, DEFAULT_SESSION, cmdline)
+        await self.handle_resume(event, sink, repo_name, repo_path, DEFAULT_SESSION, cmdline)
 
-    async def handle_dm_message(self, message: discord.Message) -> None:
+    async def handle_dm_message(self, event: MessageEvent, sink: ResponseSink) -> None:
         """Handle an incoming DM admin message."""
-        await dm_admin_handlers.handle_dm_message(self, message)
+        await dm_admin_handlers.handle_dm_message(self, event, sink)
 
-    async def handle_start(self, message: discord.Message, repo_name: str, repo_path: str, session: str) -> None:
+    async def handle_start(self, event: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, session: str) -> None:
         """Start a new Codex session for a channel/session."""
-        await core_handlers.handle_start(self, message, repo_name, repo_path, session)
+        await core_handlers.handle_start(self, event, sink, repo_name, repo_path, session)
 
-    async def handle_resume(self, message: discord.Message, repo_name: str, repo_path: str, session: str, prompt: str) -> None:
+    async def handle_resume(
+        self,
+        event: MessageEvent,
+        sink: ResponseSink,
+        repo_name: str,
+        repo_path: str,
+        session: str,
+        prompt: str,
+    ) -> None:
         """Resume a Codex session with a prompt."""
-        await core_handlers.handle_resume(self, message, repo_name, repo_path, session, prompt)
+        await core_handlers.handle_resume(self, event, sink, repo_name, repo_path, session, prompt)
 
-    async def handle_create_repo(self, message: discord.Message, repo_name: str, repo_path: str) -> None:
+    async def handle_create_repo(self, event: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str) -> None:
         """Create a new repo directory and git init."""
-        await core_handlers.handle_create_repo(self, message, repo_name, repo_path)
+        await core_handlers.handle_create_repo(self, event, sink, repo_name, repo_path)
 
-    async def handle_clone_repo(self, message: discord.Message, repo_name: str, repo_path: str, raw_url: str) -> None:
+    async def handle_clone_repo(
+        self,
+        event: MessageEvent,
+        sink: ResponseSink,
+        repo_name: str,
+        repo_path: str,
+        raw_url: str,
+    ) -> None:
         """Clone a GitHub repo into code_root for the channel name."""
-        await core_handlers.handle_clone_repo(self, message, repo_name, repo_path, raw_url)
+        await core_handlers.handle_clone_repo(self, event, sink, repo_name, repo_path, raw_url)
 
     async def handle_copy_repo(
         self,
-        message: discord.Message,
+        event: MessageEvent,
+        sink: ResponseSink,
         repo_name: str,
         repo_path: str,
         new_name: str,
         target_path: str,
     ) -> None:
         """Copy an existing repo into a new directory without .git."""
-        await core_handlers.handle_copy_repo(self, message, repo_name, repo_path, new_name, target_path)
+        await core_handlers.handle_copy_repo(self, event, sink, repo_name, repo_path, new_name, target_path)
 
-    async def handle_spec(self, message: discord.Message, repo_name: str, repo_path: str, session: str) -> None:
+    async def handle_spec(
+        self,
+        event: MessageEvent,
+        sink: ResponseSink,
+        repo_name: str,
+        repo_path: str,
+        session: str,
+    ) -> None:
         """Run the spec capture flow via Codex."""
-        await core_handlers.handle_spec(self, message, repo_name, repo_path, session)
+        await core_handlers.handle_spec(self, event, sink, repo_name, repo_path, session)
 
-    async def handle_choose(self, message: discord.Message, repo_name: str, repo_path: str, session: str, choice: str) -> None:
+    async def handle_choose(
+        self,
+        event: MessageEvent,
+        sink: ResponseSink,
+        repo_name: str,
+        repo_path: str,
+        session: str,
+        choice: str,
+    ) -> None:
         """Resolve a pending start conflict."""
-        await core_handlers.handle_choose(self, message, repo_name, repo_path, session, choice)
+        await core_handlers.handle_choose(self, event, sink, repo_name, repo_path, session, choice)
 
-    async def handle_stop(self, channel: discord.abc.Messageable, session: str) -> None:
+    async def handle_stop(self, sink: ResponseSink, session: str) -> None:
         """Send a stop signal to a running Codex process."""
-        await core_handlers.handle_stop(self, channel, session)
+        await core_handlers.handle_stop(self, sink, session)
 
-    async def handle_kill(self, channel: discord.abc.Messageable, session: str) -> None:
+    async def handle_kill(self, sink: ResponseSink, session: str) -> None:
         """Force-kill a running Codex process."""
-        await core_handlers.handle_kill(self, channel, session)
+        await core_handlers.handle_kill(self, sink, session)
 
-    async def handle_quit(self, channel: discord.abc.Messageable, session: str) -> None:
+    async def handle_quit(self, sink: ResponseSink, session: str) -> None:
         """Send /quit to the Codex process."""
-        await core_handlers.handle_quit(self, channel, session)
+        await core_handlers.handle_quit(self, sink, session)
 
-    async def handle_showrepo(self, channel: discord.abc.Messageable, repo_path: str) -> None:
+    async def handle_showrepo(self, sink: ResponseSink, repo_path: str) -> None:
         """Show a pruned repo tree for orientation."""
-        await repo_handlers.handle_showrepo(self, channel, repo_path)
+        await repo_handlers.handle_showrepo(self, sink, repo_path)
 
-    async def handle_showchanges(self, channel: discord.abc.Messageable, repo_path: str) -> None:
+    async def handle_showchanges(self, sink: ResponseSink, repo_path: str) -> None:
         """Show git status and diffstat for the repo."""
-        await repo_handlers.handle_showchanges(self, channel, repo_path)
+        await repo_handlers.handle_showchanges(self, sink, repo_path)
 
-    async def handle_tests(self, channel: discord.abc.Messageable, repo_path: str) -> None:
+    async def handle_tests(self, sink: ResponseSink, repo_path: str) -> None:
         """Run tests for the repo (pytest -q)."""
-        await repo_handlers.handle_tests(self, channel, repo_path)
+        await repo_handlers.handle_tests(self, sink, repo_path)
 
-    async def handle_git(self, channel: discord.abc.Messageable, repo_path: str, rest: str) -> None:
+    async def handle_git(self, sink: ResponseSink, repo_path: str, rest: str) -> None:
         """Run safe git helper commands."""
-        await git_handlers.handle_git(self, channel, repo_path, rest)
+        await git_handlers.handle_git(self, sink, repo_path, rest)
 
-    async def handle_logs(self, channel: discord.abc.Messageable, session: str, limit: int) -> None:
+    async def handle_logs(self, sink: ResponseSink, session: str, limit: int) -> None:
         """Show recent audit log entries."""
         try:
-            summaries = self.audit.summaries(str(channel.id), session, limit)
+            summaries = self.audit.summaries(sink.channel_id, session, limit)
         except Exception as exc:
-            await self.reply(channel, f"logs error: {exc}")
+            await self.reply(sink, f"logs error: {exc}")
             return
         if not summaries:
-            await self.reply(channel, "No logs yet.")
+            await self.reply(sink, "No logs yet.")
             return
         lines = []
         for s in summaries:
             lines.append(f"[{s.seq}] channel:{s.channel_id} session:{s.session} thread:{s.thread_id}")
         text = "\n".join(lines)
         for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
-            await self.reply(channel, chunk)
+            await self.reply(sink, chunk)
 
-    async def handle_ps(self, channel: discord.abc.Messageable) -> None:
+    async def handle_ps(self, sink: ResponseSink) -> None:
         """Show queued/running jobs for the channel."""
-        statuses = await self.queue.snapshot(str(channel.id))
+        statuses = await self.queue.snapshot(sink.channel_id)
         if not statuses:
-            await self.reply_forbidden(channel, "No jobs queued or running.")
+            await self.reply_forbidden(sink, "No jobs queued or running.")
             return
         lines = []
-        for st in statuses:
-            lines.append(f"{st.job_id} [{st.status}] session:{st.session or DEFAULT_SESSION} pos:{st.position}")
-        await self.reply(channel, "\n".join(lines))
+        for s in statuses:
+            pos = f" pos:{s.position}" if s.position >= 0 else ""
+            lines.append(f"{s.job_id} [{s.status}] session:{s.session or DEFAULT_SESSION}{pos} {s.command}")
+        await self.reply(sink, "\n".join(lines))
 
-    async def handle_cancel(self, channel: discord.abc.Messageable, job_id: str) -> None:
+    async def handle_cancel(self, sink: ResponseSink, job_id: str) -> None:
         """Cancel a queued job by id."""
-        ok = await self.queue.cancel(str(channel.id), job_id)
-        if ok:
-            await self.reply(channel, f"Cancelled {job_id}")
-        else:
-            await self.reply(channel, "Job not found or already running.")
-
-    async def handle_rerun(self, channel: discord.abc.Messageable) -> None:
-        """Re-queue the last job for the channel."""
-        record = await self.queue.last_job(str(channel.id))
-        if not record:
-            await self.reply_forbidden(channel, "No job to rerun.")
+        ok = await self.queue.cancel(sink.channel_id, job_id)
+        if not ok:
+            await self.reply_forbidden(sink, "Unknown job id.")
             return
-        pos, job_id, _ = await self.queue.enqueue(str(channel.id), record.session, record.job)
-        await self.reply(channel, f"Re-queued last job (session '{record.session or DEFAULT_SESSION}') as {job_id} (position {pos})")
+        await self.reply(sink, f"Cancelled job {job_id}.")
 
-    async def handle_select_session(self, message: discord.Message, session: str) -> None:
-        """Set a sticky session selection for a user."""
-        channel_id = str(message.channel.id)
-        user_id = str(message.author.id)
-        self.sessions.set_sticky(channel_id, user_id, session)
-        await self.update_pinned_status(message.channel, user_id, session)
-        await self.reply(message.channel, f"Current session set to '{session}' for you in this channel.")
+    async def handle_rerun(self, sink: ResponseSink) -> None:
+        """Requeue the last job for the channel."""
+        job_id = await self.queue.rerun(sink.channel_id)
+        if not job_id:
+            await self.reply_forbidden(sink, "No prior job to rerun.")
+            return
+        await self.reply(sink, f"Requeued job {job_id}.")
 
-    async def handle_thread(self, channel: discord.abc.Messageable, session: str, repo_name: str, repo_path: str, thread_id: str) -> None:
-        """Attach a thread id to a session."""
-        if not session:
-            session = DEFAULT_SESSION
-        self.update_state(str(channel.id), session, repo_name, repo_path, thread_id, self.session_model(str(channel.id), session))
-        await self.reply(channel, f"Thread for session '{session}' set to {thread_id}")
+    async def handle_select_session(self, event: MessageEvent, sink: ResponseSink, session: str) -> None:
+        """Set the sticky session selection for a user."""
+        user_id = event.author_id
+        channel_id = event.channel_id
+        self.set_sticky(channel_id, user_id, session)
+        await self.update_state(channel_id, session, "", "", "", "")
+        await self.reply(sink, f"Using session '{session}' by default.")
+        await self.update_pinned_status(sink, user_id, session)
 
-    async def handle_stats(self, channel: discord.abc.Messageable, session: str) -> None:
+    async def handle_thread(self, sink: ResponseSink, session: str, repo_name: str, repo_path: str, thread_id: str) -> None:
+        """Override stored thread id for a session."""
+        session = normalize_session(session or DEFAULT_SESSION)
+        self.update_state(sink.channel_id, session, repo_name, repo_path, thread_id, "")
+        await self.reply(sink, f"Thread id for session '{session}' set to {thread_id}")
+
+    async def handle_stats(self, sink: ResponseSink, session: str) -> None:
         """Show token usage stats for a session."""
-        stats = self.get_usage(str(channel.id), session)
+        stats = self._usage.get(sink.channel_id, {}).get(session)
         if not stats:
-            await self.reply(channel, "No usage recorded yet for this session.")
+            await self.reply_forbidden(sink, "No usage stats yet.")
             return
-        await self.reply(channel, f"Usage for session '{session}': input {stats.input_tokens}, output {stats.output_tokens}, total {stats.total_tokens}")
+        await self.reply(
+            sink,
+            f"session {session}: input {stats.input_tokens}, output {stats.output_tokens}, total {stats.total_tokens}",
+        )
 
-    async def handle_peek(self, channel: discord.abc.Messageable, session: str) -> None:
+    async def handle_peek(self, sink: ResponseSink, session: str) -> None:
         """Show running status and last output time."""
-        channel_id = str(channel.id)
-        active = await self.get_active(channel_id, session)
-        last = self.get_activity(channel_id, session)
+        active = await self.get_active(sink.channel_id, session)
+        last = self.get_activity(sink.channel_id, session)
         if active is None:
-            if last:
-                await self.reply(channel, f"No active job. Last output for session '{session}' at {last}")
-                return
-            await self.reply(channel, "No active job.")
+            await self.reply(sink, f"Codex is idle. Last output at {last or 'n/a'}.")
             return
-        if last:
-            await self.reply(channel, f"Codex is running for session '{session}'. Last output at {last}")
-            return
-        await self.reply(channel, f"Codex is running for session '{session}'.")
+        await self.reply(sink, f"Codex is running for session '{session}'.")
 
-    async def send_status(self, channel: discord.abc.Messageable, repo_name: str, repo_path: str) -> None:
+    async def send_status(self, sink: ResponseSink, repo_name: str, repo_path: str) -> None:
         """Send status summary for the channel and sessions."""
         state = self.state.load()
-        ch = state.channels.get(str(channel.id))
+        ch = state.channels.get(sink.channel_id)
         if ch and ch.sessions:
             lines = [f"Repo: {repo_name}", f"Path: {repo_path}", f"Sessions ({len(ch.sessions)}/{MAX_SESSIONS_PER_CHANNEL}):"]
             for name, sess in ch.sessions.items():
-                active = " (active)" if await self.get_active(str(channel.id), name) is not None else ""
+                active = " (active)" if await self.get_active(sink.channel_id, name) is not None else ""
                 model = sess.model or self.cfg.codex.model
                 model_info = f" model {model}" if model else ""
                 lines.append(f"- {name}: thread {sess.thread_id}{active}{model_info} last {sess.last_used_at}")
-            current = self.current_session_for_user("", str(channel.id))
+            current = self.current_session_for_user("", sink.channel_id)
             if current:
                 lines.append(f"Current selection: {current}")
-            await self.reply(channel, "\n".join(lines))
+            await self.reply(sink, "\n".join(lines))
             return
-        await self.reply(channel, f"Repo: {repo_name}\nPath: {repo_path}\nNo session attached.")
+        await self.reply(sink, f"Repo: {repo_name}\nPath: {repo_path}\nNo session attached.")
 
-    async def send_help(self, channel: discord.abc.Messageable) -> None:
+    async def send_help(self, sink: ResponseSink) -> None:
         """Send help text for supported commands."""
-        await self.reply(channel, command_registry.render_help(self._command_specs))
+        await self.reply(sink, command_registry.render_help(self._command_specs))
 
     def config_text(self) -> str:
         """Render a concise config summary."""
@@ -351,7 +377,8 @@ class Router:
 
     async def run_codex(
         self,
-        message: discord.Message,
+        event: MessageEvent,
+        sink: ResponseSink,
         repo_name: str,
         repo_path: str,
         session: str,
@@ -359,7 +386,7 @@ class Router:
         args: list[str],
     ) -> None:
         """Run Codex with streaming callbacks and audit logging."""
-        channel_id = str(message.channel.id)
+        channel_id = event.channel_id
         meta = {
             "repo_name": repo_name,
             "repo_path": repo_path,
@@ -369,14 +396,14 @@ class Router:
             "channel": channel_id,
         }
         entry = self.audit_start(channel_id, session or DEFAULT_SESSION, "pending", meta)
-        async with self.typing_context(message.channel):
+        async with self.typing_context(sink):
             try:
                 proc = await self.runner.run(
                     Options(
                         repo_path=repo_path,
                         args=args,
                         env=self.cfg.codex.env,
-                        on_jsonl=lambda line: self.on_jsonl(message.channel, channel_id, session, entry, line),
+                        on_jsonl=lambda line: self.on_jsonl(sink, channel_id, session, entry, line),
                         on_thread=lambda tid: self.on_thread(channel_id, session, repo_name, repo_path, model, entry, tid),
                         on_stderr=lambda line: self.append_audit_stderr(entry, line),
                         on_exit=lambda err, rc: self.on_exit(channel_id, session, repo_name, err, rc),
@@ -395,7 +422,7 @@ class Router:
                 await self.clear_active(channel_id, session)
                 self.close_audit(entry)
 
-    async def on_jsonl(self, channel: discord.abc.Messageable, channel_id: str, session: str, entry: Optional[Entry], line: str) -> None:
+    async def on_jsonl(self, sink: ResponseSink, channel_id: str, session: str, entry: Optional[Entry], line: str) -> None:
         """Handle a JSONL line from Codex and relay output."""
         self.append_audit_codex(entry, line)
         evt = parse_event(line)
@@ -403,8 +430,8 @@ class Router:
             text = strip_control_codes(line).strip()
             if text:
                 for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
-                    self.append_audit_discord(entry, chunk)
-                    await self.reply(channel, chunk)
+                    self.append_audit_output(entry, chunk)
+                    await self.reply(sink, chunk)
             return
         self.update_usage(channel_id, session, evt)
         self.update_activity(channel_id, session)
@@ -413,8 +440,8 @@ class Router:
             if needs_user_input(text):
                 text = f"Codex asks: {text}"
             for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
-                self.append_audit_discord(entry, chunk)
-                await self.reply(channel, chunk)
+                self.append_audit_output(entry, chunk)
+                await self.reply(sink, chunk)
 
     async def on_thread(
         self,
@@ -440,21 +467,15 @@ class Router:
             return
         self.logger.info("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "code": rc})
 
-    async def reply(self, channel: discord.abc.Messageable, content: str) -> None:
+    async def reply(self, sink: ResponseSink, content: str) -> None:
         """Send a reply to a channel, chunking as needed."""
         content = strip_control_codes(content)
         for chunk in chunk_text(content, self.cfg.discord.max_discord_message_chars):
-            await channel.send(chunk)
-            if await self.has_active(str(channel.id)):
-                if hasattr(channel, "trigger_typing"):
-                    try:
-                        await channel.trigger_typing()
-                    except Exception:
-                        pass
+            await sink.send(chunk)
 
-    async def reply_forbidden(self, channel: discord.abc.Messageable, detail: str) -> None:
+    async def reply_forbidden(self, sink: ResponseSink, detail: str) -> None:
         """Send a standardized forbidden/invalid response."""
-        await channel.send(forbidden_message(detail))
+        await sink.send(forbidden_message(detail))
 
     def _dm_admin_allowed(self, user_id: str) -> bool:
         if self.cfg.discord.dm_admin_user_ids:
@@ -462,57 +483,15 @@ class Router:
         return user_id in self.cfg.discord.allowed_user_ids
 
     @asynccontextmanager
-    async def typing_context(self, channel: discord.abc.Messageable):
-        """Provide a typing indicator context with fallback."""
-        if hasattr(channel, "typing"):
-            async with channel.typing():
-                yield
-            return
-        if not hasattr(channel, "trigger_typing"):
+    async def typing_context(self, sink: ResponseSink):
+        """Provide a typing indicator context."""
+        async with sink.typing():
             yield
-            return
-        stop = asyncio.Event()
 
-        async def _loop() -> None:
-            while not stop.is_set():
-                try:
-                    await channel.trigger_typing()
-                except Exception:
-                    pass
-                try:
-                    await asyncio.wait_for(stop.wait(), timeout=8.0)
-                except asyncio.TimeoutError:
-                    continue
-
-        task = asyncio.create_task(_loop())
-        try:
-            yield
-        finally:
-            stop.set()
-            task.cancel()
-
-    async def update_pinned_status(self, channel: discord.abc.Messageable, user_id: str, session: str) -> None:
+    async def update_pinned_status(self, sink: ResponseSink, user_id: str, session: str) -> None:
         """Update or pin the current session status message."""
-        if not isinstance(channel, discord.TextChannel):
-            return
         text = f"User {user_id} current session: {session or DEFAULT_SESSION}"
-        msg_id = self._pins.get(str(channel.id))
-        if msg_id:
-            try:
-                msg = await channel.fetch_message(msg_id)
-                await msg.edit(content=text)
-                return
-            except Exception:
-                self._pins.pop(str(channel.id), None)
-        try:
-            msg = await channel.send(text)
-        except Exception:
-            return
-        try:
-            await msg.pin()
-        except Exception:
-            pass
-        self._pins[str(channel.id)] = msg.id
+        await sink.update_pinned_status(user_id, session, text)
 
     def seed_agents_template(self, repo_path: str) -> None:
         """Seed AGENTS.md from a template when configured."""
@@ -563,8 +542,8 @@ class Router:
             except Exception:
                 pass
 
-    def append_audit_discord(self, entry: Optional[Entry], msg: str) -> None:
-        """Append a Discord message to the audit log."""
+    def append_audit_output(self, entry: Optional[Entry], msg: str) -> None:
+        """Append a message to the audit log."""
         if entry:
             try:
                 entry.append_discord_out(msg)

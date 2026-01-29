@@ -7,6 +7,7 @@ Python service that connects Discord channels (`codex-<repo>`) to Codex CLI sess
 - Runs Codex in JSONL streaming mode; forwards output to Discord, strips control codes, and flags prompts needing user input.
 - Per-channel queue, multi-session support (max 3 per channel), and run control (stop/kill/quit).
 - Optional DM admin mode for owner-only repo management.
+- Transport-agnostic router core using `MessageEvent` + `ResponseSink` for future adapters (e.g., Slack).
 
 ## Setup
 Prereqs:

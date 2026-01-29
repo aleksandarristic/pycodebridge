@@ -126,7 +126,7 @@
 - Generate help text from the registry to avoid drift.
 - Add unit tests for registry parsing and help output.
 
-25) TODO - Transport abstraction (phase 1)
+25) DONE - Transport abstraction (phase 1)
 - Define a platform-agnostic `MessageEvent` and `ResponseSink` contract.
 - Update Router to consume these interfaces rather than discord.py types.
 - Add unit tests for event parsing and sink behavior.
@@ -162,3 +162,4 @@
 - 2026-01-29: Split router handlers and helpers into dedicated modules.
 - 2026-01-29: Added SessionService abstraction and unit tests for pending conflicts and active tracking.
 - 2026-01-29: Introduced a command registry with generated help text and registry tests.
+- 2026-01-29: Added transport-agnostic MessageEvent/ResponseSink contracts with Router refactor and transport tests.

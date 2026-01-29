@@ -4,6 +4,7 @@
 - Build and maintain the Python service that bridges Discord channels (`codex-<repo>`) to Codex CLI sessions in the matching repo under `code_root`.
 - One Codex session per channel per session name; queue requests sequentially; stream Codex JSONL output back to Discord.
 - Persist state and audit logs per channel/session/thread; provide explicit run control (stop/kill/quit) and repo helpers.
+- Keep Router transport-agnostic via `MessageEvent` + `ResponseSink`; adapters map platform events (Discord, future Slack) into these interfaces.
 
 ## Key behaviors
 - Commands: start, resume, /quit, stop, kill, choose resume|replace|cancel, use/select, model, thread, help/status/config, logs, stats/peek, showrepo/showchanges/tests, git helpers, ps/cancel/rerun, repo bootstrap (createrepo/clonerepo/copyrepo/spec).
