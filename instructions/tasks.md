@@ -111,6 +111,31 @@
 - Keep docstrings concise and behavior-focused; avoid altering logic.
 - Run tests to confirm no regressions.
 
+22) TODO - Router refactor (1-2 day wins)
+- Split `codebridge/router.py` into handler modules (core, DM admin, repo helpers, git helpers).
+- Extract shared helper functions into a `router_helpers.py`.
+- Add unit tests for handler entry points where feasible.
+
+23) TODO - SessionService layer
+- Introduce a `SessionService` to encapsulate session state updates, pending conflict handling, and active process tracking.
+- Replace direct map access in `Router` with the service to reduce locking complexity.
+- Add unit tests covering SessionService behavior (conflict TTL, active tracking).
+
+24) TODO - Command registry
+- Implement a table-driven command registry to dispatch handlers.
+- Generate help text from the registry to avoid drift.
+- Add unit tests for registry parsing and help output.
+
+25) TODO - Transport abstraction (phase 1)
+- Define a platform-agnostic `MessageEvent` and `ResponseSink` contract.
+- Update Router to consume these interfaces rather than discord.py types.
+- Add unit tests for event parsing and sink behavior.
+
+26) TODO - Transport abstraction (phase 2)
+- Implement a Discord adapter that maps discord.py events to `MessageEvent` and provides a `ResponseSink`.
+- Keep existing behavior and typing indicators intact under the adapter.
+- Add a config option/flag for selecting adapters (Discord only for now).
+
 ---
 
 ## progress.log
