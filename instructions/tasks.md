@@ -219,7 +219,7 @@
   - Refactor Router/SessionService/Queue to use coordinator transitions.
   - Add a state-transition test matrix for start/resume/stop/kill/pending.
 
-54) TODO - Adapter contract fixtures (issue plan)
+54) DONE - Adapter contract fixtures (issue plan)
 - Owner: TBD
 - Subtasks:
   - Define typed fixtures for each adapter input event.
@@ -325,4 +325,5 @@
 - 2026-01-29: Added capability conformance tests for adapter sinks.
 - 2026-01-29: Added gating tests for upload/download capabilities.
 - 2026-01-29: Moved adapter implementation tasks to `instructions/backlog.md`.
- - 2026-01-29: Added backlog file reference in docs and updated architecture diagram for adapters.
+- 2026-01-29: Added backlog file reference in docs and updated architecture diagram for adapters.
+- 2026-01-29: Added adapter contract fixtures and golden payload tests.
