@@ -88,6 +88,10 @@
 - Verify path expansion, file locks, and signal handling.
 - Replace SIGINT-only logic with cross-platform handling where needed.
 
+17) DONE - Requirements files
+- Add `requirements.txt` and `requirements-dev.txt` with pinned versions.
+- Keep dev requirements installing into `.venv`.
+
 ---
 
 ## progress.log
@@ -95,3 +99,4 @@
 - 2026-01-29: Scaffolded Python package, config loader, util modules, state/audit/logging, and async codex runner skeleton.
 - 2026-01-29: Added pending task notes for remaining porting work.
 - 2026-01-29: Added DISCORD.md and refreshed README/AGENTS for the Python port.
+- 2026-01-29: Added requirements.txt / requirements-dev.txt with pinned versions.

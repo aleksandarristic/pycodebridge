@@ -1,0 +1,4 @@
+discord.py==2.6.4
+PyYAML==6.0.3
+python-dotenv==1.2.1
+filelock==3.20.3
