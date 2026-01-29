@@ -233,6 +233,34 @@
   - Add scenarios for start/resume/stop/kill, file transfers, and threading.
   - Run harness in CI (unit-level, no external API calls).
 
+56) TODO - Router surface cleanup (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Identify Router methods that can move into `handlers/*` or small service helpers.
+  - Extract at least one low-risk block (status formatting or reply helpers) into a dedicated module.
+  - Add/update unit tests covering the moved behavior.
+
+57) TODO - Standardize command routing utilities (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Audit duplicated parsing/validation logic across handlers.
+  - Add shared helpers in `command_parse.py` or `command_registry.py`.
+  - Update handlers to use shared utilities and add regression tests.
+
+58) TODO - Consolidate audit helper calls (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Introduce a small audit helper/service for start/append/close patterns.
+  - Replace direct audit calls in Router with helper usage.
+  - Add tests to ensure audit entries are still written correctly.
+
+59) TODO - Clarify adapter contract usage (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Identify adapter-specific conditionals in Router and handlers.
+  - Prefer capabilities checks or adapter-layer behavior where possible.
+  - Add tests covering any adjusted routing behavior.
+
 37) DONE - Telegram adapter completion
 - Implement Telegram runtime wiring (polling/webhook) and response sending.
 - Add Telegram config fields and validation.

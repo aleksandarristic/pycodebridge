@@ -5,6 +5,8 @@ def chunk_text(text: str, max_len: int) -> list[str]:
     """Split text into chunks that respect a maximum length."""
     if max_len <= 0:
         return [text]
+    if not text or len(text) <= max_len:
+        return [text]
     chunks: list[str] = []
     buf: list[str] = []
     buf_len = 0
