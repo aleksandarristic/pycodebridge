@@ -280,6 +280,8 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
     """Handle an incoming DM admin message."""
     content = (event.content or "").strip()
     prefix = router._transport_prefix(event)
+    if await router.handle_pending_upload_response(event, sink, router.get_dm_binding(event) or ""):
+        return
     if not content.startswith(prefix):
         if not router._transport_user_allowed(event):
             await sink.send(forbidden_message("You are not allowed to use this bot."))

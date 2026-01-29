@@ -103,6 +103,8 @@ class Router:
                 return
             await self.handle_upload_request(event, sink, repo_name, repo_path)
             return
+        if await self.handle_pending_upload_response(event, sink, repo_name):
+            return
         if not content.startswith(prefix):
             if not self._transport_allow_plain_prompts(event):
                 return

@@ -40,6 +40,7 @@ class _FakeRouter:
         self.state = store
         self.last_resume = None
         self.logger = _FakeLogger()
+        self.pending_handled = False
 
     def _transport_prefix(self, event: MessageEvent) -> str:
         if event.platform == "telegram":
@@ -79,6 +80,12 @@ class _FakeRouter:
             "session": session,
             "prompt": prompt,
         }
+
+    async def handle_pending_upload_response(self, event: MessageEvent, sink, repo_name: str) -> bool:
+        if event.content == "uploads/":
+            self.pending_handled = True
+            return True
+        return False
 
     def append_audit_output(self, entry, msg: str) -> None:
         return None
@@ -214,3 +221,47 @@ def test_dm_unbound_guidance(tmp_path):
     asyncio.run(run())
 
     assert "No repo bound" in sink.sent[0]
+
+
+def test_dm_pending_upload_response_short_circuits(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.telegram.allowed_user_ids = ["user"]
+    cfg.telegram.prefix = "!c"
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    store = Store(cfg.state.data_dir)
+    router = _FakeRouter(cfg, store)
+    sink = _FakeSink("dm-1")
+    bind_event = MessageEvent(
+        platform="telegram",
+        content="!c bind repo",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+    upload_response = MessageEvent(
+        platform="telegram",
+        content="uploads/",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    async def run():
+        await dm_admin.handle_dm_message(router, bind_event, sink)
+        await dm_admin.handle_dm_message(router, upload_response, sink)
+
+    asyncio.run(run())
+
+    assert router.pending_handled is True
+    assert router.last_resume is None
