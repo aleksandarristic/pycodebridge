@@ -225,7 +225,7 @@
   - Add adapter tests for Discord thread id mapping and Telegram reply/topic mapping.
   - Add Router test verifying thread context propagation via sink wrapper.
 
-50) TODO - Capability conformance tests (issue plan)
+50) DONE - Capability conformance tests (issue plan)
 - Owner: TBD
 - Subtasks:
   - Add unit tests asserting `ResponseSink.capabilities()` for each adapter.
@@ -353,3 +353,4 @@
 - 2026-01-29: Added transport capabilities, extracted file transfer service, and expanded thread context tests.
 - 2026-01-29: Marked Discord threads-only adapter variant as removed.
 - 2026-01-29: Documented transport capabilities in README and adapter docs.
+- 2026-01-29: Added capability conformance tests for adapter sinks.
