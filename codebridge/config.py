@@ -15,6 +15,7 @@ DEFAULT_LOG_LEVEL = "info"
 DEFAULT_TOKEN_ENV = "DISCORD_TOKEN"
 DEFAULT_LOCK_TIMEOUT_SECONDS = 600
 DEFAULT_CONFLICT_TTL_SECONDS = 60
+DEFAULT_TRANSPORT_ADAPTER = "discord"
 
 DEFAULT_START_PROMPT = (
     "Hello. This is a Discord-bridged Codex session for repo: {{REPO_NAME}}.\n"
@@ -74,6 +75,12 @@ class RuntimeConfig:
 
 
 @dataclass
+class TransportConfig:
+    """Transport adapter configuration."""
+    adapter: str = DEFAULT_TRANSPORT_ADAPTER
+
+
+@dataclass
 class RepoBootstrapConfig:
     """Repo bootstrap configuration for createrepo/spec flows."""
     agents_template: str = ""
@@ -87,6 +94,7 @@ class Config:
     codex: CodexConfig = field(default_factory=CodexConfig)
     state: StateConfig = field(default_factory=StateConfig)
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
+    transport: TransportConfig = field(default_factory=TransportConfig)
     repo_bootstrap: RepoBootstrapConfig = field(default_factory=RepoBootstrapConfig)
 
     def discord_token(self) -> str:
@@ -152,6 +160,9 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     runtime = raw.get("runtime", {}) or {}
     cfg.runtime.log_level = runtime.get("log_level", cfg.runtime.log_level)
 
+    transport = raw.get("transport", {}) or {}
+    cfg.transport.adapter = transport.get("adapter", cfg.transport.adapter)
+
     repo_bootstrap = raw.get("repo_bootstrap", {}) or {}
     cfg.repo_bootstrap.agents_template = repo_bootstrap.get(
         "agents_template", cfg.repo_bootstrap.agents_template
@@ -187,6 +198,8 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.state.conflict_ttl_seconds = DEFAULT_CONFLICT_TTL_SECONDS
     if not cfg.runtime.log_level:
         cfg.runtime.log_level = DEFAULT_LOG_LEVEL
+    if not cfg.transport.adapter:
+        cfg.transport.adapter = DEFAULT_TRANSPORT_ADAPTER
     if not cfg.state.log_dir and cfg.state.data_dir:
         cfg.state.log_dir = os.path.join(cfg.state.data_dir, "logs")
     if not cfg.repo_bootstrap.spec_prompt:
@@ -215,6 +228,9 @@ def _validate(cfg: Config) -> None:
     level = cfg.runtime.log_level.lower()
     if level not in {"debug", "info", "warn", "warning", "error"}:
         raise ValueError("runtime.log_level must be debug|info|warn|error")
+
+    if cfg.transport.adapter.lower() not in {"discord"}:
+        raise ValueError("transport.adapter must be discord (additional adapters not yet supported)")
 
     if len(cfg.discord.allowed_user_ids) == 0:
         if not cfg.discord.dm_admin_enabled or len(cfg.discord.dm_admin_user_ids) == 0:

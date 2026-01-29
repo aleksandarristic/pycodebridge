@@ -46,6 +46,9 @@ pycodebridge/
     __init__.py
     config.py
     discord_bot.py
+    adapters/
+      __init__.py
+      discord.py
     router.py
     queue.py
     codex.py
@@ -172,6 +175,9 @@ state:
 
 runtime:
   log_level: "info"
+
+transport:
+  adapter: "discord"
 
 repo_bootstrap:
   agents_template: ""

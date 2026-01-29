@@ -54,6 +54,9 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 ### `runtime`
 - `log_level` (default `info`) — `debug|info|warn|error`.
 
+### `transport`
+- `adapter` (default `discord`) — transport adapter to use (only `discord` supported today).
+
 ### `repo_bootstrap`
 - `agents_template` (default empty) — optional AGENTS.md template for `!c createrepo`.
 - `spec_prompt` (default template) — prompt used by `!c spec`.

@@ -29,7 +29,9 @@ state:
 runtime:
   log_level: "info"
 
+transport:
+  adapter: "discord"
+
 repo_bootstrap:
   agents_template: ""
   spec_prompt: ""
-

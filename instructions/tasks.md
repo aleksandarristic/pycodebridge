@@ -131,7 +131,7 @@
 - Update Router to consume these interfaces rather than discord.py types.
 - Add unit tests for event parsing and sink behavior.
 
-26) TODO - Transport abstraction (phase 2)
+26) DONE - Transport abstraction (phase 2)
 - Implement a Discord adapter that maps discord.py events to `MessageEvent` and provides a `ResponseSink`.
 - Keep existing behavior and typing indicators intact under the adapter.
 - Add a config option/flag for selecting adapters (Discord only for now).
@@ -163,3 +163,4 @@
 - 2026-01-29: Added SessionService abstraction and unit tests for pending conflicts and active tracking.
 - 2026-01-29: Introduced a command registry with generated help text and registry tests.
 - 2026-01-29: Added transport-agnostic MessageEvent/ResponseSink contracts with Router refactor and transport tests.
+- 2026-01-29: Added Discord adapter + transport config for MessageEvent/ResponseSink routing.

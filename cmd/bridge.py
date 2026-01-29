@@ -45,6 +45,9 @@ async def main() -> None:
     queue = Manager()
     router = Router(cfg, state_store, audit_logger, runner, queue, logger)
 
+    adapter = (cfg.transport.adapter or "discord").lower()
+    if adapter != "discord":
+        raise ValueError(f"Unsupported transport adapter: {adapter}")
     token = cfg.discord_token()
     client = build_client(router)
 

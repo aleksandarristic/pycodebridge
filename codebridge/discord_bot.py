@@ -2,6 +2,7 @@
 
 import discord
 
+from .adapters.discord import DiscordAdapter
 from .router import Router
 
 
@@ -16,6 +17,7 @@ class BridgeClient(discord.Client):
         intents.dm_messages = True
         super().__init__(intents=intents, **kwargs)
         self.router = router
+        self.adapter = DiscordAdapter()
 
     async def on_ready(self) -> None:
         """Log when the Discord client is ready."""
@@ -23,7 +25,9 @@ class BridgeClient(discord.Client):
 
     async def on_message(self, message: discord.Message) -> None:
         """Dispatch incoming messages to the Router."""
-        await self.router.handle_message(self, message)
+        event = self.adapter.event_from_message(message)
+        sink = self.adapter.sink_for_channel(message.channel)
+        await self.router.handle_message(event, sink)
 
 
 def build_client(router: Router) -> BridgeClient:
