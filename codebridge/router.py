@@ -2,7 +2,6 @@
 
 import asyncio
 import os
-import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
@@ -13,6 +12,7 @@ from . import config as cfgmod
 from .audit import Entry, Logger as AuditLogger
 from .codex import Event, Options, Runner, display_texts, parse_event
 from .queue import Manager
+from .session_service import SessionService
 from .state import Store, utc_now_iso
 from .util import path as pathutil
 from .command_parse import (
@@ -57,11 +57,8 @@ class Router:
         self.queue = queue
         self.logger = logger
         self._pins: Dict[str, int] = {}
-        self._active: Dict[str, Dict[str, Any]] = {}
-        self._activity: Dict[str, Dict[str, float]] = {}
         self._usage: Dict[str, Dict[str, UsageStats]] = {}
-        self._pending: Dict[str, PendingConflict] = {}
-        self._lock = asyncio.Lock()
+        self.sessions = SessionService(state, cfg)
 
     async def handle_message(self, client: discord.Client, message: discord.Message) -> None:
         """Handle an incoming Discord message."""
@@ -488,7 +485,7 @@ class Router:
         """Set a sticky session selection for a user."""
         channel_id = str(message.channel.id)
         user_id = str(message.author.id)
-        self.state.update(lambda fs: set_sticky(fs, channel_id, user_id, session))
+        self.sessions.set_sticky(channel_id, user_id, session)
         await self.update_pinned_status(message.channel, user_id, session)
         await self.reply(message.channel, f"Current session set to '{session}' for you in this channel.")
 
@@ -840,48 +837,15 @@ class Router:
 
     def update_state(self, channel_id: str, session: str, repo_name: str, repo_path: str, thread_id: str, model: str) -> None:
         """Update persistent state for a session."""
-        session = session or DEFAULT_SESSION
-
-        def mutator(fs):
-            ch = fs.channels.get(channel_id)
-            if ch is None:
-                from .state import ChannelState
-
-                ch = ChannelState()
-                fs.channels[channel_id] = ch
-            sess = ch.sessions.get(session)
-            if sess is None:
-                from .state import SessionState
-
-                sess = SessionState(repo_name=repo_name, repo_path=repo_path, thread_id=thread_id)
-            if not sess.created_at:
-                sess.created_at = utc_now_iso()
-            sess.repo_name = repo_name
-            sess.repo_path = repo_path
-            sess.thread_id = thread_id
-            if model:
-                sess.model = model
-            elif not sess.model and self.cfg.codex.model:
-                sess.model = self.cfg.codex.model
-            sess.last_used_at = utc_now_iso()
-            ch.sessions[session] = sess
-            fs.channels[channel_id] = ch
-
-        self.state.update(mutator)
+        self.sessions.update_state(channel_id, session, repo_name, repo_path, thread_id, model)
 
     def session_model(self, channel_id: str, session: str) -> str:
         """Return model override for a session or fallback to default."""
-        state = self.state.load()
-        ch = state.channels.get(channel_id)
-        if ch:
-            sess = ch.sessions.get(session or DEFAULT_SESSION)
-            if sess and sess.model:
-                return sess.model
-        return self.cfg.codex.model
+        return self.sessions.session_model(channel_id, session)
 
     def set_session_model(self, channel_id: str, session: str, repo_name: str, repo_path: str, model: str) -> None:
         """Set a model override for a session."""
-        self.update_state(channel_id, session, repo_name, repo_path, existing_thread(self.state.load(), channel_id, session), model)
+        self.sessions.set_session_model(channel_id, session, repo_name, repo_path, model)
 
     def update_usage(self, channel_id: str, session: str, evt: Event) -> None:
         """Update usage counters from a Codex event."""
@@ -903,66 +867,32 @@ class Router:
 
     def update_activity(self, channel_id: str, session: str) -> None:
         """Record last output time for a session."""
-        if channel_id not in self._activity:
-            self._activity[channel_id] = {}
-        self._activity[channel_id][session or DEFAULT_SESSION] = time.time()
+        self.sessions.update_activity(channel_id, session or DEFAULT_SESSION)
 
     def get_activity(self, channel_id: str, session: str) -> Optional[str]:
         """Return last output time for a session."""
-        ts = self._activity.get(channel_id, {}).get(session or DEFAULT_SESSION)
-        if not ts:
-            return None
-        return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ts))
+        return self.sessions.get_activity(channel_id, session or DEFAULT_SESSION)
 
     async def set_active(self, channel_id: str, session: str, proc: Any) -> None:
         """Track a running Codex process for a session."""
-        async with self._lock:
-            if channel_id not in self._active:
-                self._active[channel_id] = {}
-            self._active[channel_id][session or DEFAULT_SESSION] = proc
+        await self.sessions.set_active(channel_id, session or DEFAULT_SESSION, proc)
 
     async def clear_active(self, channel_id: str, session: str) -> None:
         """Clear the running process for a session."""
-        async with self._lock:
-            if channel_id in self._active:
-                self._active[channel_id].pop(session or DEFAULT_SESSION, None)
+        await self.sessions.clear_active(channel_id, session or DEFAULT_SESSION)
 
     async def get_active(self, channel_id: str, session: str) -> Optional[Any]:
         """Return the running process for a session, if any."""
-        async with self._lock:
-            return self._active.get(channel_id, {}).get(session or DEFAULT_SESSION)
+        return await self.sessions.get_active(channel_id, session or DEFAULT_SESSION)
 
     async def has_active(self, channel_id: str) -> bool:
         """Return True if any session is active in a channel."""
-        async with self._lock:
-            if channel_id in self._active:
-                return any(self._active[channel_id].values())
-        return False
+        return await self.sessions.has_active(channel_id)
 
     async def consume_pending(self, channel_id: str, session: str) -> Optional[PendingConflict]:
         """Consume a pending conflict if present and not expired."""
-        async with self._lock:
-            if session:
-                key = pending_key(channel_id, session)
-                conflict = self._pending.pop(key, None)
-            else:
-                conflict = None
-                for key in list(self._pending.keys()):
-                    if key.startswith(f"{channel_id}:"):
-                        conflict = self._pending.pop(key, None)
-                        break
-        if not conflict:
-            return None
-        if conflict.expires_at < time.time():
-            return None
-        return conflict
+        return await self.sessions.consume_pending(channel_id, session)
 
     def current_session_for_user(self, user_id: str, channel_id: str) -> str:
         """Return sticky session selection for a user or default."""
-        state = self.state.load()
-        ch = state.channels.get(channel_id)
-        if ch and user_id:
-            sess = ch.sticky.get(user_id)
-            if sess:
-                return sess
-        return DEFAULT_SESSION
+        return self.sessions.current_session_for_user(user_id, channel_id)

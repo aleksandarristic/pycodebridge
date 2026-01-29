@@ -116,7 +116,7 @@
 - Extract shared helper functions into a `router_helpers.py`.
 - Add unit tests for handler entry points where feasible.
 
-23) TODO - SessionService layer
+23) DONE - SessionService layer
 - Introduce a `SessionService` to encapsulate session state updates, pending conflict handling, and active process tracking.
 - Replace direct map access in `Router` with the service to reduce locking complexity.
 - Add unit tests covering SessionService behavior (conflict TTL, active tracking).
@@ -160,3 +160,4 @@
 - 2026-01-29: Switched to a typing context for reliable Discord typing indicators.
 - 2026-01-29: Added PEP8 docstrings across Python modules.
 - 2026-01-29: Split router handlers and helpers into dedicated modules.
+- 2026-01-29: Added SessionService abstraction and unit tests for pending conflicts and active tracking.

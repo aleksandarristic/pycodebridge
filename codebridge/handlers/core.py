@@ -39,15 +39,17 @@ async def handle_start(router: "Router", message: discord.Message, repo_name: st
             return
     thread_id = existing_thread(state, channel_id, session)
     if thread_id:
-        async with router._lock:
-            key = pending_key(channel_id, session)
-            router._pending[key] = PendingConflict(
+        await router.sessions.set_pending_conflict(
+            channel_id,
+            session,
+            PendingConflict(
                 repo_name=repo_name,
                 session=session,
                 thread_id=thread_id,
                 user_id=str(message.author.id),
                 expires_at=time.time() + router.cfg.state.conflict_ttl_seconds,
-            )
+            ),
+        )
         await router.reply(message.channel, f"Session '{session}' already exists for this channel.\nChoose one:\n!c choose resume\n!c choose replace\n!c choose cancel")
         return
 
