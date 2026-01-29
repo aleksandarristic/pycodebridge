@@ -49,6 +49,7 @@ class _FakeRouter:
         self.last_resume = None
         self.logger = _FakeLogger()
         self.pending_handled = False
+        self.uploads_requested = False
 
     def _transport_prefix(self, event: MessageEvent) -> str:
         if event.platform == "telegram":
@@ -88,6 +89,9 @@ class _FakeRouter:
             "session": session,
             "prompt": prompt,
         }
+
+    async def handle_upload_request(self, event: MessageEvent, sink, repo_name: str, repo_path: str) -> None:
+        self.uploads_requested = True
 
     async def handle_pending_upload_response(self, event: MessageEvent, sink, repo_name: str) -> bool:
         if event.content == "uploads/":

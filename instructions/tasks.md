@@ -231,7 +231,7 @@
   - Add unit tests asserting `ResponseSink.capabilities()` for each adapter.
   - Add negative tests ensuring unsupported operations are gated by Router.
 
-51) TODO - Router tests for DM uploads/download gating (issue plan)
+51) DONE - Router tests for DM uploads/download gating (issue plan)
 - Owner: TBD
 - Subtasks:
   - Add tests for DM-bound uploads and download permission errors when capabilities are false.
@@ -354,3 +354,4 @@
 - 2026-01-29: Marked Discord threads-only adapter variant as removed.
 - 2026-01-29: Documented transport capabilities in README and adapter docs.
 - 2026-01-29: Added capability conformance tests for adapter sinks.
+- 2026-01-29: Added gating tests for upload/download capabilities.
