@@ -55,7 +55,7 @@
 - Typing indicator keepalive while running.
 - Typing indicator keepalive task and status message management.
 
-10) TODO - Command routing
+10) DONE - Command routing
 - Implement all commands from spec (start/resume/choose/stop/kill/quit/etc.).
 - Git helpers with safe flag allowlist and timeouts.
 - Repo helpers: showrepo/showchanges/tests.
@@ -102,3 +102,4 @@
 - 2026-01-29: Added requirements.txt / requirements-dev.txt with pinned versions.
 - 2026-01-29: Completed codex runner stderr streaming and exit status handling.
 - 2026-01-29: Added typing keepalive and pinned status helpers for Discord wiring.
+- 2026-01-29: Implemented core command routing, queue controls, and DM admin basics.
