@@ -155,6 +155,36 @@
 - Remove local filesystem references from docs including `AGENTS.md`, `instructions/instructions.md`, and `instructions/tasks.md`.
 - Keep Discord mentioned only where it is a concrete adapter/example.
 
+31) TODO - Slack adapter implementation
+- Wire Slack adapter into runtime (event ingestion + response sending).
+- Add Slack config fields (tokens, signing secret, app settings) and validation.
+- Add adapter integration tests with faked Slack events.
+
+32) TODO - Slack/Telegram setup docs
+- Add `SLACK.md` with bot/app setup, tokens, permissions, and webhook/polling notes.
+- Add `TELEGRAM.md` with bot setup, token placement, webhook/polling notes, and a broader explanation of chat types (1:1, group, supergroup) vs room/DM semantics.
+- Reference the new docs from README.
+
+33) TODO - Telegram adapter scaffold
+- Add a Telegram adapter scaffold (event mapping + response sink interface implementation).
+- Keep it behind `transport.adapter` selection without changing default behavior.
+- Add docs note that Telegram is scaffold-only until API integration is completed.
+
+34) TODO - Discord threads-only adapter variant
+- Add a Discord adapter variant that routes all Codex sessions into per-user threads (one thread per session) instead of the parent channel.
+- Ensure thread creation/selection happens on first message and responses go to the thread sink.
+- Add config flag to opt into threads-only behavior and document it.
+
+35) TODO - Google Chat adapter implementation
+- Add a Google Chat adapter (event mapping + response sink implementation).
+- Add configuration and validation for Google Chat credentials/webhook settings.
+- Add integration tests with mocked payloads.
+
+36) TODO - Microsoft Teams adapter implementation
+- Add a Microsoft Teams adapter (event mapping + response sink implementation).
+- Add configuration and validation for Teams bot credentials/app settings.
+- Add integration tests with mocked payloads.
+
 ---
 
 ## progress.log
