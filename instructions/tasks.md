@@ -155,14 +155,6 @@
 - Remove local filesystem references from docs including `AGENTS.md`, `instructions/instructions.md`, and `instructions/tasks.md`.
 - Keep Discord mentioned only where it is a concrete adapter/example.
 
-31) TODO - Slack adapter implementation (issue plan)
-- Owner: TBD
-- Subtasks:
-  - Define Slack config schema (tokens/signing secret/app settings) and validation in `codebridge/config.py`.
-  - Implement Slack adapter runtime wiring (event ingestion, response send, typing).
-  - Add upload/download support for Slack if supported; otherwise guard via capabilities.
-  - Add adapter integration tests with mocked Slack payloads.
-
 32) DONE - Slack/Telegram setup docs
 - Add `SLACK.md` with bot/app setup, tokens, permissions, and webhook/polling notes.
 - Add `TELEGRAM.md` with bot setup, token placement, webhook/polling notes, and a broader explanation of chat types (1:1, group, supergroup) vs room/DM semantics.
@@ -180,29 +172,6 @@
   - Implement thread creation/selection on first message; persist thread id per session.
   - Route responses to thread sink; ensure uploads/downloads work in threads.
   - Add adapter tests covering thread routing + session mapping.
-
-35) TODO - Google Chat adapter implementation (issue plan)
-- Owner: TBD
-- Subtasks:
-  - Define Google Chat config schema (credentials/webhook) and validation.
-  - Implement adapter mapping for events + responses (MessageEvent + ResponseSink).
-  - Add thread id mapping + reply targeting where supported.
-  - Add integration tests with mocked payloads.
-
-36) TODO - Microsoft Teams adapter implementation (issue plan)
-- Owner: TBD
-- Subtasks:
-  - Define Teams config schema (bot credentials/app settings) and validation.
-  - Implement adapter mapping for events + responses (MessageEvent + ResponseSink).
-  - Add thread/conversation id mapping + reply targeting.
-  - Add integration tests with mocked payloads.
-
-46) TODO - Threaded replies for Slack/Teams/Google Chat (issue plan)
-- Owner: TBD
-- Subtasks:
-  - Add thread id extraction in Slack/Teams/Chat adapters.
-  - Implement threaded send/reply behavior in corresponding ResponseSinks.
-  - Add adapter tests to assert thread targeting behavior.
 
 47) DONE - Add transport capabilities and guard router behaviors (issue plan)
 - Owner: TBD
@@ -355,3 +324,5 @@
 - 2026-01-29: Documented transport capabilities in README and adapter docs.
 - 2026-01-29: Added capability conformance tests for adapter sinks.
 - 2026-01-29: Added gating tests for upload/download capabilities.
+- 2026-01-29: Moved adapter implementation tasks to `instructions/backlog.md`.
+ - 2026-01-29: Added backlog file reference in docs and updated architecture diagram for adapters.

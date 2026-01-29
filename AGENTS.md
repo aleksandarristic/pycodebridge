@@ -17,6 +17,7 @@
 ## Files to consult
 - `instructions/instructions.md` — full Python implementation spec.
 - `instructions/tasks.md` — task list and progress log (mark tasks with `- DONE`).
+- `instructions/backlog.md` — backlog for future tasks to promote into tasks.md.
 - `docs/architecture.mmd` — mermaid architecture diagram.
 - `<GO_CODEBRIDGE>/AGENTS.md` and `<GO_CODEBRIDGE>/instructions` — Go reference for intended behavior.
 - `.codex/skills/README.md` and skill `SKILL.md` files — use when tasks match their descriptions.

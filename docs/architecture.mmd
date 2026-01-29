@@ -1,14 +1,21 @@
 flowchart LR
   subgraph Transport
-    Discord[Discord] --> Adapter[Discord adapter]
-    Adapter -->|MessageEvent| Router[Router]
-    Router -->|ResponseSink| Adapter
+    Discord[Discord] --> DAdapter[Discord adapter]
+    Telegram[Telegram] --> TAdapter[Telegram adapter]
+    Slack[Slack] -. scaffold .-> SAdapter[Slack adapter]
+    DAdapter -->|MessageEvent| Router[Router]
+    TAdapter -->|MessageEvent| Router
+    SAdapter -->|MessageEvent| Router
+    Router -->|ResponseSink| DAdapter
+    Router -->|ResponseSink| TAdapter
+    Router -->|ResponseSink| SAdapter
   end
 
   Router --> Queue[Queue Manager]
   Router --> State[State Store]
   Router --> Audit[Audit Logger]
   Router --> CodexRunner[Codex Runner]
+  Router --> FileXfer[FileTransfer Service]
   Router --> RepoFS[Repo filesystem]
   CodexRunner --> CodexCLI[Codex CLI]
   Config[config.yaml] --> Router

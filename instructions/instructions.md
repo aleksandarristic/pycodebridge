@@ -65,6 +65,7 @@ pycodebridge/
   instructions/
     instructions.md
     tasks.md
+    backlog.md
   tests/
     ...
 ```
