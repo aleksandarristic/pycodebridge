@@ -44,9 +44,18 @@ async def main() -> None:
     token = cfg.discord_token()
     client = build_client(router)
 
-    await client.start(token)
+    try:
+        await client.start(token)
+    except asyncio.CancelledError:
+        logger.info("shutdown", extra={"reason": "cancelled"})
+        await client.close()
+    except KeyboardInterrupt:
+        logger.info("shutdown", extra={"reason": "keyboard_interrupt"})
+        await client.close()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
-
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass

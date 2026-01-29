@@ -96,7 +96,7 @@
 - Add `.codex/skills/README.md` with when-to-use guidance and overlap notes.
 - Reference skill usage in `AGENTS.md` and `instructions/instructions.md`.
 
-19) TODO - Graceful shutdown on Ctrl-C
+19) DONE - Graceful shutdown on Ctrl-C
 - Catch KeyboardInterrupt/CancelledError and close the Discord client cleanly to avoid traceback spam.
 - Optional: add SIGINT/SIGTERM handlers (non-Windows) to call `client.close()` and log a single shutdown line.
 - Validate by starting the app, pressing Ctrl-C, and confirming no traceback.
@@ -122,3 +122,4 @@
 - 2026-01-29: Added __main__ entrypoint and README run notes for editable installs.
 - 2026-01-29: Added Windows-compatible process group handling for Codex interrupts.
 - 2026-01-29: Added skills overview and instructions to use skills when appropriate.
+- 2026-01-29: Added clean shutdown handling for Ctrl-C to avoid tracebacks.
