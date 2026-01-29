@@ -16,6 +16,13 @@ from .codex import Event, Options, Runner, display_texts, parse_event
 from .queue import Manager
 from .state import Store, utc_now_iso
 from .util import path as pathutil
+from .command_parse import (
+    parse_choose,
+    parse_log_count,
+    parse_session_and_id,
+    parse_session_and_prompt,
+    parse_session_or_limit,
+)
 from .util.ansi import strip_control_codes
 from .util.chunk import chunk_text
 from .util.prompt import needs_user_input
@@ -1419,70 +1426,6 @@ def normalize_session(name: str) -> str:
 
 def pending_key(channel_id: str, session: str) -> str:
     return f"{channel_id}:{session or DEFAULT_SESSION}"
-
-
-def parse_session_and_prompt(rest: str) -> Tuple[str, str]:
-    rest = rest.strip()
-    if not rest:
-        return DEFAULT_SESSION, ""
-    fields = rest.split()
-    session = fields[0]
-    prompt = rest[len(session) :].strip()
-    return session, prompt
-
-
-def parse_choose(rest: str) -> Tuple[str, str]:
-    parts = rest.split()
-    if not parts:
-        return "", ""
-    if len(parts) == 1:
-        return parts[0], ""
-    if len(parts) >= 2 and parts[1] in {"resume", "replace", "cancel"}:
-        return parts[1], parts[0]
-    return parts[0], ""
-
-
-def parse_session_or_limit(rest: str) -> Tuple[str, int]:
-    rest = rest.strip()
-    if not rest:
-        return "", 0
-    parts = rest.split()
-    if not parts:
-        return "", 0
-    try:
-        return "", int(parts[0])
-    except ValueError:
-        session = parts[0]
-        if len(parts) > 1:
-            try:
-                return session, int(parts[1])
-            except ValueError:
-                return session, 0
-        return session, 0
-
-
-def parse_session_and_id(rest: str) -> Tuple[str, str]:
-    rest = rest.strip()
-    if not rest:
-        return "", ""
-    parts = rest.split()
-    if len(parts) == 1:
-        return "", parts[0]
-    return parts[0], parts[1]
-
-
-def parse_log_count(args: list[str]) -> int:
-    n = 5
-    if args:
-        try:
-            n = int(args[0])
-        except ValueError:
-            n = 5
-    if n <= 0:
-        n = 5
-    if n > 50:
-        n = 50
-    return n
 
 
 def has_forbidden_flags(args: list[str]) -> bool:

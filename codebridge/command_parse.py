@@ -1,0 +1,65 @@
+from __future__ import annotations
+
+
+def parse_session_and_prompt(rest: str) -> tuple[str, str]:
+    rest = rest.strip()
+    if not rest:
+        return "default", ""
+    fields = rest.split()
+    session = fields[0]
+    prompt = rest[len(session) :].strip()
+    return session, prompt
+
+
+def parse_choose(rest: str) -> tuple[str, str]:
+    parts = rest.split()
+    if not parts:
+        return "", ""
+    if len(parts) == 1:
+        return parts[0], ""
+    if len(parts) >= 2 and parts[1] in {"resume", "replace", "cancel"}:
+        return parts[1], parts[0]
+    return parts[0], ""
+
+
+def parse_session_or_limit(rest: str) -> tuple[str, int]:
+    rest = rest.strip()
+    if not rest:
+        return "", 0
+    parts = rest.split()
+    if not parts:
+        return "", 0
+    try:
+        return "", int(parts[0])
+    except ValueError:
+        session = parts[0]
+        if len(parts) > 1:
+            try:
+                return session, int(parts[1])
+            except ValueError:
+                return session, 0
+        return session, 0
+
+
+def parse_session_and_id(rest: str) -> tuple[str, str]:
+    rest = rest.strip()
+    if not rest:
+        return "", ""
+    parts = rest.split()
+    if len(parts) == 1:
+        return "", parts[0]
+    return parts[0], parts[1]
+
+
+def parse_log_count(args: list[str]) -> int:
+    n = 5
+    if args:
+        try:
+            n = int(args[0])
+        except ValueError:
+            n = 5
+    if n <= 0:
+        n = 5
+    if n > 50:
+        n = 50
+    return n
