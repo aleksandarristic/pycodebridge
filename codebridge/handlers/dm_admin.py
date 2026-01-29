@@ -155,6 +155,7 @@ async def dm_create_repo(
     except Exception as exc:
         return exc
     await dm_reply(router, sink, entry, f"Created repo at {repo_path}. Continue in #codex-{repo_name}")
+    router.logger.info("dm.bind.createrepo", extra={"platform": event.platform, "user_id": event.author_id, "repo": repo_name})
     router.logger.info("dm.createrepo.ok", extra={"user_id": event.author_id, "repo": repo_name, "path": repo_path})
     return None
 
@@ -182,6 +183,7 @@ async def dm_clone_repo(
     if err:
         return err
     await dm_reply(router, sink, entry, f"Cloned {clone_url} into {repo_path}. Continue in #codex-{repo_name}")
+    router.logger.info("dm.bind.clonerepo", extra={"platform": event.platform, "user_id": event.author_id, "repo": repo_name})
     router.logger.info("dm.clonerepo.ok", extra={"user_id": event.author_id, "repo": repo_name, "url": clone_url, "path": repo_path})
     return None
 
@@ -210,6 +212,7 @@ async def dm_copy_repo(
     if err:
         return err
     await dm_reply(router, sink, entry, f"Copied repo to {dst_path}. Continue in #codex-{to_name}")
+    router.logger.info("dm.bind.copyrepo", extra={"platform": event.platform, "user_id": event.author_id, "repo": to_name})
     router.logger.info("dm.copyrepo.ok", extra={"user_id": event.author_id, "repo": from_name, "target": dst_path})
     return None
 
@@ -239,6 +242,7 @@ async def dm_delete_repo(
         return exc
     router.state.update(lambda fs: prune_state_for_repo(fs, repo_name, repo_path))
     await dm_reply(router, sink, entry, f"Deleted repo {repo_name}")
+    router.logger.info("dm.bind.deleterepo", extra={"platform": event.platform, "user_id": event.author_id, "repo": repo_name})
     router.logger.info("dm.deleterepo.ok", extra={"user_id": event.author_id, "repo": repo_name})
     return None
 
@@ -267,6 +271,7 @@ async def dm_rename_repo(
         return exc
     router.state.update(lambda fs: rename_state_repo(fs, from_name, src_path, to_name, dst_path))
     await dm_reply(router, sink, entry, f"Renamed repo {from_name} to {to_name}. Continue in #codex-{to_name}")
+    router.logger.info("dm.bind.renamerepo", extra={"platform": event.platform, "user_id": event.author_id, "repo": to_name})
     router.logger.info("dm.renamerepo.ok", extra={"user_id": event.author_id, "repo": from_name, "target": dst_path})
     return None
 
@@ -327,6 +332,10 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         if not is_admin:
             await send_forbidden("You are not allowed to use DM admin commands.")
             return
+        router.logger.info(
+            "dm.admin",
+            extra={"platform": event.platform, "user_id": event.author_id, "cmd": cmd},
+        )
         if cmd == "help":
             await send(dm_help_text())
             return
@@ -401,6 +410,10 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
                 if status:
                     info = info + "\n\nAdmin status:\n" + status
             await send(info)
+            router.logger.info(
+                "dm.status",
+                extra={"platform": event.platform, "user_id": event.author_id, "repo": bound or "", "session": session},
+            )
             return
         if cmd in {"bind", "use"}:
             repo_name = rest.strip()
@@ -414,10 +427,18 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
                 return
             router.set_dm_binding(event, repo_name)
             await send(f"Bound repo: {repo_name}")
+            router.logger.info(
+                "dm.bind",
+                extra={"platform": event.platform, "user_id": event.author_id, "repo": repo_name},
+            )
             return
         if cmd == "unbind":
             router.clear_dm_binding(event)
             await send("Repo binding cleared.")
+            router.logger.info(
+                "dm.unbind",
+                extra={"platform": event.platform, "user_id": event.author_id},
+            )
             return
         if cmd == "repo":
             parts = rest.split(maxsplit=1)
@@ -436,6 +457,10 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
                 return
             session = router.current_session_for_user(event.author_id, event.channel_id)
             prefixed_sink = _PrefixedSink(sink, repo_name)
+            router.logger.info(
+                "dm.repo",
+                extra={"platform": event.platform, "user_id": event.author_id, "repo": repo_name, "session": session},
+            )
             await router.handle_resume(event, prefixed_sink, repo_name, repo_path, session, prompt)
             return
         await send(dm_binding_help_text())
@@ -451,4 +476,8 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         return
     session = router.current_session_for_user(event.author_id, event.channel_id)
     prefixed_sink = _PrefixedSink(sink, bound_repo)
+    router.logger.info(
+        "dm.prompt",
+        extra={"platform": event.platform, "user_id": event.author_id, "repo": bound_repo, "session": session},
+    )
     await router.handle_resume(event, prefixed_sink, bound_repo, repo_path, session, cmdline)

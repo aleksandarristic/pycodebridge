@@ -29,11 +29,17 @@ class _FakeAsyncContext:
         return False
 
 
+class _FakeLogger:
+    def info(self, name: str, extra=None):
+        return None
+
+
 class _FakeRouter:
     def __init__(self, cfg: cfgmod.Config, store: Store) -> None:
         self.cfg = cfg
         self.state = store
         self.last_resume = None
+        self.logger = _FakeLogger()
 
     def _transport_prefix(self, event: MessageEvent) -> str:
         if event.platform == "telegram":

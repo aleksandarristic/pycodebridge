@@ -216,6 +216,12 @@
 - Define security constraints (path containment, size limits, allowed extensions) and audit logging.
 - Add command UX (e.g., `!c upload`, `!c download`) and adapter-specific handling.
 
+43) DONE - Improve operational logging
+- Add structured log fields for routing decisions (platform, channel/chat, repo, session, command, DM binding changes).
+- Log DM bind/unbind/use/repo events and destination routing decisions.
+- Log adapter-specific events (Discord/Telegram) with context; include error details for failed routing.
+- Review log verbosity and add config to tune (info/debug).
+
 
 ---
 
@@ -250,3 +256,4 @@
 - 2026-01-29: Added README integrations section with adapter doc links.
 - 2026-01-29: Added DM repo binding commands, state storage, and tests.
 - 2026-01-29: Added audit log redaction toggle and DM command collision resolution.
+- 2026-01-29: Improved operational logging for routing and DM binding events.

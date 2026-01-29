@@ -56,6 +56,16 @@ class Router:
         if event.author_is_bot:
             return
 
+        self.logger.info(
+            "incoming.message",
+            extra={
+                "platform": event.platform,
+                "channel_id": event.channel_id,
+                "is_dm": event.is_dm,
+                "user_id": event.author_id,
+            },
+        )
+
         channel_name = event.channel_name or event.channel_id
 
         if event.is_dm:
@@ -84,6 +94,15 @@ class Router:
         if not content.startswith(prefix):
             if not self._transport_allow_plain_prompts(event):
                 return
+            self.logger.info(
+                "routing.prompt",
+                extra={
+                    "platform": event.platform,
+                    "channel_id": event.channel_id,
+                    "repo": repo_name,
+                    "session": self.current_session_for_user(event.author_id, event.channel_id),
+                },
+            )
             prompt = content.strip()
             if not prompt:
                 return
@@ -103,6 +122,17 @@ class Router:
         fields = cmdline.split()
         cmd = fields[0].lower()
         rest = cmdline[len(fields[0]) :].strip()
+        self.logger.info(
+            "routing.command",
+            extra={
+                "platform": event.platform,
+                "channel_id": event.channel_id,
+                "repo": repo_name,
+                "cmd": cmd,
+                "session": self.current_session_for_user(event.author_id, event.channel_id),
+                "user_id": event.author_id,
+            },
+        )
         if cmd == "createrepo":
             try:
                 repo_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, repo_name)
