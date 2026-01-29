@@ -1,3 +1,5 @@
+"""Configuration loading and validation for the bridge."""
+
 import os
 import re
 from dataclasses import dataclass, field
@@ -30,6 +32,7 @@ DEFAULT_SPEC_PROMPT = (
 
 @dataclass
 class DiscordConfig:
+    """Discord-related configuration."""
     token_env: str = DEFAULT_TOKEN_ENV
     guild_id: str = ""
     allowed_user_ids: List[str] = field(default_factory=list)
@@ -45,6 +48,7 @@ class DiscordConfig:
 
 @dataclass
 class CodexConfig:
+    """Codex CLI configuration."""
     binary: str = "codex"
     code_root: str = ""
     sandbox: str = DEFAULT_SANDBOX
@@ -56,6 +60,7 @@ class CodexConfig:
 
 @dataclass
 class StateConfig:
+    """State persistence configuration."""
     data_dir: str = ""
     lock_timeout_seconds: int = DEFAULT_LOCK_TIMEOUT_SECONDS
     conflict_ttl_seconds: int = DEFAULT_CONFLICT_TTL_SECONDS
@@ -64,17 +69,20 @@ class StateConfig:
 
 @dataclass
 class RuntimeConfig:
+    """Runtime logging configuration."""
     log_level: str = DEFAULT_LOG_LEVEL
 
 
 @dataclass
 class RepoBootstrapConfig:
+    """Repo bootstrap configuration for createrepo/spec flows."""
     agents_template: str = ""
     spec_prompt: str = DEFAULT_SPEC_PROMPT
 
 
 @dataclass
 class Config:
+    """Top-level configuration container."""
     discord: DiscordConfig = field(default_factory=DiscordConfig)
     codex: CodexConfig = field(default_factory=CodexConfig)
     state: StateConfig = field(default_factory=StateConfig)
@@ -82,6 +90,7 @@ class Config:
     repo_bootstrap: RepoBootstrapConfig = field(default_factory=RepoBootstrapConfig)
 
     def discord_token(self) -> str:
+        """Return the Discord token from the configured env var."""
         env_name = self.discord.token_env or DEFAULT_TOKEN_ENV
         token = os.getenv(env_name, "").strip()
         if not token:
@@ -89,12 +98,14 @@ class Config:
         return token
 
     def channel_regex(self) -> re.Pattern:
+        """Compile and return the channel name regex."""
         if self.discord._compiled_regex is None:
             self.discord._compiled_regex = re.compile(self.discord.channel_name_regex)
         return self.discord._compiled_regex
 
 
 def load(path: str) -> Config:
+    """Load configuration from YAML and apply defaults/validation."""
     if not path:
         raise ValueError("config path is required")
     with open(path, "r", encoding="utf-8") as f:
@@ -109,6 +120,7 @@ def load(path: str) -> Config:
 
 
 def _apply_dict(cfg: Config, raw: dict) -> None:
+    """Apply raw dictionary values onto the Config object."""
     discord = raw.get("discord", {}) or {}
     cfg.discord.token_env = discord.get("token_env", cfg.discord.token_env)
     cfg.discord.guild_id = discord.get("guild_id", cfg.discord.guild_id)
@@ -148,6 +160,7 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
 
 
 def _apply_defaults(cfg: Config) -> None:
+    """Fill missing values with defaults."""
     if not cfg.discord.token_env:
         cfg.discord.token_env = DEFAULT_TOKEN_ENV
     if not cfg.discord.prefix:
@@ -181,6 +194,7 @@ def _apply_defaults(cfg: Config) -> None:
 
 
 def _expand_paths(cfg: Config) -> None:
+    """Expand env vars and ~ in configured paths."""
     cfg.codex.code_root = _expand_path(cfg.codex.code_root)
     cfg.state.data_dir = _expand_path(cfg.state.data_dir)
     cfg.state.log_dir = _expand_path(cfg.state.log_dir)
@@ -188,6 +202,7 @@ def _expand_paths(cfg: Config) -> None:
 
 
 def _validate(cfg: Config) -> None:
+    """Validate config values and required fields."""
     if not cfg.codex.code_root:
         raise ValueError("codex.code_root is required")
     if not cfg.state.data_dir:
@@ -215,6 +230,7 @@ _PERCENT_VAR_RE = re.compile(r"%([^%]+)%")
 
 
 def _expand_path(val: str) -> str:
+    """Expand $VAR, %VAR%, and ~ in path values."""
     if not val:
         return ""
     expanded = os.path.expandvars(val)
@@ -225,9 +241,9 @@ def _expand_path(val: str) -> str:
 
 
 def _expand_percent_vars(val: str) -> str:
+    """Expand Windows-style %VAR% tokens in a string."""
     def repl(match: re.Match) -> str:
         key = match.group(1)
         return os.getenv(key, match.group(0))
 
     return _PERCENT_VAR_RE.sub(repl, val)
-

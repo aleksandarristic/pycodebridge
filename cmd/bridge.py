@@ -1,3 +1,5 @@
+"""CLI entrypoint for the Discord ↔ Codex CLI bridge."""
+
 import argparse
 import asyncio
 import os
@@ -16,6 +18,7 @@ from codebridge.state import Store
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse CLI arguments."""
     parser = argparse.ArgumentParser(description="Discord ↔ Codex CLI Bridge (Python)")
     parser.add_argument("-config", dest="config", default="config.yaml", help="path to config file")
     parser.add_argument("-env", dest="env", default="", help="path to .env file (optional)")
@@ -23,6 +26,7 @@ def parse_args() -> argparse.Namespace:
 
 
 async def main() -> None:
+    """Main async entrypoint for running the Discord client."""
     args = parse_args()
     config_path = args.config
     env_path = args.env

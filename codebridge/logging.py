@@ -1,9 +1,12 @@
+"""Logging setup for the bridge."""
+
 import logging
 import os
 from logging.handlers import RotatingFileHandler
 
 
 def setup_logging(level: str, log_dir: str) -> logging.Logger:
+    """Configure and return the app logger."""
     logger = logging.getLogger("pycodebridge")
     if logger.handlers:
         return logger
@@ -35,4 +38,3 @@ def setup_logging(level: str, log_dir: str) -> logging.Logger:
         logger.addHandler(file_handler)
 
     return logger
-

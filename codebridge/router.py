@@ -1,3 +1,5 @@
+"""Discord/Codex command router and handlers."""
+
 import asyncio
 import os
 import re
@@ -39,6 +41,7 @@ HELPER_OUTPUT_LIMIT = 128 * 1024
 
 @dataclass
 class PendingConflict:
+    """Pending conflict for start vs existing session."""
     repo_name: str
     session: str
     thread_id: str
@@ -48,12 +51,14 @@ class PendingConflict:
 
 @dataclass
 class UsageStats:
+    """Token usage counters per session."""
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
 
 
 class Router:
+    """Main command router for Discord messages."""
     def __init__(self, cfg: cfgmod.Config, state: Store, audit: AuditLogger, runner: Runner, queue: Manager, logger):
         self.cfg = cfg
         self.state = state
@@ -69,6 +74,7 @@ class Router:
         self._lock = asyncio.Lock()
 
     async def handle_message(self, client: discord.Client, message: discord.Message) -> None:
+        """Handle an incoming Discord message."""
         if message.author.bot:
             return
 
@@ -377,6 +383,7 @@ class Router:
         await self.handle_resume(message, repo_name, repo_path, DEFAULT_SESSION, cmdline)
 
     async def handle_dm_message(self, message: discord.Message) -> None:
+        """Handle an incoming DM admin message."""
         content = (message.content or "").strip()
         if not content.startswith(self.cfg.discord.prefix or "!c"):
             return
@@ -461,6 +468,7 @@ class Router:
         await send_forbidden("Unknown DM command. Try !c help.")
 
     async def handle_start(self, message: discord.Message, repo_name: str, repo_path: str, session: str) -> None:
+        """Start a new Codex session for a channel/session."""
         channel_id = str(message.channel.id)
         session = normalize_session(session)
         state = self.state.load()
@@ -492,6 +500,7 @@ class Router:
         self.logger.info("enqueue.start", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
 
     async def handle_resume(self, message: discord.Message, repo_name: str, repo_path: str, session: str, prompt: str) -> None:
+        """Resume a Codex session with a prompt."""
         channel_id = str(message.channel.id)
         session = normalize_session(session)
         state = self.state.load()
@@ -509,6 +518,7 @@ class Router:
         self.logger.info("enqueue.resume", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
 
     async def handle_create_repo(self, message: discord.Message, repo_name: str, repo_path: str) -> None:
+        """Create a new repo directory and git init."""
         channel_id = str(message.channel.id)
         if os.path.isdir(repo_path):
             if os.path.isdir(os.path.join(repo_path, ".git")):
@@ -547,6 +557,7 @@ class Router:
         await self.handle_start(message, repo_name, repo_path, session_name)
 
     async def handle_clone_repo(self, message: discord.Message, repo_name: str, repo_path: str, raw_url: str) -> None:
+        """Clone a GitHub repo into code_root for the channel name."""
         channel_id = str(message.channel.id)
         if os.path.exists(repo_path):
             await self.reply_forbidden(message.channel, "Repo directory already exists.")
@@ -572,6 +583,7 @@ class Router:
         new_name: str,
         target_path: str,
     ) -> None:
+        """Copy an existing repo into a new directory without .git."""
         channel_id = str(message.channel.id)
         if os.path.exists(target_path):
             await self.reply_forbidden(message.channel, "Target repo directory already exists.")
@@ -591,6 +603,7 @@ class Router:
         self.logger.info("copyrepo.ok", extra={"channel_id": channel_id, "repo": repo_name, "target": target_path})
 
     async def handle_spec(self, message: discord.Message, repo_name: str, repo_path: str, session: str) -> None:
+        """Run the spec capture flow via Codex."""
         channel_id = str(message.channel.id)
         session = normalize_session(session)
         try:
@@ -617,6 +630,7 @@ class Router:
         self.logger.info("enqueue.spec", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
 
     async def handle_choose(self, message: discord.Message, repo_name: str, repo_path: str, session: str, choice: str) -> None:
+        """Resolve a pending start conflict."""
         channel_id = str(message.channel.id)
         conflict = await self.consume_pending(channel_id, session)
         if not conflict:
@@ -637,6 +651,7 @@ class Router:
         await self.reply(message.channel, "Unknown choice. Use resume|replace|cancel.")
 
     async def handle_stop(self, channel: discord.abc.Messageable, session: str) -> None:
+        """Send a stop signal to a running Codex process."""
         channel_id = str(channel.id)
         proc = await self.get_active(channel_id, session)
         if proc is not None:
@@ -648,6 +663,7 @@ class Router:
         await self.reply(channel, "No running Codex process.")
 
     async def handle_kill(self, channel: discord.abc.Messageable, session: str) -> None:
+        """Force-kill a running Codex process."""
         channel_id = str(channel.id)
         proc = await self.get_active(channel_id, session)
         if proc is not None:
@@ -657,6 +673,7 @@ class Router:
         await self.reply_forbidden(channel, "No running Codex process.")
 
     async def handle_quit(self, channel: discord.abc.Messageable, session: str) -> None:
+        """Send /quit to the Codex process."""
         channel_id = str(channel.id)
         proc = await self.get_active(channel_id, session)
         if proc is not None:
@@ -666,12 +683,14 @@ class Router:
         await self.reply_forbidden(channel, "No running Codex process.")
 
     async def handle_showrepo(self, channel: discord.abc.Messageable, repo_path: str) -> None:
+        """Show a pruned repo tree for orientation."""
         text = build_tree(repo_path, max_depth=3)
         text = trim_output(text, 300, 6000)
         for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
             await self.reply(channel, chunk)
 
     async def handle_showchanges(self, channel: discord.abc.Messageable, repo_path: str) -> None:
+        """Show git status and diffstat for the repo."""
         out, err = await run_limited_command(repo_path, ["git", "status", "--short", "--branch"])
         out2, err2 = await run_limited_command(repo_path, ["git", "diff", "--stat"])
         text = strip_control_codes(out + "\n" + out2)
@@ -683,6 +702,7 @@ class Router:
             await self.reply(channel, chunk)
 
     async def handle_tests(self, channel: discord.abc.Messageable, repo_path: str) -> None:
+        """Run tests for the repo (pytest -q)."""
         out, err = await run_limited_command(repo_path, ["pytest", "-q"], timeout=TESTS_TIMEOUT)
         text = strip_control_codes(out)
         text = trim_output(text, 200, 6000)
@@ -695,6 +715,7 @@ class Router:
             await self.reply(channel, chunk)
 
     async def handle_git(self, channel: discord.abc.Messageable, repo_path: str, rest: str) -> None:
+        """Run safe git helper commands."""
         fields = shlex.split(rest) if rest else []
         if not fields:
             await self.reply(channel, "Usage: !c git <status|log|branches|show|diff|pull|commit|push|merge> [args]")
@@ -764,6 +785,7 @@ class Router:
             await self.reply(channel, chunk)
 
     async def handle_logs(self, channel: discord.abc.Messageable, session: str, limit: int) -> None:
+        """Show recent audit log entries."""
         try:
             summaries = self.audit.summaries(str(channel.id), session, limit)
         except Exception as exc:
@@ -780,6 +802,7 @@ class Router:
             await self.reply(channel, chunk)
 
     async def handle_ps(self, channel: discord.abc.Messageable) -> None:
+        """Show queued/running jobs for the channel."""
         statuses = await self.queue.snapshot(str(channel.id))
         if not statuses:
             await self.reply_forbidden(channel, "No jobs queued or running.")
@@ -790,6 +813,7 @@ class Router:
         await self.reply(channel, "\n".join(lines))
 
     async def handle_cancel(self, channel: discord.abc.Messageable, job_id: str) -> None:
+        """Cancel a queued job by id."""
         ok = await self.queue.cancel(str(channel.id), job_id)
         if ok:
             await self.reply(channel, f"Cancelled {job_id}")
@@ -797,6 +821,7 @@ class Router:
             await self.reply(channel, "Job not found or already running.")
 
     async def handle_rerun(self, channel: discord.abc.Messageable) -> None:
+        """Re-queue the last job for the channel."""
         record = await self.queue.last_job(str(channel.id))
         if not record:
             await self.reply_forbidden(channel, "No job to rerun.")
@@ -805,6 +830,7 @@ class Router:
         await self.reply(channel, f"Re-queued last job (session '{record.session or DEFAULT_SESSION}') as {job_id} (position {pos})")
 
     async def handle_select_session(self, message: discord.Message, session: str) -> None:
+        """Set a sticky session selection for a user."""
         channel_id = str(message.channel.id)
         user_id = str(message.author.id)
         self.state.update(lambda fs: set_sticky(fs, channel_id, user_id, session))
@@ -812,12 +838,14 @@ class Router:
         await self.reply(message.channel, f"Current session set to '{session}' for you in this channel.")
 
     async def handle_thread(self, channel: discord.abc.Messageable, session: str, repo_name: str, repo_path: str, thread_id: str) -> None:
+        """Attach a thread id to a session."""
         if not session:
             session = DEFAULT_SESSION
         self.update_state(str(channel.id), session, repo_name, repo_path, thread_id, self.session_model(str(channel.id), session))
         await self.reply(channel, f"Thread for session '{session}' set to {thread_id}")
 
     async def handle_stats(self, channel: discord.abc.Messageable, session: str) -> None:
+        """Show token usage stats for a session."""
         stats = self.get_usage(str(channel.id), session)
         if not stats:
             await self.reply(channel, "No usage recorded yet for this session.")
@@ -825,6 +853,7 @@ class Router:
         await self.reply(channel, f"Usage for session '{session}': input {stats.input_tokens}, output {stats.output_tokens}, total {stats.total_tokens}")
 
     async def handle_peek(self, channel: discord.abc.Messageable, session: str) -> None:
+        """Show running status and last output time."""
         channel_id = str(channel.id)
         active = await self.get_active(channel_id, session)
         last = self.get_activity(channel_id, session)
@@ -840,6 +869,7 @@ class Router:
         await self.reply(channel, f"Codex is running for session '{session}'.")
 
     async def send_status(self, channel: discord.abc.Messageable, repo_name: str, repo_path: str) -> None:
+        """Send status summary for the channel and sessions."""
         state = self.state.load()
         ch = state.channels.get(str(channel.id))
         if ch and ch.sessions:
@@ -857,6 +887,7 @@ class Router:
         await self.reply(channel, f"Repo: {repo_name}\nPath: {repo_path}\nNo session attached.")
 
     async def send_help(self, channel: discord.abc.Messageable) -> None:
+        """Send help text for supported commands."""
         text = (
             "Commands:\n"
             "General:\n"
@@ -900,6 +931,7 @@ class Router:
         await self.reply(channel, text)
 
     def config_text(self) -> str:
+        """Render a concise config summary."""
         cfg = self.cfg
         return (
             f"code_root: {cfg.codex.code_root}\n"
@@ -922,6 +954,7 @@ class Router:
         model: str,
         args: list[str],
     ) -> None:
+        """Run Codex with streaming callbacks and audit logging."""
         channel_id = str(message.channel.id)
         meta = {
             "repo_name": repo_name,
@@ -959,6 +992,7 @@ class Router:
                 self.close_audit(entry)
 
     async def on_jsonl(self, channel: discord.abc.Messageable, channel_id: str, session: str, entry: Optional[Entry], line: str) -> None:
+        """Handle a JSONL line from Codex and relay output."""
         self.append_audit_codex(entry, line)
         evt = parse_event(line)
         if not evt:
@@ -988,12 +1022,14 @@ class Router:
         entry: Optional[Entry],
         thread_id: str,
     ) -> None:
+        """Handle thread id updates from Codex."""
         if entry:
             entry.thread_id = thread_id
             entry.session = session or DEFAULT_SESSION
         self.update_state(channel_id, session, repo_name, repo_path, thread_id, model)
 
     async def on_exit(self, channel_id: str, session: str, repo_name: str, err: Optional[BaseException], rc: int) -> None:
+        """Handle Codex process exit events."""
         await self.clear_active(channel_id, session)
         if err:
             self.logger.error("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "error": str(err)})
@@ -1001,6 +1037,7 @@ class Router:
         self.logger.info("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "code": rc})
 
     async def reply(self, channel: discord.abc.Messageable, content: str) -> None:
+        """Send a reply to a channel, chunking as needed."""
         content = strip_control_codes(content)
         for chunk in chunk_text(content, self.cfg.discord.max_discord_message_chars):
             await channel.send(chunk)
@@ -1012,6 +1049,7 @@ class Router:
                         pass
 
     async def reply_forbidden(self, channel: discord.abc.Messageable, detail: str) -> None:
+        """Send a standardized forbidden/invalid response."""
         await channel.send(forbidden_message(detail))
 
     def _dm_admin_allowed(self, user_id: str) -> bool:
@@ -1021,6 +1059,7 @@ class Router:
 
     @asynccontextmanager
     async def typing_context(self, channel: discord.abc.Messageable):
+        """Provide a typing indicator context with fallback."""
         if hasattr(channel, "typing"):
             async with channel.typing():
                 yield
@@ -1049,6 +1088,7 @@ class Router:
             task.cancel()
 
     async def update_pinned_status(self, channel: discord.abc.Messageable, user_id: str, session: str) -> None:
+        """Update or pin the current session status message."""
         if not isinstance(channel, discord.TextChannel):
             return
         text = f"User {user_id} current session: {session or DEFAULT_SESSION}"
@@ -1071,6 +1111,7 @@ class Router:
         self._pins[str(channel.id)] = msg.id
 
     def dm_help_text(self) -> str:
+        """Return DM admin help text."""
         return (
             "DM Admin:\n"
             "help — show this help\n"
@@ -1086,10 +1127,12 @@ class Router:
         )
 
     async def dm_reply(self, channel: discord.abc.Messageable, entry: Optional[Entry], msg: str) -> None:
+        """Send a DM reply and record it to audit logs."""
         self.append_audit_discord(entry, msg)
         await channel.send(msg)
 
     def dm_audit_start(self, message: discord.Message, cmd: str, rest: str) -> Optional[Entry]:
+        """Start a DM audit entry for admin commands."""
         meta = {
             "command": cmd,
             "args": rest,
@@ -1099,6 +1142,7 @@ class Router:
         return self.audit_start(f"dm-{message.author.id}", "admin", "dm", meta)
 
     async def dm_list_repos(self) -> str:
+        """List repos under code_root with last modified time."""
         base = self.cfg.codex.code_root
         if not base or not os.path.isdir(base):
             return "code_root does not exist."
@@ -1115,6 +1159,7 @@ class Router:
         return "\n".join(entries) if entries else "No repos found."
 
     async def dm_list_sessions(self) -> str:
+        """List all sessions across channels."""
         state = self.state.load()
         lines = []
         for channel_id, ch in state.channels.items():
@@ -1123,6 +1168,7 @@ class Router:
         return "\n".join(lines) if lines else "No sessions found."
 
     async def dm_status(self) -> str:
+        """Return a summary of queued/running jobs across channels."""
         snapshots = await self.queue.snapshot_all()
         lines = []
         for channel_id, statuses in snapshots.items():
@@ -1131,6 +1177,7 @@ class Router:
         return "\n".join(lines) if lines else "No queued or running jobs."
 
     async def dm_create_repo(self, message: discord.Message, repo_name: str, entry: Optional[Entry]) -> Optional[Exception]:
+        """Create a new repo via DM admin command."""
         try:
             repo_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, repo_name)
         except Exception as exc:
@@ -1155,6 +1202,7 @@ class Router:
         return None
 
     async def dm_clone_repo(self, message: discord.Message, repo_name: str, raw_url: str, entry: Optional[Entry]) -> Optional[Exception]:
+        """Clone a repo via DM admin command."""
         try:
             repo_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, repo_name)
         except Exception as exc:
@@ -1173,6 +1221,7 @@ class Router:
         return None
 
     async def dm_copy_repo(self, message: discord.Message, from_name: str, to_name: str, entry: Optional[Entry]) -> Optional[Exception]:
+        """Copy a repo via DM admin command."""
         try:
             src_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, from_name)
             dst_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, to_name)
@@ -1192,6 +1241,7 @@ class Router:
         return None
 
     async def dm_delete_repo(self, message: discord.Message, repo_name: str, entry: Optional[Entry]) -> Optional[Exception]:
+        """Delete a repo via DM admin command."""
         try:
             repo_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, repo_name)
         except Exception as exc:
@@ -1213,6 +1263,7 @@ class Router:
         return None
 
     async def dm_rename_repo(self, message: discord.Message, from_name: str, to_name: str, entry: Optional[Entry]) -> Optional[Exception]:
+        """Rename a repo via DM admin command."""
         try:
             src_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, from_name)
             dst_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, to_name)
@@ -1232,6 +1283,7 @@ class Router:
         return None
 
     def seed_agents_template(self, repo_path: str) -> None:
+        """Seed AGENTS.md from a template when configured."""
         tmpl = (self.cfg.repo_bootstrap.agents_template or "").strip()
         if not tmpl:
             return
@@ -1242,12 +1294,14 @@ class Router:
         Path(agents_path).write_text(data, encoding="utf-8")
 
     def spec_prompt(self, repo_name: str) -> str:
+        """Render the spec capture prompt template."""
         prompt = (self.cfg.repo_bootstrap.spec_prompt or "").strip()
         if not prompt:
             prompt = "Please ask me for a project spec."
         return prompt.replace("{{REPO_NAME}}", repo_name)
 
     async def repo_busy(self, repo_name: str) -> bool:
+        """Return True if a repo has active or queued jobs."""
         state = self.state.load()
         for channel_id, ch in state.channels.items():
             for sess in ch.sessions.values():
@@ -1260,6 +1314,7 @@ class Router:
         return False
 
     def audit_start(self, channel_id: str, session: str, thread_id: str, meta: Any) -> Optional[Entry]:
+        """Start an audit entry with error handling."""
         if not self.audit:
             return None
         try:
@@ -1269,6 +1324,7 @@ class Router:
             return None
 
     def append_audit_codex(self, entry: Optional[Entry], line: str) -> None:
+        """Append a JSONL line to the audit log."""
         if entry:
             try:
                 entry.append_codex_line(line)
@@ -1276,6 +1332,7 @@ class Router:
                 pass
 
     def append_audit_discord(self, entry: Optional[Entry], msg: str) -> None:
+        """Append a Discord message to the audit log."""
         if entry:
             try:
                 entry.append_discord_out(msg)
@@ -1283,6 +1340,7 @@ class Router:
                 pass
 
     def append_audit_stderr(self, entry: Optional[Entry], msg: str) -> None:
+        """Append stderr output to the audit log."""
         if entry:
             try:
                 entry.append_stderr(msg)
@@ -1290,6 +1348,7 @@ class Router:
                 pass
 
     def close_audit(self, entry: Optional[Entry]) -> None:
+        """Close an audit entry safely."""
         if entry:
             try:
                 entry.close()
@@ -1297,6 +1356,7 @@ class Router:
                 pass
 
     def update_state(self, channel_id: str, session: str, repo_name: str, repo_path: str, thread_id: str, model: str) -> None:
+        """Update persistent state for a session."""
         session = session or DEFAULT_SESSION
 
         def mutator(fs):
@@ -1327,6 +1387,7 @@ class Router:
         self.state.update(mutator)
 
     def session_model(self, channel_id: str, session: str) -> str:
+        """Return model override for a session or fallback to default."""
         state = self.state.load()
         ch = state.channels.get(channel_id)
         if ch:
@@ -1336,9 +1397,11 @@ class Router:
         return self.cfg.codex.model
 
     def set_session_model(self, channel_id: str, session: str, repo_name: str, repo_path: str, model: str) -> None:
+        """Set a model override for a session."""
         self.update_state(channel_id, session, repo_name, repo_path, existing_thread(self.state.load(), channel_id, session), model)
 
     def update_usage(self, channel_id: str, session: str, evt: Event) -> None:
+        """Update usage counters from a Codex event."""
         usage = usage_from_event(evt)
         if not usage:
             return
@@ -1352,41 +1415,49 @@ class Router:
         self._usage[channel_id][session] = stats
 
     def get_usage(self, channel_id: str, session: str) -> Optional[UsageStats]:
+        """Return usage stats for a session if present."""
         return self._usage.get(channel_id, {}).get(session)
 
     def update_activity(self, channel_id: str, session: str) -> None:
+        """Record last output time for a session."""
         if channel_id not in self._activity:
             self._activity[channel_id] = {}
         self._activity[channel_id][session or DEFAULT_SESSION] = time.time()
 
     def get_activity(self, channel_id: str, session: str) -> Optional[str]:
+        """Return last output time for a session."""
         ts = self._activity.get(channel_id, {}).get(session or DEFAULT_SESSION)
         if not ts:
             return None
         return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ts))
 
     async def set_active(self, channel_id: str, session: str, proc: Any) -> None:
+        """Track a running Codex process for a session."""
         async with self._lock:
             if channel_id not in self._active:
                 self._active[channel_id] = {}
             self._active[channel_id][session or DEFAULT_SESSION] = proc
 
     async def clear_active(self, channel_id: str, session: str) -> None:
+        """Clear the running process for a session."""
         async with self._lock:
             if channel_id in self._active:
                 self._active[channel_id].pop(session or DEFAULT_SESSION, None)
 
     async def get_active(self, channel_id: str, session: str) -> Optional[Any]:
+        """Return the running process for a session, if any."""
         async with self._lock:
             return self._active.get(channel_id, {}).get(session or DEFAULT_SESSION)
 
     async def has_active(self, channel_id: str) -> bool:
+        """Return True if any session is active in a channel."""
         async with self._lock:
             if channel_id in self._active:
                 return any(self._active[channel_id].values())
         return False
 
     async def consume_pending(self, channel_id: str, session: str) -> Optional[PendingConflict]:
+        """Consume a pending conflict if present and not expired."""
         async with self._lock:
             if session:
                 key = pending_key(channel_id, session)
@@ -1404,6 +1475,7 @@ class Router:
         return conflict
 
     def current_session_for_user(self, user_id: str, channel_id: str) -> str:
+        """Return sticky session selection for a user or default."""
         state = self.state.load()
         ch = state.channels.get(channel_id)
         if ch and user_id:
@@ -1413,10 +1485,12 @@ class Router:
         return DEFAULT_SESSION
 
 def forbidden_message(detail: str) -> str:
+    """Format a standard forbidden response message."""
     return f"{FORBIDDEN_PREFIX}\n```text\n{detail}\n```"
 
 
 def normalize_session(name: str) -> str:
+    """Normalize and validate session name input."""
     if not name:
         return DEFAULT_SESSION
     if not SESSION_RE.match(name):
@@ -1425,10 +1499,12 @@ def normalize_session(name: str) -> str:
 
 
 def pending_key(channel_id: str, session: str) -> str:
+    """Build a stable key for pending conflicts."""
     return f"{channel_id}:{session or DEFAULT_SESSION}"
 
 
 def has_forbidden_flags(args: list[str]) -> bool:
+    """Return True if args include disallowed flags."""
     for a in args:
         if a in {"-f", "--force", "--force-with-lease", "--rebase", "--squash"}:
             return True
@@ -1436,6 +1512,7 @@ def has_forbidden_flags(args: list[str]) -> bool:
 
 
 def find_unsafe_git_flag(args: list[str]) -> Optional[str]:
+    """Return the first unsafe git flag, if any."""
     for a in args:
         flag = a
         if flag.startswith("--") and "=" in flag:
@@ -1448,6 +1525,7 @@ def find_unsafe_git_flag(args: list[str]) -> Optional[str]:
 
 
 def usage_from_event(evt: Event) -> Optional[UsageStats]:
+    """Convert Codex usage event into UsageStats."""
     if not evt.usage:
         return None
     usage = evt.usage or {}
@@ -1459,6 +1537,7 @@ def usage_from_event(evt: Event) -> Optional[UsageStats]:
 
 
 def count_active_sessions(state, channel_id: str) -> int:
+    """Count sessions for a channel in state."""
     ch = state.channels.get(channel_id)
     if not ch:
         return 0
@@ -1466,6 +1545,7 @@ def count_active_sessions(state, channel_id: str) -> int:
 
 
 def session_exists(state, channel_id: str, session: str) -> bool:
+    """Return True if a session exists for the channel."""
     ch = state.channels.get(channel_id)
     if not ch:
         return False
@@ -1473,6 +1553,7 @@ def session_exists(state, channel_id: str, session: str) -> bool:
 
 
 def existing_thread(state, channel_id: str, session: str) -> str:
+    """Return the thread id for a session, if any."""
     ch = state.channels.get(channel_id)
     if not ch:
         return ""
@@ -1483,6 +1564,7 @@ def existing_thread(state, channel_id: str, session: str) -> str:
 
 
 def set_sticky(fs, channel_id: str, user_id: str, session: str) -> None:
+    """Set sticky session selection for a user in state."""
     ch = fs.channels.get(channel_id)
     if ch is None:
         from .state import ChannelState
@@ -1495,6 +1577,7 @@ def set_sticky(fs, channel_id: str, user_id: str, session: str) -> None:
 
 
 def prune_state_for_repo(fs, repo_name: str, repo_path: str) -> None:
+    """Remove state entries referencing a repo."""
     for channel_id, ch in list(fs.channels.items()):
         changed = False
         for sess_name, sess in list(ch.sessions.items()):
@@ -1512,6 +1595,7 @@ def prune_state_for_repo(fs, repo_name: str, repo_path: str) -> None:
 
 
 def rename_state_repo(fs, from_name: str, from_path: str, to_name: str, to_path: str) -> None:
+    """Update state entries after a repo rename."""
     for channel_id, ch in fs.channels.items():
         changed = False
         for sess_name, sess in ch.sessions.items():
@@ -1524,6 +1608,7 @@ def rename_state_repo(fs, from_name: str, from_path: str, to_name: str, to_path:
 
 
 def build_tree(repo_path: str, max_depth: int = 3) -> str:
+    """Build a pruned repo tree listing."""
     lines: list[str] = []
     base = Path(repo_path)
     if not base.exists():
@@ -1552,6 +1637,7 @@ def build_tree(repo_path: str, max_depth: int = 3) -> str:
 
 
 def parse_github_clone_url(raw: str) -> str:
+    """Normalize GitHub clone URL inputs."""
     raw = raw.strip()
     if not raw:
         raise ValueError("GitHub URL required")
@@ -1567,6 +1653,7 @@ def parse_github_clone_url(raw: str) -> str:
 
 
 def normalize_github_path(path: str) -> str:
+    """Normalize a GitHub path to an HTTPS clone URL."""
     path = path.strip().strip("/")
     if path.endswith(".git"):
         path = path[: -len(".git")]
@@ -1579,6 +1666,7 @@ def normalize_github_path(path: str) -> str:
 
 
 def copy_dir_excluding_git(src: str, dst: str) -> None:
+    """Copy a directory excluding .git."""
     if not os.path.isdir(src):
         raise ValueError("source is not a directory")
     os.makedirs(dst, exist_ok=True)
@@ -1600,6 +1688,7 @@ def copy_dir_excluding_git(src: str, dst: str) -> None:
 
 
 def copy_file(src: str, dst: str) -> None:
+    """Copy a file to a destination path, creating directories."""
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     with open(src, "rb") as fsrc:
         data = fsrc.read()
@@ -1608,6 +1697,7 @@ def copy_file(src: str, dst: str) -> None:
 
 
 def trim_output(text: str, max_lines: int, max_bytes: int) -> str:
+    """Trim output by line and byte limits for Discord safety."""
     lines = text.split("\n")
     if len(lines) > max_lines:
         lines = lines[:max_lines] + ["...(truncated)"]
@@ -1618,6 +1708,7 @@ def trim_output(text: str, max_lines: int, max_bytes: int) -> str:
 
 
 async def run_limited_command(repo_path: str, args: list[str], timeout: float = HELPER_TIMEOUT) -> Tuple[str, Optional[Exception]]:
+    """Run a helper command with time/output limits."""
     try:
         proc = await asyncio.create_subprocess_exec(
             *args,

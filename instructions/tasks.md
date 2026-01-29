@@ -106,6 +106,11 @@
 - Keep fallback timer if needed, but prefer the official typing context.
 - Validate by sending a long-running command and confirming the typing indicator stays on.
 
+21) TODO - PEP8 docstrings
+- Add PEP8-style docstrings to Python modules/classes/functions where missing.
+- Keep docstrings concise and behavior-focused; avoid altering logic.
+- Run tests to confirm no regressions.
+
 ---
 
 ## progress.log

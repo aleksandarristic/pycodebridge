@@ -1,3 +1,5 @@
+"""Audit logging for Codex/Discord interactions."""
+
 import hashlib
 import json
 import os
@@ -10,6 +12,7 @@ SAFE_SEG_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 @dataclass
 class Entry:
+    """Open audit log entry for a single request cycle."""
     seq: str
     channel_id: str
     session: str
@@ -23,21 +26,25 @@ class Entry:
     _stderr_file: Optional[Any] = None
 
     def append_codex_line(self, line: str) -> None:
+        """Append a raw JSONL line from Codex output."""
         if self._codex_file:
             self._codex_file.write(line + "\n")
             self._codex_file.flush()
 
     def append_discord_out(self, text: str) -> None:
+        """Append text sent to Discord for this request."""
         if self._discord_file:
             self._discord_file.write(text + "\n")
             self._discord_file.flush()
 
     def append_stderr(self, text: str) -> None:
+        """Append stderr text from Codex process."""
         if self._stderr_file:
             self._stderr_file.write(text + "\n")
             self._stderr_file.flush()
 
     def close(self) -> None:
+        """Close any open file handles for this entry."""
         for f in (self._codex_file, self._discord_file, self._stderr_file):
             if f:
                 try:
@@ -49,6 +56,7 @@ class Entry:
 
 @dataclass
 class Summary:
+    """Summary metadata for an audit entry."""
     seq: str
     channel_id: str
     session: str
@@ -58,6 +66,7 @@ class Summary:
 
 
 class Logger:
+    """Audit logger managing per-channel/session/thread directories."""
     def __init__(self, base_dir: str) -> None:
         if not base_dir:
             raise ValueError("log dir is required")
@@ -65,6 +74,7 @@ class Logger:
         self.base_dir = base_dir
 
     def start(self, channel_id: str, session: str, thread_id: str, request: Any) -> Entry:
+        """Start a new audit entry and return its writer."""
         session = session or "default"
         channel_safe = _safe_segment(channel_id, "channel")
         session_safe = _safe_segment(session, "default")
@@ -96,6 +106,7 @@ class Logger:
         return entry
 
     def summaries(self, channel_id: str, session: str, limit: int) -> list[Summary]:
+        """Return recent audit summaries for a channel/session."""
         summaries: list[Summary] = []
         if channel_id:
             channel_id = _safe_segment(channel_id, "channel")
@@ -135,6 +146,7 @@ class Logger:
 
 
 def _next_seq(entry_dir: str) -> str:
+    """Allocate the next sequence number for an entry directory."""
     latest_path = os.path.join(entry_dir, ".latest")
     next_val = 1
     if os.path.exists(latest_path):
@@ -158,15 +170,16 @@ def _next_seq(entry_dir: str) -> str:
 
 
 def _write_json(path: str, payload: Any) -> None:
+    """Write JSON to disk with indentation."""
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
 
 
 def _safe_segment(val: str, fallback: str) -> str:
+    """Return a filesystem-safe segment, hashing when needed."""
     if not val:
         val = fallback
     if SAFE_SEG_RE.match(val):
         return val
     digest = hashlib.sha1(val.encode("utf-8")).hexdigest()[:12]
     return f"{fallback}-{digest}"
-

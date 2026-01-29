@@ -1,3 +1,5 @@
+"""State persistence for channel/session mappings."""
+
 import json
 import os
 import time
@@ -11,6 +13,7 @@ CURRENT_VERSION = 1
 
 @dataclass
 class SessionState:
+    """State for a single Codex session."""
     repo_name: str
     repo_path: str
     thread_id: str
@@ -21,17 +24,20 @@ class SessionState:
 
 @dataclass
 class ChannelState:
+    """State for a Discord channel, including sessions and sticky selections."""
     sessions: Dict[str, SessionState] = field(default_factory=dict)
     sticky: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
 class FileState:
+    """Top-level state container stored on disk."""
     version: int = CURRENT_VERSION
     channels: Dict[str, ChannelState] = field(default_factory=dict)
 
 
 class Store:
+    """State store with file locking and atomic writes."""
     def __init__(self, data_dir: str, lock_timeout_seconds: int = 600) -> None:
         if not data_dir:
             raise ValueError("data_dir is required")
@@ -42,14 +48,17 @@ class Store:
         self._lock = FileLock(self.lock_path, timeout=self.lock_timeout_seconds)
 
     def load(self) -> FileState:
+        """Load state from disk or return an empty default."""
         with self._lock:
             return self._read_unlocked()
 
     def save(self, state: FileState) -> None:
+        """Persist state to disk."""
         with self._lock:
             self._write_unlocked(state)
 
     def update(self, mutator: Callable[[FileState], None]) -> FileState:
+        """Update state via a mutator callback under lock."""
         with self._lock:
             state = self._read_unlocked()
             mutator(state)
@@ -57,6 +66,7 @@ class Store:
             return state
 
     def _read_unlocked(self) -> FileState:
+        """Read state without acquiring the file lock."""
         if not os.path.exists(self.path):
             return FileState(version=CURRENT_VERSION, channels={})
         with open(self.path, "r", encoding="utf-8") as f:
@@ -64,6 +74,7 @@ class Store:
         return _from_dict(data)
 
     def _write_unlocked(self, state: FileState) -> None:
+        """Write state without acquiring the file lock."""
         if state.version == 0:
             state.version = CURRENT_VERSION
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
@@ -74,6 +85,7 @@ class Store:
 
 
 def _from_dict(data: Dict[str, Any]) -> FileState:
+    """Deserialize a FileState from a raw dictionary."""
     version = int(data.get("version", CURRENT_VERSION))
     channels_raw = data.get("channels", {}) or {}
     channels: Dict[str, ChannelState] = {}
@@ -99,6 +111,7 @@ def _from_dict(data: Dict[str, Any]) -> FileState:
 
 
 def _migrate_legacy(fs: FileState, raw: Dict[str, Any]) -> None:
+    """Migrate legacy single-session schema into default session."""
     # If legacy fields exist, move them into default session.
     channels_raw = raw.get("channels", {}) or {}
     for channel_id, ch in channels_raw.items():
@@ -122,6 +135,7 @@ def _migrate_legacy(fs: FileState, raw: Dict[str, Any]) -> None:
 
 
 def _to_dict(state: FileState) -> Dict[str, Any]:
+    """Serialize FileState to a JSON-serializable dictionary."""
     channels: Dict[str, Any] = {}
     for channel_id, ch in state.channels.items():
         sessions: Dict[str, Any] = {}
@@ -142,5 +156,5 @@ def _to_dict(state: FileState) -> Dict[str, Any]:
 
 
 def utc_now_iso() -> str:
+    """Return current UTC time in ISO8601 format."""
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-

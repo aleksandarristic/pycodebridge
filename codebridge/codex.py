@@ -1,3 +1,5 @@
+"""Codex CLI runner and JSONL parsing utilities."""
+
 import asyncio
 import json
 import os
@@ -12,6 +14,7 @@ from .util.prompt import needs_user_input
 
 @dataclass
 class Event:
+    """Parsed Codex JSONL event wrapper."""
     type: str
     thread_id: str = ""
     item: Optional[Dict[str, Any]] = None
@@ -23,6 +26,7 @@ class Event:
 
 
 def parse_event(line: str) -> Optional[Event]:
+    """Parse a JSONL line into an Event, or return None on error."""
     try:
         payload = json.loads(line)
     except json.JSONDecodeError:
@@ -40,6 +44,7 @@ def parse_event(line: str) -> Optional[Event]:
 
 
 def extract_thread_id(line: str) -> str:
+    """Extract thread_id from a JSONL line if present."""
     try:
         payload = json.loads(line)
     except json.JSONDecodeError:
@@ -48,6 +53,7 @@ def extract_thread_id(line: str) -> str:
 
 
 def agent_texts(evt: Event) -> list[str]:
+    """Extract agent-visible text blocks from an Event."""
     texts: list[str] = []
     if evt.item:
         item_type = evt.item.get("type", "")
@@ -70,6 +76,7 @@ def agent_texts(evt: Event) -> list[str]:
 
 
 def display_texts(evt: Event) -> list[str]:
+    """Return displayable texts from an Event, falling back to error messages."""
     texts = agent_texts(evt)
     if texts:
         return texts
@@ -86,6 +93,7 @@ def display_texts(evt: Event) -> list[str]:
 
 
 def _normalize_message(msg: str) -> str:
+    """Normalize structured error messages into plain text."""
     msg = (msg or "").strip()
     if msg.startswith("{") and "detail" in msg:
         try:
@@ -97,6 +105,7 @@ def _normalize_message(msg: str) -> str:
 
 
 def _is_agent_like(t: str) -> bool:
+    """Return True for agent-like item types."""
     if not t:
         return True
     return t in {"agent_message", "message", "output_text"}
@@ -104,6 +113,7 @@ def _is_agent_like(t: str) -> bool:
 
 @dataclass
 class Options:
+    """Options for running a Codex command."""
     repo_path: str
     args: list[str]
     env: Dict[str, str]
@@ -115,24 +125,29 @@ class Options:
 
 
 class Process:
+    """Handle to a running Codex process."""
     def __init__(self, proc: asyncio.subprocess.Process) -> None:
         self._proc = proc
         self._thread_id = ""
 
     @property
     def thread_id(self) -> str:
+        """Thread id captured from the Codex JSONL stream."""
         return self._thread_id
 
     def set_thread_id(self, thread_id: str) -> None:
+        """Set thread id once, ignoring subsequent updates."""
         if not self._thread_id:
             self._thread_id = thread_id
 
     async def stop(self) -> None:
+        """Send ESC to request a graceful stop."""
         if self._proc.stdin:
             self._proc.stdin.write(b"\x1b")
             await self._proc.stdin.drain()
 
     async def interrupt(self) -> None:
+        """Send an interrupt signal (SIGINT/CTRL_BREAK)."""
         if self._proc.returncode is None:
             if os.name == "nt":
                 if hasattr(signal, "CTRL_BREAK_EVENT"):
@@ -143,25 +158,30 @@ class Process:
                 self._proc.send_signal(signal.SIGINT)
 
     async def kill(self) -> None:
+        """Force-kill the process."""
         if self._proc.returncode is None:
             self._proc.kill()
 
     async def write(self, text: str) -> None:
+        """Write raw text to Codex stdin."""
         if self._proc.stdin:
             self._proc.stdin.write(text.encode("utf-8"))
             await self._proc.stdin.drain()
 
     async def wait(self) -> int:
+        """Wait for process exit and return returncode."""
         return await self._proc.wait()
 
 
 class Runner:
+    """Build and execute Codex CLI commands."""
     def __init__(self, binary: str, sandbox: str, base_env: Optional[Dict[str, str]] = None) -> None:
         self.binary = binary or "codex"
         self.sandbox = sandbox or "workspace-write"
         self.base_env = base_env or {}
 
     def build_start_args(self, repo_path: str, prompt: str, model: str) -> list[str]:
+        """Build args for starting a new Codex session."""
         args = ["exec", "--json", "--cd", repo_path, "--sandbox", self.sandbox]
         if model.strip():
             args += ["--model", model]
@@ -169,6 +189,7 @@ class Runner:
         return args
 
     def build_resume_args(self, repo_path: str, thread_id: str, prompt: str, model: str) -> list[str]:
+        """Build args for resuming a session by thread id."""
         args = ["exec", "--json", "--cd", repo_path, "--sandbox", self.sandbox, "resume", thread_id]
         if model.strip():
             args += ["--model", model]
@@ -176,6 +197,7 @@ class Runner:
         return args
 
     def build_resume_last_args(self, repo_path: str, prompt: str, model: str) -> list[str]:
+        """Build args for resuming the last session in a repo."""
         args = ["exec", "--json", "--cd", repo_path, "--sandbox", self.sandbox, "resume", "--last"]
         if model.strip():
             args += ["--model", model]
@@ -183,6 +205,7 @@ class Runner:
         return args
 
     async def run(self, opts: Options) -> Process:
+        """Run Codex with given options and stream JSONL output to callbacks."""
         if not opts.repo_path:
             raise ValueError("repo path required")
         if not opts.args:
@@ -205,6 +228,7 @@ class Runner:
         process = Process(proc)
 
         async def _read_stdout() -> Optional[BaseException]:
+            """Read stdout JSONL and forward to callbacks."""
             assert proc.stdout
             try:
                 async for raw in proc.stdout:
@@ -229,6 +253,7 @@ class Runner:
                 return exc
 
         async def _read_stderr() -> Optional[BaseException]:
+            """Read stderr and forward to callback if provided."""
             if not proc.stderr:
                 return None
             try:
@@ -244,6 +269,7 @@ class Runner:
         stderr_task = asyncio.create_task(_read_stderr())
 
         async def _waiter() -> None:
+            """Wait for process completion and invoke on_exit callback."""
             err = await stdout_task
             stderr_err = await stderr_task
             rc = await proc.wait()
@@ -257,6 +283,7 @@ class Runner:
 
 
 def _merge_env(base: Dict[str, str], extra: Dict[str, str]) -> Dict[str, str]:
+    """Merge environment variables using an allowlist baseline."""
     env = {}
     allow = {
         "PATH",

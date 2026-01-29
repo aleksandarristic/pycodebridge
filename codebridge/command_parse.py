@@ -1,7 +1,10 @@
+"""Command parsing helpers for Discord/Codex CLI commands."""
+
 from __future__ import annotations
 
 
 def parse_session_and_prompt(rest: str) -> tuple[str, str]:
+    """Parse an optional session name and prompt string from a command tail."""
     rest = rest.strip()
     if not rest:
         return "default", ""
@@ -12,6 +15,7 @@ def parse_session_and_prompt(rest: str) -> tuple[str, str]:
 
 
 def parse_choose(rest: str) -> tuple[str, str]:
+    """Parse a choose command into (choice, session)."""
     parts = rest.split()
     if not parts:
         return "", ""
@@ -23,6 +27,7 @@ def parse_choose(rest: str) -> tuple[str, str]:
 
 
 def parse_session_or_limit(rest: str) -> tuple[str, int]:
+    """Parse either a session name or numeric limit from a command tail."""
     rest = rest.strip()
     if not rest:
         return "", 0
@@ -42,6 +47,7 @@ def parse_session_or_limit(rest: str) -> tuple[str, int]:
 
 
 def parse_session_and_id(rest: str) -> tuple[str, str]:
+    """Parse a session name and identifier from a command tail."""
     rest = rest.strip()
     if not rest:
         return "", ""
@@ -52,6 +58,7 @@ def parse_session_and_id(rest: str) -> tuple[str, str]:
 
 
 def parse_log_count(args: list[str]) -> int:
+    """Parse a bounded log count from command args."""
     n = 5
     if args:
         try:

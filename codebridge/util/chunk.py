@@ -1,4 +1,8 @@
+"""Chunking helpers for Discord output limits."""
+
+
 def chunk_text(text: str, max_len: int) -> list[str]:
+    """Split text into chunks that respect a maximum length."""
     if max_len <= 0:
         return [text]
     chunks: list[str] = []
@@ -34,4 +38,3 @@ def chunk_text(text: str, max_len: int) -> list[str]:
             start = end
     flush()
     return chunks
-

@@ -1,3 +1,5 @@
+"""Per-channel async job queue manager."""
+
 import asyncio
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Dict, Optional
@@ -7,6 +9,7 @@ Job = Callable[[], Awaitable[None]]
 
 @dataclass
 class JobRecord:
+    """Record of a queued job used for reruns."""
     job: Job
     session: str
     label: str = ""
@@ -14,6 +17,7 @@ class JobRecord:
 
 @dataclass
 class JobStatus:
+    """Snapshot of a job's queue status."""
     job_id: str
     session: str
     status: str
@@ -21,6 +25,7 @@ class JobStatus:
 
 
 class Manager:
+    """Queue manager that serializes jobs per channel."""
     def __init__(self) -> None:
         self._lock = asyncio.Lock()
         self._workers: Dict[str, _Worker] = {}
@@ -28,6 +33,7 @@ class Manager:
         self._last_jobs: Dict[str, JobRecord] = {}
 
     async def enqueue(self, channel_id: str, session: str, job: Job) -> tuple[int, str, asyncio.Future]:
+        """Enqueue a job for a channel and return (position, job_id, future)."""
         async with self._lock:
             worker = self._workers.get(channel_id)
             if worker is None:
@@ -42,6 +48,7 @@ class Manager:
             return pos, job_id, fut
 
     async def snapshot(self, channel_id: str) -> list[JobStatus]:
+        """Return a snapshot of queued/running jobs for a channel."""
         async with self._lock:
             worker = self._workers.get(channel_id)
             if worker is None:
@@ -49,6 +56,7 @@ class Manager:
             return worker.snapshot()
 
     async def snapshot_all(self) -> Dict[str, list[JobStatus]]:
+        """Return snapshots for all channels with queued/running jobs."""
         async with self._lock:
             items = list(self._workers.items())
         out: Dict[str, list[JobStatus]] = {}
@@ -59,6 +67,7 @@ class Manager:
         return out
 
     async def cancel(self, channel_id: str, job_id: str) -> bool:
+        """Cancel a queued job by id."""
         async with self._lock:
             worker = self._workers.get(channel_id)
         if worker is None:
@@ -66,6 +75,7 @@ class Manager:
         return worker.cancel(job_id)
 
     async def last_job(self, channel_id: str) -> Optional[JobRecord]:
+        """Return the most recent enqueued job for a channel."""
         async with self._lock:
             return self._last_jobs.get(channel_id)
 
@@ -79,15 +89,18 @@ class _JobRequest:
 
 
 class _Worker:
+    """Internal worker that executes jobs sequentially."""
     def __init__(self) -> None:
         self._queue: asyncio.Queue[_JobRequest] = asyncio.Queue()
         self._active: Optional[_JobRequest] = None
 
     def enqueue(self, req: _JobRequest) -> int:
+        """Enqueue a job request and return queue position."""
         self._queue.put_nowait(req)
         return self._queue.qsize()
 
     async def run(self) -> None:
+        """Run queued jobs in order forever."""
         while True:
             req = await self._queue.get()
             self._active = req
@@ -103,6 +116,7 @@ class _Worker:
                 self._queue.task_done()
 
     def snapshot(self) -> list[JobStatus]:
+        """Snapshot of current running and queued jobs."""
         statuses: list[JobStatus] = []
         if self._active:
             statuses.append(JobStatus(job_id=self._active.job_id, session=self._active.session, status="running", position=0))
@@ -112,6 +126,7 @@ class _Worker:
         return statuses
 
     def cancel(self, job_id: str) -> bool:
+        """Cancel a queued job if present."""
         queued = list(self._queue._queue)  # type: ignore[attr-defined]
         for idx, req in enumerate(queued):
             if req.job_id == job_id:
@@ -120,4 +135,3 @@ class _Worker:
                     req.future.set_exception(RuntimeError("cancelled"))
                 return True
         return False
-
