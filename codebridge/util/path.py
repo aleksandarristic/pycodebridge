@@ -69,3 +69,15 @@ def _ensure_contained(root: str, child: str) -> None:
         raise ValueError("repo cannot be the code root")
     if rel.startswith(".."):
         raise ValueError("repo escapes code root")
+
+
+def resolve_repo_file_path(repo_path: str, rel_path: str) -> str:
+    """Resolve and validate a file path under a repo directory."""
+    if not rel_path:
+        raise ValueError("path is required")
+    if os.path.isabs(rel_path):
+        raise ValueError("path must be relative")
+    cleaned = rel_path.lstrip("/").lstrip("\\")
+    target = os.path.abspath(os.path.join(repo_path, cleaned))
+    _ensure_contained(_realpath_or_self(repo_path), _realpath_or_self(target))
+    return target

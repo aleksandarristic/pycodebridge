@@ -65,3 +65,7 @@ From the repo root:
 `./.venv/bin/python -m cmd.bridge -config config.yaml`
 
 In a `codex-<repo>` channel: send `!c config` to verify config, then `!c start`. If you get no response, re-check Message Content intent, token in `.env`, channel naming, and that the repo exists under `code_root`.
+
+## File uploads/downloads
+- Attach a file in a `codex-<repo>` channel and the bot will ask where to save it.
+- Use `!c download <path>` to download a file from the repo.

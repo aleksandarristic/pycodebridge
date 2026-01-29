@@ -293,6 +293,9 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         except Exception as exc:
             await sink.send(forbidden_message(f"Repo error: {exc}"))
             return
+        if event.attachments:
+            await router.handle_upload_request(event, sink, bound_repo, repo_path)
+            return
         session = router.current_session_for_user(event.author_id, event.channel_id)
         prefixed_sink = _PrefixedSink(sink, bound_repo)
         await router.handle_resume(event, prefixed_sink, bound_repo, repo_path, session, content)

@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -26,12 +27,14 @@ from .router_helpers import (
     DEFAULT_SESSION,
     MAX_SESSIONS_PER_CHANNEL,
     PendingConflict,
+    PendingUpload,
     UsageStats,
     existing_thread,
     forbidden_message,
     normalize_session,
     pending_key,
     set_sticky,
+    UPLOAD_TTL_SECONDS,
     usage_from_event,
 )
 
@@ -50,6 +53,7 @@ class Router:
         self._usage: Dict[str, Dict[str, UsageStats]] = {}
         self.sessions = SessionService(state, cfg)
         self._command_registry, self._command_specs = command_registry.build_registry()
+        self._pending_uploads: Dict[str, PendingUpload] = {}
 
     async def handle_message(self, event: MessageEvent, sink: ResponseSink) -> None:
         """Handle an incoming message event."""
@@ -91,6 +95,14 @@ class Router:
         repo_name = match.group(1)
         prefix = self._transport_prefix(event)
         content = (event.content or "").strip()
+        if event.attachments:
+            try:
+                repo_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, repo_name)
+            except Exception as exc:
+                await self.reply_forbidden(sink, f"Repo error: {exc}")
+                return
+            await self.handle_upload_request(event, sink, repo_name, repo_path)
+            return
         if not content.startswith(prefix):
             if not self._transport_allow_plain_prompts(event):
                 return
@@ -117,6 +129,9 @@ class Router:
 
         cmdline = content[len(prefix) :].strip()
         if not cmdline:
+            return
+
+        if await self.handle_pending_upload_response(event, sink, repo_name):
             return
 
         fields = cmdline.split()
@@ -282,6 +297,22 @@ class Router:
     async def handle_git(self, sink: ResponseSink, repo_path: str, rest: str) -> None:
         """Run safe git helper commands."""
         await git_handlers.handle_git(self, sink, repo_path, rest)
+
+    async def handle_download(self, sink: ResponseSink, repo_path: str, rel_path: str) -> None:
+        """Send a file from the repo to the channel."""
+        try:
+            target = pathutil.resolve_repo_file_path(repo_path, rel_path)
+        except Exception as exc:
+            await self.reply_forbidden(sink, f"Invalid path: {exc}")
+            return
+        if os.path.isdir(target):
+            await self.reply_forbidden(sink, "Path is a directory; provide a file path.")
+            return
+        if not os.path.exists(target):
+            await self.reply_forbidden(sink, "File not found.")
+            return
+        filename = os.path.basename(target)
+        await sink.send_file(target, filename)
 
     async def handle_logs(self, sink: ResponseSink, session: str, limit: int) -> None:
         """Show recent audit log entries."""
@@ -544,6 +575,117 @@ class Router:
         if event.platform == "telegram":
             return self.cfg.telegram.allow_plain_prompts
         return self.cfg.discord.allow_plain_prompts
+
+    def _upload_key(self, event: MessageEvent) -> str:
+        return f"{event.platform}:{event.channel_id}:{event.author_id}"
+
+    def _set_pending_upload(self, event: MessageEvent, upload: PendingUpload) -> None:
+        self._pending_uploads[self._upload_key(event)] = upload
+
+    def _pop_pending_upload(self, event: MessageEvent) -> Optional[PendingUpload]:
+        return self._pending_uploads.pop(self._upload_key(event), None)
+
+    def _get_pending_upload(self, event: MessageEvent) -> Optional[PendingUpload]:
+        upload = self._pending_uploads.get(self._upload_key(event))
+        if not upload:
+            return None
+        if upload.expires_at < time.time():
+            self._pending_uploads.pop(self._upload_key(event), None)
+            return None
+        return upload
+
+    async def handle_upload_request(self, event: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str) -> None:
+        """Prompt for a destination path for uploaded files."""
+        max_bytes = self.cfg.files.max_upload_mb * 1024 * 1024
+        too_large = [att.filename for att in event.attachments if att.size > max_bytes]
+        if too_large:
+            await self.reply_forbidden(sink, f"Files too large (max {self.cfg.files.max_upload_mb}MB): {', '.join(too_large)}")
+            return
+        upload = PendingUpload(
+            repo_name=repo_name,
+            repo_path=repo_path,
+            attachments=event.attachments,
+            user_id=event.author_id,
+            created_at=time.time(),
+            expires_at=time.time() + UPLOAD_TTL_SECONDS,
+        )
+        self._set_pending_upload(event, upload)
+        suggestions = self._suggest_upload_paths(repo_path)
+        hint = ", ".join(suggestions) if suggestions else "repo root"
+        await self.reply(
+            sink,
+            f"Where do you want to put these file(s)? Reply with a relative path. Suggestions: {hint}",
+        )
+
+    async def handle_pending_upload_response(self, event: MessageEvent, sink: ResponseSink, repo_name: str) -> bool:
+        """Handle a pending upload path response."""
+        if not event.content:
+            return False
+        upload = self._get_pending_upload(event)
+        if not upload:
+            return False
+        if event.content.strip().startswith(self._transport_prefix(event)):
+            return False
+        rel_path = event.content.strip()
+        try:
+            target_path = pathutil.resolve_repo_file_path(upload.repo_path, rel_path)
+        except Exception as exc:
+            await self.reply_forbidden(sink, f"Invalid path: {exc}")
+            return True
+        is_dir = rel_path.endswith(("/", "\\")) or os.path.isdir(target_path)
+        if len(upload.attachments) > 1 and not is_dir:
+            await self.reply_forbidden(sink, "Provide a directory path when uploading multiple files.")
+            return True
+        saved = []
+        for att in upload.attachments:
+            dest = target_path
+            if is_dir:
+                dest = os.path.join(target_path, att.filename)
+            dest = self._unique_path(dest)
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            await att.save(dest)
+            saved.append(os.path.relpath(dest, upload.repo_path))
+        self._pop_pending_upload(event)
+        await self.reply(sink, f"Saved {len(saved)} file(s):\n" + "\n".join(saved))
+        self.logger.info(
+            "upload.saved",
+            extra={
+                "platform": event.platform,
+                "channel_id": event.channel_id,
+                "user_id": event.author_id,
+                "repo": upload.repo_name,
+                "count": len(saved),
+            },
+        )
+        return True
+
+    def _unique_path(self, path: str) -> str:
+        if not os.path.exists(path):
+            return path
+        base, ext = os.path.splitext(path)
+        idx = 1
+        while True:
+            candidate = f"{base}_{idx}{ext}"
+            if not os.path.exists(candidate):
+                return candidate
+            idx += 1
+
+    def _suggest_upload_paths(self, repo_path: str) -> list[str]:
+        suggestions = []
+        try:
+            for name in sorted(os.listdir(repo_path)):
+                if name.startswith("."):
+                    continue
+                if name in {".git", "node_modules", "vendor"}:
+                    continue
+                full = os.path.join(repo_path, name)
+                if os.path.isdir(full):
+                    suggestions.append(f"{name}/")
+                if len(suggestions) >= 5:
+                    break
+        except Exception:
+            return []
+        return suggestions
 
     @asynccontextmanager
     async def typing_context(self, sink: ResponseSink):

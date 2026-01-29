@@ -31,6 +31,7 @@ class TelegramAdapter:
             author_is_bot=is_bot,
             is_dm=bool(getattr(chat, "type", "") == "private"),
             guild_id=None,
+            attachments=[],
             raw_event=update,
         )
 
@@ -58,6 +59,11 @@ class TelegramResponseSink:
         """Update pinned status (no-op for now)."""
         _ = (user_id, session, text)
         return None
+
+    async def send_file(self, path: str, filename: str) -> None:
+        """Send a file to the chat."""
+        with open(path, "rb") as fh:
+            await self._bot.send_document(chat_id=self.channel_id, document=fh, filename=filename)
 
 
 @asynccontextmanager

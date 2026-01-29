@@ -23,6 +23,7 @@ For this bridge, use **DMs** and bind a repo in each chat:
 - `!c repo <repo> <prompt>` to run a one-off prompt
 - `!c unbind` to clear the binding
 When a repo is bound, any DM message without `!c` is treated as a prompt.
+Attachments in bound DMs will prompt for a destination path before saving.
 
 ## 4) Token placement
 Telegram adapter configuration lives under `transport` and `telegram`, for example:

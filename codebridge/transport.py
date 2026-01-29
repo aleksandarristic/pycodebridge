@@ -3,8 +3,18 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
-from typing import Any, AsyncContextManager, Protocol
+from dataclasses import dataclass, field
+from typing import Any, AsyncContextManager, Awaitable, Callable, Protocol
+
+
+@dataclass(frozen=True)
+class Attachment:
+    """File attachment metadata and save handler."""
+
+    filename: str
+    size: int
+    content_type: str | None
+    save: Callable[[str], Awaitable[None]]
 
 
 @dataclass(frozen=True)
@@ -19,6 +29,7 @@ class MessageEvent:
     author_is_bot: bool
     is_dm: bool
     guild_id: str | None = None
+    attachments: list[Attachment] = field(default_factory=list)
     raw_event: Any | None = None
 
 
@@ -35,6 +46,9 @@ class ResponseSink(Protocol):
 
     async def update_pinned_status(self, user_id: str, session: str, text: str) -> None:
         """Update a pinned status message for the channel, if supported."""
+
+    async def send_file(self, path: str, filename: str) -> None:
+        """Send a file to the channel."""
 
 
 @asynccontextmanager

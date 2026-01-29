@@ -193,6 +193,9 @@ audit:
 transport:
   adapter: "discord"  # slack/telegram scaffold only
 
+files:
+  max_upload_mb: 200
+
 repo_bootstrap:
   agents_template: ""
   spec_prompt: ""
@@ -288,12 +291,14 @@ Follow behavior described in the Go spec (ported):
 - `start`, `resume`, `choose resume|replace|cancel`, `use/select`, `model`, `thread`
 - `stop`, `kill`, `/quit`
 - `showrepo`, `showchanges`, `tests`, git helpers
+- `download <path>` (downloads a file from the repo)
 - queue controls `ps`, `cancel`, `rerun`
 - repo bootstrap `createrepo`, `clonerepo`, `copyrepo`, `spec`
 - DM admin commands (optional, gated by config) for repo management
 - DM repo binding commands in DMs: `bind`, `use`, `repo`, `unbind`, `status`
 - In DMs with a bound repo, messages without the `!c` prefix are treated as prompts.
 - In DMs, admin commands take precedence; `status` includes admin status for admins.
+- Attachments in channels or bound DMs prompt for a destination path before saving.
 
 All invalid/forbidden actions should respond:
 

@@ -19,6 +19,8 @@ SESSION_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 HELPER_TIMEOUT = 30.0
 TESTS_TIMEOUT = 120.0
 HELPER_OUTPUT_LIMIT = 128 * 1024
+UPLOAD_TIMEOUT = 60.0
+UPLOAD_TTL_SECONDS = 300
 
 
 @dataclass
@@ -37,6 +39,17 @@ class UsageStats:
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
+
+
+@dataclass
+class PendingUpload:
+    """Pending upload state for attachments."""
+    repo_name: str
+    repo_path: str
+    attachments: list[Any]
+    user_id: str
+    created_at: float
+    expires_at: float
 
 
 def forbidden_message(detail: str) -> str:

@@ -107,6 +107,7 @@ Repo helpers:
 - `!c showchanges`
 - `!c tests`
 - `!c git <status|log|branches|show|diff|pull|commit|push|merge> [...]`
+- `!c download <path>`
 
 Queue:
 - `!c logs [session] [n]`
@@ -132,6 +133,7 @@ Enable with `discord.dm_admin_enabled: true`. Commands require the same `!c` pre
 - `!c renamerepo <from> <to>` (alias: `rename`)
 
 When a repo is bound in DMs, any message without `!c` is treated as a prompt.
+Attachments in channels or bound DMs will prompt for a destination path before saving.
 
 ## Troubleshooting
 - No response: confirm Message Content intent is enabled and saved, and your user ID is allowlisted.

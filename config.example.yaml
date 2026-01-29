@@ -45,6 +45,9 @@ transport:
   # adapter: "slack"  # scaffold only
   # adapter: "telegram"  # scaffold only
 
+files:
+  max_upload_mb: 200
+
 repo_bootstrap:
   agents_template: ""
   spec_prompt: ""

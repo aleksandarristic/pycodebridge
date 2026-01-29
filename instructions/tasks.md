@@ -211,7 +211,7 @@
 - Store DM bound repo per user/channel and prefix DM responses with `[repo]`.
 - Add tests for binding, unbinding, repo override, and collision handling.
 
-42) TODO - Repo file upload/download support
+42) DONE - Repo file upload/download support
 - Support uploading files into repos and downloading files from repos via adapters.
 - Define security constraints (path containment, size limits, allowed extensions) and audit logging.
 - Add command UX (e.g., `!c upload`, `!c download`) and adapter-specific handling.
@@ -257,3 +257,4 @@
 - 2026-01-29: Added DM repo binding commands, state storage, and tests.
 - 2026-01-29: Added audit log redaction toggle and DM command collision resolution.
 - 2026-01-29: Improved operational logging for routing and DM binding events.
+- 2026-01-29: Added implicit file upload flow and repo download command (Discord).

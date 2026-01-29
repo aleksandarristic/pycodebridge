@@ -18,6 +18,7 @@ DEFAULT_LOCK_TIMEOUT_SECONDS = 600
 DEFAULT_CONFLICT_TTL_SECONDS = 60
 DEFAULT_TRANSPORT_ADAPTER = "discord"
 DEFAULT_AUDIT_REDACT = False
+DEFAULT_MAX_UPLOAD_MB = 200
 
 DEFAULT_START_PROMPT = (
     "Hello. This is a Discord-bridged Codex session for repo: {{REPO_NAME}}.\n"
@@ -102,6 +103,12 @@ class TransportConfig:
 
 
 @dataclass
+@dataclass
+class FilesConfig:
+    """File transfer configuration."""
+    max_upload_mb: int = DEFAULT_MAX_UPLOAD_MB
+
+
 class RepoBootstrapConfig:
     """Repo bootstrap configuration for createrepo/spec flows."""
     agents_template: str = ""
@@ -118,6 +125,7 @@ class Config:
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
     audit: AuditConfig = field(default_factory=AuditConfig)
     transport: TransportConfig = field(default_factory=TransportConfig)
+    files: FilesConfig = field(default_factory=FilesConfig)
     repo_bootstrap: RepoBootstrapConfig = field(default_factory=RepoBootstrapConfig)
 
     def discord_token(self) -> str:
@@ -210,6 +218,9 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.audit.redact = bool(audit.get("redact", cfg.audit.redact))
     cfg.audit.redact_patterns = list(audit.get("redact_patterns", cfg.audit.redact_patterns) or [])
 
+    files = raw.get("files", {}) or {}
+    cfg.files.max_upload_mb = int(files.get("max_upload_mb", cfg.files.max_upload_mb))
+
     transport = raw.get("transport", {}) or {}
     cfg.transport.adapter = transport.get("adapter", cfg.transport.adapter)
 
@@ -255,6 +266,8 @@ def _apply_defaults(cfg: Config) -> None:
     if not cfg.runtime.log_level:
         cfg.runtime.log_level = DEFAULT_LOG_LEVEL
     cfg.audit.redact = bool(cfg.audit.redact)
+    if cfg.files.max_upload_mb <= 0:
+        cfg.files.max_upload_mb = DEFAULT_MAX_UPLOAD_MB
     if not cfg.transport.adapter:
         cfg.transport.adapter = DEFAULT_TRANSPORT_ADAPTER
     if not cfg.state.log_dir and cfg.state.data_dir:

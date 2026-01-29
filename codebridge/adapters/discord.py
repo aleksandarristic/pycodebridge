@@ -6,7 +6,7 @@ from typing import Dict
 
 import discord
 
-from ..transport import MessageEvent, ResponseSink, null_typing
+from ..transport import Attachment, MessageEvent, ResponseSink, null_typing
 
 
 class DiscordAdapter:
@@ -21,6 +21,16 @@ class DiscordAdapter:
         is_dm = isinstance(channel, (discord.DMChannel, discord.GroupChannel))
         channel_name = channel.name if hasattr(channel, "name") and channel.name else str(channel.id)
         guild_id = str(message.guild.id) if message.guild else None
+        attachments = []
+        for att in getattr(message, "attachments", []) or []:
+            attachments.append(
+                Attachment(
+                    filename=att.filename,
+                    size=att.size,
+                    content_type=getattr(att, "content_type", None),
+                    save=att.save,
+                )
+            )
         return MessageEvent(
             platform="discord",
             content=message.content or "",
@@ -30,6 +40,7 @@ class DiscordAdapter:
             author_is_bot=bool(message.author.bot),
             is_dm=is_dm,
             guild_id=guild_id,
+            attachments=attachments,
             raw_event=message,
         )
 
@@ -82,3 +93,7 @@ class DiscordResponseSink:
     async def update_pinned_status(self, user_id: str, session: str, text: str) -> None:
         """Update pinned status for this channel."""
         await self._adapter.update_pinned_status(self._channel, text)
+
+    async def send_file(self, path: str, filename: str) -> None:
+        """Send a file to the channel."""
+        await self._channel.send(file=discord.File(path, filename=filename))
