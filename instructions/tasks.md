@@ -173,7 +173,7 @@
 - Keep it behind `transport.adapter` selection without changing default behavior.
 - Add docs note that Telegram is scaffold-only until API integration is completed.
 
-34) TODO - Discord threads-only adapter variant (issue plan)
+34) REMOVED - Discord threads-only adapter variant (issue plan)
 - Owner: TBD
 - Subtasks:
   - Add config flag for threads-only mode and document in `DISCORD.md`/`README.md`.
@@ -312,3 +312,4 @@
 - 2026-01-29: Standardized platform thread context fields and Telegram reply threading.
 - 2026-01-29: Added TODO for threaded replies across Slack/Teams/Google Chat adapters.
 - 2026-01-29: Added transport capabilities, extracted file transfer service, and expanded thread context tests.
+- 2026-01-29: Marked Discord threads-only adapter variant as removed.
