@@ -229,8 +229,8 @@ def _validate(cfg: Config) -> None:
     if level not in {"debug", "info", "warn", "warning", "error"}:
         raise ValueError("runtime.log_level must be debug|info|warn|error")
 
-    if cfg.transport.adapter.lower() not in {"discord"}:
-        raise ValueError("transport.adapter must be discord (additional adapters not yet supported)")
+    if cfg.transport.adapter.lower() not in {"discord", "slack"}:
+        raise ValueError("transport.adapter must be discord or slack (additional adapters not yet supported)")
 
     if len(cfg.discord.allowed_user_ids) == 0:
         if not cfg.discord.dm_admin_enabled or len(cfg.discord.dm_admin_user_ids) == 0:

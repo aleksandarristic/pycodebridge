@@ -46,10 +46,13 @@ async def main() -> None:
     router = Router(cfg, state_store, audit_logger, runner, queue, logger)
 
     adapter = (cfg.transport.adapter or "discord").lower()
-    if adapter != "discord":
+    if adapter == "discord":
+        token = cfg.discord_token()
+        client = build_client(router)
+    elif adapter == "slack":
+        raise ValueError("Slack adapter scaffolded but not yet wired; use transport.adapter: discord")
+    else:
         raise ValueError(f"Unsupported transport adapter: {adapter}")
-    token = cfg.discord_token()
-    client = build_client(router)
 
     try:
         await client.start(token)

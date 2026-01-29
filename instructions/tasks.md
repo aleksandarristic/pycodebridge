@@ -140,12 +140,12 @@
 - Create a Mermaid diagram describing core modules, adapters, and data flow.
 - Store it in `docs/architecture.mmd` (or similar) and reference from README.
 
-28) TODO - Slack adapter skeleton
+28) DONE - Slack adapter skeleton
 - Create a Slack transport adapter stub (event mapping + response sink interface implementation).
 - Keep it behind `transport.adapter` selection without changing default behavior.
 - Add docs note that Slack is scaffold-only until API integration is completed.
 
-29) TODO - Transport test expansion
+29) DONE - Transport test expansion
 - Add adapter mapping tests for Discord adapter (MessageEvent fields, sink behaviors).
 - Add ResponseSink pin/typing behavior tests via fakes/mocks where possible.
 - Ensure tests stay unit-level with no external API calls.
@@ -181,3 +181,4 @@
 - 2026-01-29: Added Discord adapter + transport config for MessageEvent/ResponseSink routing.
 - 2026-01-29: Added Mermaid architecture diagram and doc references.
 - 2026-01-29: Cleaned up docs for transport-agnostic wording and removed local path references.
+- 2026-01-29: Added Slack adapter scaffold and expanded transport adapter tests.

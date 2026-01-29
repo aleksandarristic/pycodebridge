@@ -31,6 +31,7 @@ runtime:
 
 transport:
   adapter: "discord"
+  # adapter: "slack"  # scaffold only
 
 repo_bootstrap:
   agents_template: ""
