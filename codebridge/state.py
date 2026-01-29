@@ -34,6 +34,7 @@ class FileState:
     """Top-level state container stored on disk."""
     version: int = CURRENT_VERSION
     channels: Dict[str, ChannelState] = field(default_factory=dict)
+    dm_bindings: Dict[str, str] = field(default_factory=dict)
 
 
 class Store:
@@ -88,6 +89,7 @@ def _from_dict(data: Dict[str, Any]) -> FileState:
     """Deserialize a FileState from a raw dictionary."""
     version = int(data.get("version", CURRENT_VERSION))
     channels_raw = data.get("channels", {}) or {}
+    dm_bindings = data.get("dm_bindings", {}) or {}
     channels: Dict[str, ChannelState] = {}
 
     for channel_id, ch in channels_raw.items():
@@ -105,7 +107,7 @@ def _from_dict(data: Dict[str, Any]) -> FileState:
             )
         channels[channel_id] = ChannelState(sessions=sessions, sticky=dict(sticky))
 
-    fs = FileState(version=version, channels=channels)
+    fs = FileState(version=version, channels=channels, dm_bindings=dict(dm_bindings))
     _migrate_legacy(fs, data)
     return fs
 
@@ -152,7 +154,7 @@ def _to_dict(state: FileState) -> Dict[str, Any]:
             "sessions": sessions,
             "sticky": ch.sticky,
         }
-    return {"version": state.version, "channels": channels}
+    return {"version": state.version, "channels": channels, "dm_bindings": state.dm_bindings}
 
 
 def utc_now_iso() -> str:

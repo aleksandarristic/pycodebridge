@@ -287,6 +287,7 @@ Follow behavior described in the Go spec (ported):
 - queue controls `ps`, `cancel`, `rerun`
 - repo bootstrap `createrepo`, `clonerepo`, `copyrepo`, `spec`
 - DM admin commands (optional, gated by config) for repo management
+- DM repo binding commands in DMs: `bind`, `use`, `repo`, `unbind`, `status`
 
 All invalid/forbidden actions should respond:
 

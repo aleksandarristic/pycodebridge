@@ -194,6 +194,23 @@
 - Add an "Integrations" section in `README.md`.
 - List supported/scaffolded integrations and link to docs (e.g., `DISCORD.md`, `SLACK.md`, `TELEGRAM.md`).
 
+39) TODO - Audit log redaction toggle
+- Add an optional config to redact secrets from audit logs (tokens/keys/passwords) before writing.
+- Document the redaction option and any limitations.
+- Add tests for redaction patterns.
+
+40) TODO - DM command collision resolution
+- Review DM admin command namespace vs per-repo DM commands (e.g., /bind, /repo, /use, /unbind).
+- Define a precedence/namespace strategy to avoid collisions (admin-only prefix, reserved commands, or routing by adapter).
+- Add a context status command that works in non-repo and repo context (e.g., /status or !c /status) to show current repo binding and active session.
+- Document the resolution rules and add tests for ambiguous commands.
+
+41) DONE - DM repo binding commands (prefix-only)
+- Extend DM command parsing to support repo-binding commands with `!c` prefix: `bind`, `repo`, `use`, `unbind`, `status`.
+- Define DM precedence: admin commands first, binding commands next, then prompt passthrough if bound.
+- Store DM bound repo per user/channel and prefix DM responses with `[repo]`.
+- Add tests for binding, unbinding, repo override, and collision handling.
+
 
 ---
 
@@ -226,3 +243,4 @@
 - 2026-01-29: Added Telegram adapter scaffold and noted scaffold-only status.
 - 2026-01-29: Completed Telegram adapter wiring with long polling and config updates.
 - 2026-01-29: Added README integrations section with adapter doc links.
+- 2026-01-29: Added DM repo binding commands, state storage, and tests.

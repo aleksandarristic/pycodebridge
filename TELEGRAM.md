@@ -18,9 +18,10 @@ Instead, messages arrive from a **chat**, which can be:
 - **Group chat**: a small group with the bot added.
 - **Supergroup**: large groups with extra moderation features.
 
-For this bridge, the Telegram **chat title** must match `codex-<repo>` so the
-router can resolve the repo name. Private chats do not have titles, so they
-are ignored by default. Use a group/supergroup and set its title to `codex-<repo>`.
+For this bridge, use **DMs** and bind a repo in each chat:
+- `!c bind <repo>` to set the default repo for the DM
+- `!c repo <repo> <prompt>` to run a one-off prompt
+- `!c unbind` to clear the binding
 
 ## 4) Token placement
 Telegram adapter configuration lives under `transport` and `telegram`, for example:
@@ -36,7 +37,7 @@ telegram:
 ```
 
 ## 5) Notes
-- Telegram uses chat titles for repo mapping in this bridge.
+- Telegram DMs use repo binding (`!c bind`) to select the repo context.
 - Use `telegram.allowed_user_ids` to restrict access to your bot.
 - There is no native “typing” for bots, but chat actions are supported.
 - Rate limits apply; handle retries and backoff.

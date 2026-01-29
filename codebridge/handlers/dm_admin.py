@@ -25,6 +25,24 @@ if TYPE_CHECKING:
     from ..router import Router
 
 
+class _PrefixedSink:
+    """Response sink wrapper that prefixes messages with a repo name."""
+
+    def __init__(self, sink: ResponseSink, repo_name: str) -> None:
+        self._sink = sink
+        self._repo_name = repo_name
+        self.channel_id = sink.channel_id
+
+    async def send(self, content: str) -> None:
+        await self._sink.send(f"[{self._repo_name}] {content}")
+
+    def typing(self):  # type: ignore[override]
+        return self._sink.typing()
+
+    async def update_pinned_status(self, user_id: str, session: str, text: str) -> None:
+        await self._sink.update_pinned_status(user_id, session, text)
+
+
 def dm_help_text() -> str:
     """Return DM admin help text."""
     return (
@@ -39,6 +57,18 @@ def dm_help_text() -> str:
         "copyrepo <from> <to> — copy repo\n"
         "deleterepo <name> — delete repo\n"
         "renamerepo <from> <to> — rename repo\n"
+    )
+
+
+def dm_binding_help_text() -> str:
+    """Return DM repo binding help text."""
+    return (
+        "DM Repo Binding:\n"
+        "bind <repo> — bind this DM to a repo\n"
+        "use <repo> — alias for bind\n"
+        "repo <repo> <prompt> — run a one-off prompt against a repo\n"
+        "unbind — clear bound repo\n"
+        "status — show current bound repo and session\n"
     )
 
 
@@ -244,9 +274,10 @@ async def dm_rename_repo(
 async def handle_dm_message(router: "Router", event: MessageEvent, sink: ResponseSink) -> None:
     """Handle an incoming DM admin message."""
     content = (event.content or "").strip()
-    if not content.startswith(router.cfg.discord.prefix or "!c"):
+    prefix = router._transport_prefix(event)
+    if not content.startswith(prefix):
         return
-    cmdline = content[len(router.cfg.discord.prefix or "!c") :].strip()
+    cmdline = content[len(prefix) :].strip()
     if not cmdline:
         return
     fields = cmdline.split()
@@ -261,67 +292,148 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
     async def send_forbidden(detail: str) -> None:
         await dm_reply(router, sink, entry, forbidden_message(detail))
 
-    if cmd == "help":
-        await send(dm_help_text())
-        return
-    if cmd == "repos":
-        msg = await dm_list_repos(router)
-        await send(msg)
-        return
-    if cmd == "sessions":
-        msg = await dm_list_sessions(router)
-        await send(msg)
-        return
-    if cmd == "status":
-        await send(await dm_status(router))
-        return
-    if cmd == "config":
-        await send(router.config_text())
-        return
-    if cmd == "createrepo":
-        name = rest.strip()
-        if not name:
-            await send_forbidden("Usage: !c createrepo <name>")
+    is_admin = event.platform == "discord" and router.cfg.discord.dm_admin_enabled and router._dm_admin_allowed(event.author_id)
+    binding_commands = {"bind", "use", "repo", "unbind", "status"}
+    admin_commands = {
+        "help",
+        "repos",
+        "sessions",
+        "config",
+        "createrepo",
+        "clonerepo",
+        "copyrepo",
+        "deleterepo",
+        "delete",
+        "renamerepo",
+        "rename",
+    }
+
+    if cmd in admin_commands:
+        if not is_admin:
+            await send_forbidden("You are not allowed to use DM admin commands.")
             return
-        err = await dm_create_repo(router, event, sink, name, entry)
-        if err:
-            await send_forbidden(str(err))
-        return
-    if cmd == "clonerepo":
-        parts = rest.split(maxsplit=1)
-        if len(parts) < 2:
-            await send_forbidden("Usage: !c clonerepo <name> <url>")
+        if cmd == "help":
+            await send(dm_help_text())
             return
-        err = await dm_clone_repo(router, event, sink, parts[0], parts[1], entry)
-        if err:
-            await send_forbidden(str(err))
-        return
-    if cmd == "copyrepo":
-        parts = rest.split(maxsplit=1)
-        if len(parts) < 2:
-            await send_forbidden("Usage: !c copyrepo <from> <to>")
+        if cmd == "repos":
+            msg = await dm_list_repos(router)
+            await send(msg)
             return
-        err = await dm_copy_repo(router, event, sink, parts[0], parts[1], entry)
-        if err:
-            await send_forbidden(str(err))
-        return
-    if cmd in {"deleterepo", "delete"}:
-        name = rest.strip()
-        if not name:
-            await send_forbidden("Usage: !c deleterepo <name>")
+        if cmd == "sessions":
+            msg = await dm_list_sessions(router)
+            await send(msg)
             return
-        err = await dm_delete_repo(router, event, sink, name, entry)
-        if err:
-            await send_forbidden(str(err))
-        return
-    if cmd in {"renamerepo", "rename"}:
-        parts = rest.split(maxsplit=1)
-        if len(parts) < 2:
-            await send_forbidden("Usage: !c renamerepo <from> <to>")
+        if cmd == "config":
+            await send(router.config_text())
             return
-        err = await dm_rename_repo(router, event, sink, parts[0], parts[1], entry)
-        if err:
-            await send_forbidden(str(err))
+        if cmd == "createrepo":
+            name = rest.strip()
+            if not name:
+                await send_forbidden("Usage: !c createrepo <name>")
+                return
+            err = await dm_create_repo(router, event, sink, name, entry)
+            if err:
+                await send_forbidden(str(err))
+            return
+        if cmd == "clonerepo":
+            parts = rest.split(maxsplit=1)
+            if len(parts) < 2:
+                await send_forbidden("Usage: !c clonerepo <name> <url>")
+                return
+            err = await dm_clone_repo(router, event, sink, parts[0], parts[1], entry)
+            if err:
+                await send_forbidden(str(err))
+            return
+        if cmd == "copyrepo":
+            parts = rest.split(maxsplit=1)
+            if len(parts) < 2:
+                await send_forbidden("Usage: !c copyrepo <from> <to>")
+                return
+            err = await dm_copy_repo(router, event, sink, parts[0], parts[1], entry)
+            if err:
+                await send_forbidden(str(err))
+            return
+        if cmd in {"deleterepo", "delete"}:
+            name = rest.strip()
+            if not name:
+                await send_forbidden("Usage: !c deleterepo <name>")
+                return
+            err = await dm_delete_repo(router, event, sink, name, entry)
+            if err:
+                await send_forbidden(str(err))
+            return
+        if cmd in {"renamerepo", "rename"}:
+            parts = rest.split(maxsplit=1)
+            if len(parts) < 2:
+                await send_forbidden("Usage: !c renamerepo <from> <to>")
+                return
+            err = await dm_rename_repo(router, event, sink, parts[0], parts[1], entry)
+            if err:
+                await send_forbidden(str(err))
+            return
         return
 
-    await send_forbidden("Unknown DM command. Try !c help.")
+    if cmd in binding_commands:
+        if not router._transport_user_allowed(event):
+            await send_forbidden("You are not allowed to use this bot.")
+            return
+        if cmd == "status":
+            bound = router.get_dm_binding(event)
+            session = router.current_session_for_user(event.author_id, event.channel_id)
+            info = f"Bound repo: {bound or 'none'}\nCurrent session: {session}"
+            if is_admin:
+                status = await dm_status(router)
+                if status:
+                    info = info + "\n\nAdmin status:\n" + status
+            await send(info)
+            return
+        if cmd in {"bind", "use"}:
+            repo_name = rest.strip()
+            if not repo_name:
+                await send_forbidden("Usage: !c bind <repo>")
+                return
+            try:
+                _ = pathutil.resolve_repo_path(router.cfg.codex.code_root, repo_name)
+            except Exception as exc:
+                await send_forbidden(f"Repo error: {exc}")
+                return
+            router.set_dm_binding(event, repo_name)
+            await send(f"Bound repo: {repo_name}")
+            return
+        if cmd == "unbind":
+            router.clear_dm_binding(event)
+            await send("Repo binding cleared.")
+            return
+        if cmd == "repo":
+            parts = rest.split(maxsplit=1)
+            if len(parts) < 2:
+                await send_forbidden("Usage: !c repo <repo> <prompt>")
+                return
+            repo_name = parts[0]
+            prompt = parts[1].strip()
+            if not prompt:
+                await send_forbidden("Prompt required.")
+                return
+            try:
+                repo_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, repo_name)
+            except Exception as exc:
+                await send_forbidden(f"Repo error: {exc}")
+                return
+            session = router.current_session_for_user(event.author_id, event.channel_id)
+            prefixed_sink = _PrefixedSink(sink, repo_name)
+            await router.handle_resume(event, prefixed_sink, repo_name, repo_path, session, prompt)
+            return
+        await send(dm_binding_help_text())
+        return
+    bound_repo = router.get_dm_binding(event)
+    if not bound_repo:
+        await send(dm_binding_help_text())
+        return
+    try:
+        repo_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, bound_repo)
+    except Exception as exc:
+        await send_forbidden(f"Repo error: {exc}")
+        return
+    session = router.current_session_for_user(event.author_id, event.channel_id)
+    prefixed_sink = _PrefixedSink(sink, bound_repo)
+    await router.handle_resume(event, prefixed_sink, bound_repo, repo_path, session, cmdline)

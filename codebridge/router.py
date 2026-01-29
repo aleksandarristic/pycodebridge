@@ -58,12 +58,7 @@ class Router:
 
         channel_name = event.channel_name or event.channel_id
 
-        if event.is_dm and event.platform == "discord":
-            if not self.cfg.discord.dm_admin_enabled:
-                return
-            if not self._dm_admin_allowed(event.author_id):
-                await self.reply_forbidden(sink, "You are not allowed to use DM admin commands.")
-                return
+        if event.is_dm:
             await dm_admin_handlers.handle_dm_message(self, event, sink)
             return
         if event.platform == "discord" and not event.guild_id:
@@ -481,6 +476,25 @@ class Router:
         if self.cfg.discord.dm_admin_user_ids:
             return user_id in self.cfg.discord.dm_admin_user_ids
         return user_id in self.cfg.discord.allowed_user_ids
+
+    def dm_binding_key(self, event: MessageEvent) -> str:
+        """Return a stable key for DM repo bindings."""
+        return f"{event.platform}:{event.channel_id}"
+
+    def get_dm_binding(self, event: MessageEvent) -> str:
+        """Return the bound repo name for a DM, if any."""
+        state = self.state.load()
+        return state.dm_bindings.get(self.dm_binding_key(event), "")
+
+    def set_dm_binding(self, event: MessageEvent, repo_name: str) -> None:
+        """Set the bound repo name for a DM."""
+        key = self.dm_binding_key(event)
+        self.state.update(lambda fs: fs.dm_bindings.__setitem__(key, repo_name))
+
+    def clear_dm_binding(self, event: MessageEvent) -> None:
+        """Clear the bound repo name for a DM."""
+        key = self.dm_binding_key(event)
+        self.state.update(lambda fs: fs.dm_bindings.pop(key, None))
 
     def _transport_user_allowed(self, event: MessageEvent) -> bool:
         if event.platform == "telegram":
