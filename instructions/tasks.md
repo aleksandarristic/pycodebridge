@@ -121,7 +121,7 @@
 - Replace direct map access in `Router` with the service to reduce locking complexity.
 - Add unit tests covering SessionService behavior (conflict TTL, active tracking).
 
-24) TODO - Command registry
+24) DONE - Command registry
 - Implement a table-driven command registry to dispatch handlers.
 - Generate help text from the registry to avoid drift.
 - Add unit tests for registry parsing and help output.
@@ -161,3 +161,4 @@
 - 2026-01-29: Added PEP8 docstrings across Python modules.
 - 2026-01-29: Split router handlers and helpers into dedicated modules.
 - 2026-01-29: Added SessionService abstraction and unit tests for pending conflicts and active tracking.
+- 2026-01-29: Introduced a command registry with generated help text and registry tests.

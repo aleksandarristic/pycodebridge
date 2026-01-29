@@ -15,16 +15,11 @@ from .queue import Manager
 from .session_service import SessionService
 from .state import Store, utc_now_iso
 from .util import path as pathutil
-from .command_parse import (
-    parse_choose,
-    parse_session_and_id,
-    parse_session_and_prompt,
-    parse_session_or_limit,
-)
 from .handlers import core as core_handlers
 from .handlers import dm_admin as dm_admin_handlers
 from .handlers import git_helpers as git_handlers
 from .handlers import repo_helpers as repo_handlers
+from . import command_registry
 from .util.ansi import strip_control_codes
 from .util.chunk import chunk_text
 from .util.prompt import needs_user_input
@@ -34,12 +29,10 @@ from .router_helpers import (
     MAX_SESSIONS_PER_CHANNEL,
     PendingConflict,
     UsageStats,
-    count_active_sessions,
     existing_thread,
     forbidden_message,
     normalize_session,
     pending_key,
-    session_exists,
     set_sticky,
     usage_from_event,
 )
@@ -59,6 +52,7 @@ class Router:
         self._pins: Dict[str, int] = {}
         self._usage: Dict[str, Dict[str, UsageStats]] = {}
         self.sessions = SessionService(state, cfg)
+        self._command_registry, self._command_specs = command_registry.build_registry()
 
     async def handle_message(self, client: discord.Client, message: discord.Message) -> None:
         """Handle an incoming Discord message."""
@@ -154,217 +148,15 @@ class Router:
             await self.handle_resume(message, repo_name, repo_path, session_name, prompt)
             return
 
-        if cmd == "help":
-            await self.send_help(channel)
-            return
-        if cmd == "status":
-            await self.send_status(channel, repo_name, repo_path)
-            return
-        if cmd == "stats":
-            session = rest.strip() or self.current_session_for_user(str(message.author.id), str(channel.id))
-            try:
-                session = normalize_session(session)
-            except ValueError as exc:
-                await self.reply_forbidden(channel, str(exc))
-                return
-            await self.handle_stats(channel, session)
-            return
-        if cmd == "peek":
-            session = rest.strip() or self.current_session_for_user(str(message.author.id), str(channel.id))
-            try:
-                session = normalize_session(session)
-            except ValueError as exc:
-                await self.reply_forbidden(channel, str(exc))
-                return
-            await self.handle_peek(channel, session)
-            return
-        if cmd == "config":
-            await self.reply(channel, self.config_text())
-            return
-        if cmd == "start":
-            session_name, _ = parse_session_and_prompt(rest)
-            if not session_name:
-                session_name = self.current_session_for_user(str(message.author.id), str(channel.id))
-            try:
-                session_name = normalize_session(session_name)
-            except ValueError as exc:
-                await self.reply_forbidden(channel, str(exc))
-                return
-            await self.handle_start(message, repo_name, repo_path, session_name)
-            return
-        if cmd == "resume":
-            session_name, prompt = parse_session_and_prompt(rest)
-            if not session_name:
-                session_name = self.current_session_for_user(str(message.author.id), str(channel.id))
-            try:
-                session_name = normalize_session(session_name)
-            except ValueError as exc:
-                await self.reply_forbidden(channel, str(exc))
-                return
-            await self.handle_resume(message, repo_name, repo_path, session_name, prompt)
-            return
-        if cmd == "choose":
-            choice, sess = parse_choose(rest)
-            if not choice:
-                await self.reply_forbidden(channel, "Usage: !c choose [session] resume|replace|cancel")
-                return
-            if sess:
-                try:
-                    _ = normalize_session(sess)
-                except ValueError as exc:
-                    await self.reply_forbidden(channel, str(exc))
-                    return
-            await self.handle_choose(message, repo_name, repo_path, sess, choice)
-            return
-        if cmd == "stop":
-            session = rest.strip()
-            if session:
-                try:
-                    session = normalize_session(session)
-                except ValueError as exc:
-                    await self.reply_forbidden(channel, str(exc))
-                    return
-            await self.handle_stop(channel, session)
-            return
-        if cmd == "kill":
-            session = rest.strip()
-            if session:
-                try:
-                    session = normalize_session(session)
-                except ValueError as exc:
-                    await self.reply_forbidden(channel, str(exc))
-                    return
-            await self.handle_kill(channel, session)
-            return
-        if cmd == "/quit":
-            session = rest.strip()
-            if session:
-                try:
-                    session = normalize_session(session)
-                except ValueError as exc:
-                    await self.reply_forbidden(channel, str(exc))
-                    return
-            await self.handle_quit(channel, session)
-            return
-        if cmd == "showrepo":
-            await self.handle_showrepo(channel, repo_path)
-            return
-        if cmd == "showchanges":
-            await self.handle_showchanges(channel, repo_path)
-            return
-        if cmd == "tests":
-            await self.handle_tests(channel, repo_path)
-            return
-        if cmd == "git":
-            await self.handle_git(channel, repo_path, rest)
-            return
-        if cmd == "logs":
-            session_name, limit = parse_session_or_limit(rest)
-            if limit <= 0:
-                limit = 5
-            if session_name:
-                try:
-                    session_name = normalize_session(session_name)
-                except ValueError as exc:
-                    await self.reply_forbidden(channel, str(exc))
-                    return
-            await self.handle_logs(channel, session_name, limit)
-            return
-        if cmd == "ps":
-            await self.handle_ps(channel)
-            return
-        if cmd == "cancel":
-            job_id = rest.strip()
-            if not job_id:
-                await self.reply_forbidden(channel, "Usage: !c cancel <job-id>")
-                return
-            await self.handle_cancel(channel, job_id)
-            return
-        if cmd == "rerun":
-            await self.handle_rerun(channel)
-            return
-        if cmd in {"use", "select"}:
-            if len(fields) < 2:
-                await self.reply_forbidden(channel, "Usage: !c use <session>")
-                return
-            try:
-                session_name = normalize_session(fields[1])
-            except ValueError as exc:
-                await self.reply_forbidden(channel, str(exc))
-                return
-            await self.handle_select_session(message, session_name)
-            return
-        if cmd == "thread":
-            session_name, thread_id = parse_session_and_id(rest)
-            if not thread_id:
-                await self.reply_forbidden(channel, "Usage: !c thread [session] <id>")
-                return
-            if session_name:
-                try:
-                    session_name = normalize_session(session_name)
-                except ValueError as exc:
-                    await self.reply_forbidden(channel, str(exc))
-                    return
-            await self.handle_thread(channel, session_name, repo_name, repo_path, thread_id)
-            return
-        if cmd == "model":
-            if not rest:
-                await self.reply_forbidden(channel, "Usage: !c model [session] <model-id>")
-                return
-            parts = rest.split()
-            session_name = self.current_session_for_user(str(message.author.id), str(channel.id))
-            if len(parts) == 1:
-                model = parts[0]
-            else:
-                session_name = parts[0]
-                model = rest[len(parts[0]) :].strip()
-            try:
-                session_name = normalize_session(session_name)
-            except ValueError as exc:
-                await self.reply_forbidden(channel, str(exc))
-                return
-            if not model:
-                await self.reply_forbidden(channel, "Model id required.")
-                return
-            state = self.state.load()
-            if not session_exists(state, str(channel.id), session_name) and count_active_sessions(state, str(channel.id)) >= MAX_SESSIONS_PER_CHANNEL:
-                await self.reply_forbidden(channel, f"Session limit reached ({MAX_SESSIONS_PER_CHANNEL}). Stop or reuse an existing session.")
-                return
-            self.set_session_model(str(channel.id), session_name, repo_name, repo_path, model)
-            await self.reply(channel, f"Model for session '{session_name}' set to {model}")
-            return
-        if cmd == "spec":
-            session = rest.strip() or self.current_session_for_user(str(message.author.id), str(channel.id))
-            try:
-                session = normalize_session(session)
-            except ValueError as exc:
-                await self.reply_forbidden(channel, str(exc))
-                return
-            await self.handle_spec(message, repo_name, repo_path, session)
-            return
-        if cmd == "clonerepo":
-            url = rest.strip()
-            if not url:
-                await self.reply_forbidden(channel, "Usage: !c clonerepo <github-url>")
-                return
-            try:
-                repo_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, repo_name)
-            except Exception as exc:
-                await self.reply_forbidden(channel, f"Repo error: {exc}")
-                return
-            await self.handle_clone_repo(message, repo_name, repo_path, url)
-            return
-        if cmd == "copyrepo":
-            new_name = rest.strip()
-            if not new_name:
-                await self.reply_forbidden(channel, "Usage: !c copyrepo <new-repo-name>")
-                return
-            try:
-                target_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, new_name)
-            except Exception as exc:
-                await self.reply_forbidden(channel, f"Repo error: {exc}")
-                return
-            await self.handle_copy_repo(message, repo_name, repo_path, new_name, target_path)
+        if await command_registry.dispatch(
+            self._command_registry,
+            self,
+            message,
+            repo_name,
+            repo_path,
+            cmd,
+            rest,
+        ):
             return
 
         await self.handle_resume(message, repo_name, repo_path, DEFAULT_SESSION, cmdline)
@@ -540,47 +332,7 @@ class Router:
 
     async def send_help(self, channel: discord.abc.Messageable) -> None:
         """Send help text for supported commands."""
-        text = (
-            "Commands:\n"
-            "General:\n"
-            "help — show this help\n"
-            "status — show repo path and sessions\n"
-            "stats [session] — show usage totals\n"
-            "peek [session] — show active status and last output time\n"
-            "config — show effective config\n"
-            "\n"
-            "Sessions:\n"
-            "start [session] — start a new Codex session\n"
-            "resume [session] <prompt> — resume with prompt\n"
-            "choose [session] resume|replace|cancel — resolve start conflict\n"
-            "use/select <session> — set your sticky session\n"
-            "model [session] <id> — set session model\n"
-            "thread [session] <id> — set thread id\n"
-            "\n"
-            "Repo bootstrap:\n"
-            "createrepo — create repo in code_root and git init\n"
-            "clonerepo <url> — clone GitHub repo into code_root\n"
-            "copyrepo <newname> — copy repo without .git, init git, continue in new channel\n"
-            "spec [session] — capture spec into instructions/spec.md and tasks\n"
-            "\n"
-            "Run control:\n"
-            "stop [session] — send ESC then SIGINT\n"
-            "kill [session] — force kill running process\n"
-            "/quit [session] — send /quit to Codex\n"
-            "\n"
-            "Repo helpers:\n"
-            "showrepo — list repo tree\n"
-            "showchanges — git status + diffstat\n"
-            "tests — run pytest -q\n"
-            "git <status|log|branches|show|diff|pull|commit|push|merge> — git helpers\n"
-            "\n"
-            "Queue:\n"
-            "logs [session] [n] — show recent audit entries\n"
-            "ps — list queued/running jobs\n"
-            "cancel <job-id> — cancel queued job\n"
-            "rerun — requeue last job\n"
-        )
-        await self.reply(channel, text)
+        await self.reply(channel, command_registry.render_help(self._command_specs))
 
     def config_text(self) -> str:
         """Render a concise config summary."""
