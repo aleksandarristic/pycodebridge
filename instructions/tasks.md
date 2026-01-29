@@ -165,7 +165,7 @@
 - Add `TELEGRAM.md` with bot setup, token placement, webhook/polling notes, and a broader explanation of chat types (1:1, group, supergroup) vs room/DM semantics.
 - Reference the new docs from README.
 
-33) TODO - Telegram adapter scaffold
+33) DONE - Telegram adapter scaffold
 - Add a Telegram adapter scaffold (event mapping + response sink interface implementation).
 - Keep it behind `transport.adapter` selection without changing default behavior.
 - Add docs note that Telegram is scaffold-only until API integration is completed.
@@ -184,6 +184,7 @@
 - Add a Microsoft Teams adapter (event mapping + response sink implementation).
 - Add configuration and validation for Teams bot credentials/app settings.
 - Add integration tests with mocked payloads.
+
 
 ---
 
@@ -213,3 +214,4 @@
 - 2026-01-29: Cleaned up docs for transport-agnostic wording and removed local path references.
 - 2026-01-29: Added Slack adapter scaffold and expanded transport adapter tests.
 - 2026-01-29: Added Slack/Telegram setup docs with README references.
+- 2026-01-29: Added Telegram adapter scaffold and noted scaffold-only status.

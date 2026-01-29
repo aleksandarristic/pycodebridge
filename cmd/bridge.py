@@ -51,6 +51,8 @@ async def main() -> None:
         client = build_client(router)
     elif adapter == "slack":
         raise ValueError("Slack adapter scaffolded but not yet wired; use transport.adapter: discord")
+    elif adapter == "telegram":
+        raise ValueError("Telegram adapter scaffolded but not yet wired; use transport.adapter: discord")
     else:
         raise ValueError(f"Unsupported transport adapter: {adapter}")
 

@@ -55,7 +55,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `log_level` (default `info`) — `debug|info|warn|error`.
 
 ### `transport`
-- `adapter` (default `discord`) — transport adapter to use (`discord` supported today; `slack` scaffold only).
+- `adapter` (default `discord`) — transport adapter to use (`discord` supported today; `slack`/`telegram` scaffold only).
 
 ### `repo_bootstrap`
 - `agents_template` (default empty) — optional AGENTS.md template for `!c createrepo`.

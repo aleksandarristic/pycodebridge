@@ -139,7 +139,7 @@ Send Codex output back to the same channel.
 - `MessageEvent` carries normalized channel/user metadata and the raw content.
 - `ResponseSink` exposes `send()`, `typing()` and `update_pinned_status()` for platform adapters.
 - Discord-specific wiring lives in an adapter that translates discord.py messages into `MessageEvent` and `ResponseSink`.
-- Slack adapter is scaffold-only and not wired to runtime yet.
+- Slack and Telegram adapters are scaffold-only and not wired to runtime yet.
 
 ---
 
@@ -180,7 +180,7 @@ runtime:
   log_level: "info"
 
 transport:
-  adapter: "discord"  # slack scaffold only
+  adapter: "discord"  # slack/telegram scaffold only
 
 repo_bootstrap:
   agents_template: ""
