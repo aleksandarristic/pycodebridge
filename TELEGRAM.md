@@ -30,7 +30,13 @@ Attachments in bound DMs will prompt for a destination path before saving.
 - Use `!c download <path>` to download a file from the repo (sent as a document).
 - Uploads respect `files.max_upload_mb` and Telegram's own file size limits.
 
-## 5) Token placement
+## 5) Capabilities
+- Threads: supported via supergroup topics (`message_thread_id`) when available.
+- Replies: supported (reply-to message) when no thread id is present.
+- Uploads/downloads: supported.
+- Typing: supported via chat actions (no persistent typing indicator UI).
+
+## 6) Token placement
 Telegram adapter configuration lives under `transport` and `telegram`, for example:
 ```
 transport:
@@ -43,7 +49,7 @@ telegram:
   allow_plain_prompts: false
 ```
 
-## 6) Notes
+## 7) Notes
 - Telegram DMs use repo binding (`!c bind`) to select the repo context.
 - Use `telegram.allowed_user_ids` to restrict access to your bot.
 - There is no native “typing” for bots, but chat actions are supported.

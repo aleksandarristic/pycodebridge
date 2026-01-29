@@ -69,3 +69,9 @@ In a `codex-<repo>` channel: send `!c config` to verify config, then `!c start`.
 ## File uploads/downloads
 - Attach a file in a `codex-<repo>` channel and the bot will ask where to save it.
 - Use `!c download <path>` to download a file from the repo.
+
+## Capabilities
+- Threads: supported (native Discord threads).
+- Replies: not used; messages are sent directly to the channel/thread.
+- Uploads/downloads: supported.
+- Typing indicator: supported.

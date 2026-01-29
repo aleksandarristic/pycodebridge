@@ -14,6 +14,12 @@ Python service that connects transport channels (`codex-<repo>`) to Codex CLI se
 - Slack (scaffold only): `SLACK.md`
 - Telegram (supported via long polling): `TELEGRAM.md`
 
+## Transport capabilities
+Adapters expose capabilities for threads, replies, uploads, downloads, and typing. Router behavior is gated by these flags.
+- Discord: threads ✅, replies ❌, uploads ✅, downloads ✅, typing ✅
+- Telegram: threads ✅ (topics), replies ✅, uploads ✅, downloads ✅, typing ✅ (chat action)
+- Slack: scaffold only (capabilities disabled until implemented)
+
 ## Setup
 Prereqs:
 - Python 3.14+ (3.13/3.12 fallback)

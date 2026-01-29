@@ -225,6 +225,45 @@
   - Add adapter tests for Discord thread id mapping and Telegram reply/topic mapping.
   - Add Router test verifying thread context propagation via sink wrapper.
 
+50) TODO - Capability conformance tests (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Add unit tests asserting `ResponseSink.capabilities()` for each adapter.
+  - Add negative tests ensuring unsupported operations are gated by Router.
+
+51) TODO - Router tests for DM uploads/download gating (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Add tests for DM-bound uploads and download permission errors when capabilities are false.
+  - Add tests for allowed upload/download flows when capabilities are true.
+
+52) DONE - Document transport capabilities (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Document capabilities (threads/replies/uploads/downloads/typing) in `README.md`.
+  - Add adapter-specific notes in `DISCORD.md` and `TELEGRAM.md`.
+
+53) TODO - SessionCoordinator consolidation (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Design a coordinator API that owns queue + active process lifecycle.
+  - Refactor Router/SessionService/Queue to use coordinator transitions.
+  - Add a state-transition test matrix for start/resume/stop/kill/pending.
+
+54) TODO - Adapter contract fixtures (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Define typed fixtures for each adapter input event.
+  - Add golden payload tests for Slack/Telegram/Discord mappings.
+  - Add tests for thread/reply extraction across adapters.
+
+55) TODO - Adapter integration harness (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Build an in-memory adapter harness to simulate end-to-end flows.
+  - Add scenarios for start/resume/stop/kill, file transfers, and threading.
+  - Run harness in CI (unit-level, no external API calls).
+
 37) DONE - Telegram adapter completion
 - Implement Telegram runtime wiring (polling/webhook) and response sending.
 - Add Telegram config fields and validation.
@@ -313,3 +352,4 @@
 - 2026-01-29: Added TODO for threaded replies across Slack/Teams/Google Chat adapters.
 - 2026-01-29: Added transport capabilities, extracted file transfer service, and expanded thread context tests.
 - 2026-01-29: Marked Discord threads-only adapter variant as removed.
+- 2026-01-29: Documented transport capabilities in README and adapter docs.
