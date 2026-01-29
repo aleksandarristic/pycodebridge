@@ -204,7 +204,7 @@
   - Implement threaded send/reply behavior in corresponding ResponseSinks.
   - Add adapter tests to assert thread targeting behavior.
 
-47) TODO - Add transport capabilities and guard router behaviors (issue plan)
+47) DONE - Add transport capabilities and guard router behaviors (issue plan)
 - Owner: TBD
 - Subtasks:
   - Define a capabilities descriptor (threads/uploads/typing/downloads) in `transport.py`.
@@ -212,14 +212,14 @@
   - Gate Router actions based on capabilities (upload/download/typing/threading).
   - Add unit tests for capability gating.
 
-48) TODO - Extract upload/download handling from Router (issue plan)
+48) DONE - Extract upload/download handling from Router (issue plan)
 - Owner: TBD
 - Subtasks:
   - Create upload/download service module (path validation, save logic, replies).
   - Refactor Router to delegate to the service; keep orchestration in Router.
   - Add tests for upload/download flows with mocked attachments/sinks.
 
-49) TODO - Expand threading tests for Discord/Telegram (issue plan)
+49) DONE - Expand threading tests for Discord/Telegram (issue plan)
 - Owner: TBD
 - Subtasks:
   - Add adapter tests for Discord thread id mapping and Telegram reply/topic mapping.
@@ -311,3 +311,4 @@
 - 2026-01-29: Added Telegram attachment uploads/downloads and documented file transfer behavior.
 - 2026-01-29: Standardized platform thread context fields and Telegram reply threading.
 - 2026-01-29: Added TODO for threaded replies across Slack/Teams/Google Chat adapters.
+- 2026-01-29: Added transport capabilities, extracted file transfer service, and expanded thread context tests.

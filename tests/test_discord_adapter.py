@@ -1,5 +1,7 @@
 import asyncio
 
+import discord
+
 from codebridge.adapters.discord import DiscordAdapter, DiscordResponseSink
 
 
@@ -81,3 +83,29 @@ def test_discord_adapter_update_pinned_status_noop():
         await adapter.update_pinned_status(channel, "status text")
 
     asyncio.run(run())
+
+
+def test_discord_adapter_thread_mapping(monkeypatch):
+    adapter = DiscordAdapter()
+
+    class _DummyThread:
+        def __init__(self, thread_id: str, name: str = "") -> None:
+            self.id = thread_id
+            self.name = name
+
+    monkeypatch.setattr(discord, "Thread", _DummyThread)
+    channel = _DummyThread("thread-1", "codex-thread")
+    message = type(
+        "FakeMessage",
+        (),
+        {
+            "channel": channel,
+            "content": "hello",
+            "id": "msg",
+            "author": _FakeAuthor("user"),
+            "guild": None,
+        },
+    )()
+
+    event = adapter.event_from_message(message)
+    assert event.platform_thread_id == "thread-1"

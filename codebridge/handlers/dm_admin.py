@@ -18,7 +18,7 @@ from ..router_helpers import (
     run_limited_command,
 )
 from ..state import utc_now_iso
-from ..transport import MessageEvent, ResponseSink
+from ..transport import Capabilities, MessageEvent, ResponseSink
 from ..util import path as pathutil
 
 if TYPE_CHECKING:
@@ -33,14 +33,20 @@ class _PrefixedSink:
         self._repo_name = repo_name
         self.channel_id = sink.channel_id
 
-    async def send(self, content: str) -> None:
-        await self._sink.send(f"[{self._repo_name}] {content}")
+    async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
+        await self._sink.send(f"[{self._repo_name}] {content}", thread_id=thread_id, reply_to_id=reply_to_id)
+
+    def capabilities(self) -> Capabilities:
+        return self._sink.capabilities()
 
     def typing(self):  # type: ignore[override]
         return self._sink.typing()
 
     async def update_pinned_status(self, user_id: str, session: str, text: str) -> None:
         await self._sink.update_pinned_status(user_id, session, text)
+
+    async def send_file(self, path: str, filename: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
+        await self._sink.send_file(path, filename, thread_id=thread_id, reply_to_id=reply_to_id)
 
 
 def dm_help_text() -> str:

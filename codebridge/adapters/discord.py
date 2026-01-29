@@ -6,7 +6,7 @@ from typing import Dict
 
 import discord
 
-from ..transport import Attachment, MessageEvent, ResponseSink, null_typing
+from ..transport import Attachment, Capabilities, MessageEvent, ResponseSink, null_typing
 
 
 class DiscordAdapter:
@@ -89,6 +89,9 @@ class DiscordResponseSink:
         """Send a message to the channel."""
         _ = (thread_id, reply_to_id)
         await self._channel.send(content)
+
+    def capabilities(self) -> Capabilities:
+        return Capabilities(threads=True, replies=False, uploads=True, downloads=True, typing=True)
 
     def typing(self):  # type: ignore[override]
         """Return a typing indicator context if supported."""

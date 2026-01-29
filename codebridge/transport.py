@@ -35,10 +35,24 @@ class MessageEvent:
     raw_event: Any | None = None
 
 
+@dataclass(frozen=True)
+class Capabilities:
+    """Capabilities supported by a ResponseSink."""
+
+    threads: bool = False
+    replies: bool = False
+    uploads: bool = False
+    downloads: bool = False
+    typing: bool = False
+
+
 class ResponseSink(Protocol):
     """Platform-agnostic response surface for a channel."""
 
     channel_id: str
+
+    def capabilities(self) -> Capabilities:
+        """Return capability flags for this sink."""
 
     async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
         """Send a response message to the channel."""

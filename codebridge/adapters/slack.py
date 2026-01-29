@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from ..transport import MessageEvent, ResponseSink, null_typing
+from ..transport import Capabilities, MessageEvent, ResponseSink, null_typing
 
 
 class SlackAdapter:
@@ -49,9 +49,16 @@ class SlackResponseSink:
         _ = (content, thread_id, reply_to_id)
         raise NotImplementedError("Slack adapter is scaffold-only; send is not wired.")
 
+    def capabilities(self) -> Capabilities:
+        return Capabilities()
+
     def typing(self):  # type: ignore[override]
         """Return a typing indicator context (no-op for scaffold)."""
         return null_typing()
+
+    async def send_file(self, path: str, filename: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
+        _ = (path, filename, thread_id, reply_to_id)
+        raise NotImplementedError("Slack adapter is scaffold-only; send_file is not wired.")
 
     async def update_pinned_status(self, user_id: str, session: str, text: str) -> None:
         """Update pinned status (no-op for scaffold)."""

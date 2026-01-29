@@ -3,7 +3,7 @@ import asyncio
 from codebridge import config as cfgmod
 from codebridge.handlers import dm_admin
 from codebridge.state import Store
-from codebridge.transport import MessageEvent
+from codebridge.transport import Capabilities, MessageEvent
 
 
 class _FakeSink:
@@ -15,10 +15,17 @@ class _FakeSink:
         _ = (thread_id, reply_to_id)
         self.sent.append(content)
 
+    def capabilities(self) -> Capabilities:
+        return Capabilities(threads=True, replies=True, uploads=True, downloads=True, typing=True)
+
     def typing(self):
         return _FakeAsyncContext()
 
     async def update_pinned_status(self, user_id: str, session: str, text: str) -> None:
+        return None
+
+    async def send_file(self, path: str, filename: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
+        _ = (path, filename, thread_id, reply_to_id)
         return None
 
 

@@ -100,3 +100,14 @@ def test_telegram_adapter_event_mapping_with_attachments(tmp_path: Path):
     asyncio.run(run_save())
     assert bot.requested == ["doc123"]
     assert bot.downloads == [("doc123", str(tmp_path / "notes.txt"))]
+
+
+def test_telegram_adapter_thread_mapping():
+    adapter = TelegramAdapter()
+    message = _FakeMessage("hi", None, [])
+    message.message_thread_id = 7
+    update = _FakeUpdate(message, _FakeChat("chat", "codex-test", "group"), _FakeUser("user"))
+    bot = _FakeBot()
+
+    event = adapter.event_from_update(update, bot)
+    assert event.platform_thread_id == "7"

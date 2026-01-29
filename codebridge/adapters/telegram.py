@@ -7,7 +7,7 @@ import mimetypes
 import os
 from typing import Any
 
-from ..transport import Attachment, MessageEvent, ResponseSink, null_typing
+from ..transport import Attachment, Capabilities, MessageEvent, ResponseSink, null_typing
 
 
 class TelegramAdapter:
@@ -176,6 +176,9 @@ class TelegramResponseSink:
             if reply_int is not None:
                 kwargs["reply_to_message_id"] = reply_int
         await self._bot.send_message(chat_id=self.channel_id, text=content, **kwargs)
+
+    def capabilities(self) -> Capabilities:
+        return Capabilities(threads=True, replies=True, uploads=True, downloads=True, typing=True)
 
     def typing(self):  # type: ignore[override]
         """Return a typing indicator context if supported."""
