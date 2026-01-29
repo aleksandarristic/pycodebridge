@@ -1,8 +1,6 @@
 ---
 name: python-refactor-and-simplify
 description: Refactor and simplify Python code in a moderately complex repository while preserving behavior, matching existing intent, and improving maintainability/performance where justified.
-metadata:
-  focus: refactor,simplify,maintainability,performance,scalability
 ---
 
 ## Purpose
@@ -31,6 +29,9 @@ Produce a plan with:
 - Scope boundaries (files/modules/packages)
 - Risk assessment (what could break, how to detect regressions)
 - Rollout strategy (sequence of commits)
+
+Before implementing any code changes, present the plan and wait for explicit user approval to proceed.
+Offer to capture approved items as tasks in `instructions/tasks.md` when that file exists in the repo.
 
 ## Step 3 — Identify high-leverage refactors
 Prioritize changes that deliver high value with low risk:
@@ -61,9 +62,10 @@ Only propose/implement performance work when justified by repo evidence:
 ## Output requirements
 - Provide:
   1) A short understanding summary (repo intent + key flows)
-  2) A refactor plan (bulleted, ordered)
-  3) The patch/diff for the first incremental step
+  2) A refactor plan (bulleted, ordered) and ask for approval
+  3) Only after approval: the patch/diff for the first incremental step
   4) How to validate (commands/tests/manual checks)
+  5) Ask whether to log the plan items in `instructions/tasks.md`
 - Explicitly list assumptions and unknowns.
 - If the best action is “no refactor needed,” say so and explain.
 
