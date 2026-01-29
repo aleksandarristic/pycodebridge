@@ -84,7 +84,7 @@
 - Add `__main__.py` or console script entrypoint.
 - Add `pip install -e .` and `python -m cmd.bridge` run notes.
 
-16) TODO - Windows/macOS compatibility pass
+16) DONE - Windows/macOS compatibility pass
 - Verify path expansion, file locks, and signal handling.
 - Replace SIGINT-only logic with cross-platform handling where needed.
 
@@ -106,3 +106,4 @@
 - 2026-01-29: Added repo bootstrap commands, GitHub clone parsing, and DM repo management.
 - 2026-01-29: Added pytest coverage for core modules and helper logic.
 - 2026-01-29: Added __main__ entrypoint and README run notes for editable installs.
+- 2026-01-29: Added Windows-compatible process group handling for Codex interrupts.

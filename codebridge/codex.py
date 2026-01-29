@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import signal
+import subprocess
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Dict, Optional
 
@@ -133,7 +134,13 @@ class Process:
 
     async def interrupt(self) -> None:
         if self._proc.returncode is None:
-            self._proc.send_signal(signal.SIGINT)
+            if os.name == "nt":
+                if hasattr(signal, "CTRL_BREAK_EVENT"):
+                    self._proc.send_signal(signal.CTRL_BREAK_EVENT)
+                else:
+                    self._proc.send_signal(signal.SIGTERM)
+            else:
+                self._proc.send_signal(signal.SIGINT)
 
     async def kill(self) -> None:
         if self._proc.returncode is None:
@@ -182,6 +189,9 @@ class Runner:
             raise ValueError("args required")
 
         env = _merge_env(self.base_env, opts.env)
+        creationflags = 0
+        if os.name == "nt":
+            creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
         proc = await asyncio.create_subprocess_exec(
             self.binary,
             *opts.args,
@@ -190,6 +200,7 @@ class Runner:
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            creationflags=creationflags,
         )
         process = Process(proc)
 
