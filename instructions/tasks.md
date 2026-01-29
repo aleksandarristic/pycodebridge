@@ -185,6 +185,11 @@
 - Add configuration and validation for Teams bot credentials/app settings.
 - Add integration tests with mocked payloads.
 
+37) TODO - Telegram adapter completion
+- Implement Telegram runtime wiring (polling/webhook) and response sending.
+- Add Telegram config fields and validation.
+- Expand `TELEGRAM.md` with real setup steps once wiring is implemented.
+
 
 ---
 
