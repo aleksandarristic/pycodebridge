@@ -4,6 +4,7 @@ import re
 import shlex
 import time
 from dataclasses import dataclass
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 
@@ -924,33 +925,31 @@ class Router:
             "channel": channel_id,
         }
         entry = self.audit_start(channel_id, session or DEFAULT_SESSION, "pending", meta)
-        stop_typing = self.start_typing(message.channel)
-        try:
-            proc = await self.runner.run(
-                Options(
-                    repo_path=repo_path,
-                    args=args,
-                    env=self.cfg.codex.env,
-                    on_jsonl=lambda line: self.on_jsonl(message.channel, channel_id, session, entry, line),
-                    on_thread=lambda tid: self.on_thread(channel_id, session, repo_name, repo_path, model, entry, tid),
-                    on_stderr=lambda line: self.append_audit_stderr(entry, line),
-                    on_exit=lambda err, rc: self.on_exit(channel_id, session, repo_name, err, rc),
+        async with self.typing_context(message.channel):
+            try:
+                proc = await self.runner.run(
+                    Options(
+                        repo_path=repo_path,
+                        args=args,
+                        env=self.cfg.codex.env,
+                        on_jsonl=lambda line: self.on_jsonl(message.channel, channel_id, session, entry, line),
+                        on_thread=lambda tid: self.on_thread(channel_id, session, repo_name, repo_path, model, entry, tid),
+                        on_stderr=lambda line: self.append_audit_stderr(entry, line),
+                        on_exit=lambda err, rc: self.on_exit(channel_id, session, repo_name, err, rc),
+                    )
                 )
-            )
-        except Exception as exc:
-            stop_typing()
-            self.close_audit(entry)
-            raise exc
+            except Exception as exc:
+                self.close_audit(entry)
+                raise exc
 
-        await self.set_active(channel_id, session, proc)
-        try:
-            rc = await proc.wait()
-            if rc != 0:
-                self.logger.warning("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "code": rc})
-        finally:
-            stop_typing()
-            await self.clear_active(channel_id, session)
-            self.close_audit(entry)
+            await self.set_active(channel_id, session, proc)
+            try:
+                rc = await proc.wait()
+                if rc != 0:
+                    self.logger.warning("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "code": rc})
+            finally:
+                await self.clear_active(channel_id, session)
+                self.close_audit(entry)
 
     async def on_jsonl(self, channel: discord.abc.Messageable, channel_id: str, session: str, entry: Optional[Entry], line: str) -> None:
         self.append_audit_codex(entry, line)
@@ -1013,9 +1012,15 @@ class Router:
             return user_id in self.cfg.discord.dm_admin_user_ids
         return user_id in self.cfg.discord.allowed_user_ids
 
-    def start_typing(self, channel: discord.abc.Messageable) -> Callable[[], None]:
+    @asynccontextmanager
+    async def typing_context(self, channel: discord.abc.Messageable):
+        if hasattr(channel, "typing"):
+            async with channel.typing():
+                yield
+            return
         if not hasattr(channel, "trigger_typing"):
-            return lambda: None
+            yield
+            return
         stop = asyncio.Event()
 
         async def _loop() -> None:
@@ -1030,13 +1035,11 @@ class Router:
                     continue
 
         task = asyncio.create_task(_loop())
-
-        def _stop() -> None:
-            if not stop.is_set():
-                stop.set()
+        try:
+            yield
+        finally:
+            stop.set()
             task.cancel()
-
-        return _stop
 
     async def update_pinned_status(self, channel: discord.abc.Messageable, user_id: str, session: str) -> None:
         if not isinstance(channel, discord.TextChannel):

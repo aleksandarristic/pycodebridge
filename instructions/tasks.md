@@ -101,7 +101,7 @@
 - Optional: add SIGINT/SIGTERM handlers (non-Windows) to call `client.close()` and log a single shutdown line.
 - Validate by starting the app, pressing Ctrl-C, and confirming no traceback.
 
-20) TODO - Reliable typing indicator
+20) DONE - Reliable typing indicator
 - Replace `channel.trigger_typing()` loop with `async with channel.typing():` (or manage a long-lived typing context) so typing stays visible.
 - Keep fallback timer if needed, but prefer the official typing context.
 - Validate by sending a long-running command and confirming the typing indicator stays on.
@@ -123,3 +123,4 @@
 - 2026-01-29: Added Windows-compatible process group handling for Codex interrupts.
 - 2026-01-29: Added skills overview and instructions to use skills when appropriate.
 - 2026-01-29: Added clean shutdown handling for Ctrl-C to avoid tracebacks.
+- 2026-01-29: Switched to a typing context for reliable Discord typing indicators.
