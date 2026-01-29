@@ -254,7 +254,15 @@
   - Replace direct audit calls in Router with helper usage.
   - Add tests to ensure audit entries are still written correctly.
 
-59) TODO - Clarify adapter contract usage (issue plan)
+59) TODO - Model selection and reporting (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Add a command to show the current model in use for a session.
+  - Add a command to list available models from config and select one.
+  - Persist model choice per session and reflect it in status output.
+  - Add tests for model listing/selection and persistence.
+
+60) TODO - Clarify adapter contract usage (issue plan)
 - Owner: TBD
 - Subtasks:
   - Identify adapter-specific conditionals in Router and handlers.

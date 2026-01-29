@@ -126,7 +126,7 @@ Stream the agent’s text output to Discord by parsing JSONL events and extracti
   - `!c status` / `!c help`
   - `!c git ...`, `!c ps`, `!c cancel`, `!c rerun`, `!c peek`, `!c stats`
   - `!c use <session>` (alias `select`)
-  - `!c model [session] <id>`
+  - `!c model` / `!c model list` / `!c model set <name|index>`
   - `!c spec`, `!c createrepo`, `!c clonerepo`, `!c copyrepo`
   - otherwise: treat as prompt to Codex in that channel session
 
@@ -175,7 +175,9 @@ codex:
   start_prompt: |
     Hello. This is a Discord-bridged Codex session for repo: {{REPO_NAME}}.
     Operate inside this repo directory. Stream outputs plainly.
-  model: ""
+  model: ""  # legacy single-model override (prefer models/default_model)
+  models: []
+  default_model: ""
   env: {}
 
 state:
@@ -308,6 +310,33 @@ I'm sorry, Dave. I'm afraid I can't do that.
 ```
 
 Followed by a fenced text block describing the reason.
+
+---
+
+## Model selection
+
+Model selection is per session and can be changed while a session is active.
+
+### Config rules
+
+- `codex.models` is an ordered list of allowed model names.
+- `codex.default_model` is optional; if set, it must be present in `codex.models`.
+- Back-compat: if `codex.models` is empty/missing, fall back to legacy `codex.model` when present.
+- If no models are configured, model commands should report that no models are available.
+
+### Commands
+
+- `!c model`: show the current model for the active session. If no per-session override exists, show the default (if configured).
+- `!c model list`: show all configured models with 1-based indexes, marking the current selection.
+- `!c model set <name|index>` (alias `!c model use <name|index>`): set the active session’s model immediately.
+
+### Selection rules
+
+- Index is 1-based; reject out-of-range indexes.
+- Name match is case-sensitive first; if not found, allow a case-insensitive match only when unique.
+- On success, persist the session’s selected model to state and reflect in `status`.
+- The selection affects subsequent Codex runs in that session immediately (no restart required).
+- Queue/rerun should use the session’s current model at execution time.
 
 ---
 
