@@ -125,3 +125,5 @@ Enable with `discord.dm_admin_enabled: true`. Commands require the same `!c` pre
 - Task log/plan: `instructions/tasks.md`
 - Intent summary for agents: `AGENTS.md`
 - Architecture diagram (Mermaid): `docs/architecture.mmd`
+- Slack setup: `SLACK.md`
+- Telegram setup: `TELEGRAM.md`

@@ -160,7 +160,7 @@
 - Add Slack config fields (tokens, signing secret, app settings) and validation.
 - Add adapter integration tests with faked Slack events.
 
-32) TODO - Slack/Telegram setup docs
+32) DONE - Slack/Telegram setup docs
 - Add `SLACK.md` with bot/app setup, tokens, permissions, and webhook/polling notes.
 - Add `TELEGRAM.md` with bot setup, token placement, webhook/polling notes, and a broader explanation of chat types (1:1, group, supergroup) vs room/DM semantics.
 - Reference the new docs from README.
@@ -212,3 +212,4 @@
 - 2026-01-29: Added Mermaid architecture diagram and doc references.
 - 2026-01-29: Cleaned up docs for transport-agnostic wording and removed local path references.
 - 2026-01-29: Added Slack adapter scaffold and expanded transport adapter tests.
+- 2026-01-29: Added Slack/Telegram setup docs with README references.
