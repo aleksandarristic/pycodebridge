@@ -155,10 +155,13 @@
 - Remove local filesystem references from docs including `AGENTS.md`, `instructions/instructions.md`, and `instructions/tasks.md`.
 - Keep Discord mentioned only where it is a concrete adapter/example.
 
-31) TODO - Slack adapter implementation
-- Wire Slack adapter into runtime (event ingestion + response sending).
-- Add Slack config fields (tokens, signing secret, app settings) and validation.
-- Add adapter integration tests with faked Slack events.
+31) TODO - Slack adapter implementation (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Define Slack config schema (tokens/signing secret/app settings) and validation in `codebridge/config.py`.
+  - Implement Slack adapter runtime wiring (event ingestion, response send, typing).
+  - Add upload/download support for Slack if supported; otherwise guard via capabilities.
+  - Add adapter integration tests with mocked Slack payloads.
 
 32) DONE - Slack/Telegram setup docs
 - Add `SLACK.md` with bot/app setup, tokens, permissions, and webhook/polling notes.
@@ -170,20 +173,57 @@
 - Keep it behind `transport.adapter` selection without changing default behavior.
 - Add docs note that Telegram is scaffold-only until API integration is completed.
 
-34) TODO - Discord threads-only adapter variant
-- Add a Discord adapter variant that routes all Codex sessions into per-user threads (one thread per session) instead of the parent channel.
-- Ensure thread creation/selection happens on first message and responses go to the thread sink.
-- Add config flag to opt into threads-only behavior and document it.
+34) TODO - Discord threads-only adapter variant (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Add config flag for threads-only mode and document in `DISCORD.md`/`README.md`.
+  - Implement thread creation/selection on first message; persist thread id per session.
+  - Route responses to thread sink; ensure uploads/downloads work in threads.
+  - Add adapter tests covering thread routing + session mapping.
 
-35) TODO - Google Chat adapter implementation
-- Add a Google Chat adapter (event mapping + response sink implementation).
-- Add configuration and validation for Google Chat credentials/webhook settings.
-- Add integration tests with mocked payloads.
+35) TODO - Google Chat adapter implementation (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Define Google Chat config schema (credentials/webhook) and validation.
+  - Implement adapter mapping for events + responses (MessageEvent + ResponseSink).
+  - Add thread id mapping + reply targeting where supported.
+  - Add integration tests with mocked payloads.
 
-36) TODO - Microsoft Teams adapter implementation
-- Add a Microsoft Teams adapter (event mapping + response sink implementation).
-- Add configuration and validation for Teams bot credentials/app settings.
-- Add integration tests with mocked payloads.
+36) TODO - Microsoft Teams adapter implementation (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Define Teams config schema (bot credentials/app settings) and validation.
+  - Implement adapter mapping for events + responses (MessageEvent + ResponseSink).
+  - Add thread/conversation id mapping + reply targeting.
+  - Add integration tests with mocked payloads.
+
+46) TODO - Threaded replies for Slack/Teams/Google Chat (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Add thread id extraction in Slack/Teams/Chat adapters.
+  - Implement threaded send/reply behavior in corresponding ResponseSinks.
+  - Add adapter tests to assert thread targeting behavior.
+
+47) TODO - Add transport capabilities and guard router behaviors (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Define a capabilities descriptor (threads/uploads/typing/downloads) in `transport.py`.
+  - Implement per-adapter capability reporting.
+  - Gate Router actions based on capabilities (upload/download/typing/threading).
+  - Add unit tests for capability gating.
+
+48) TODO - Extract upload/download handling from Router (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Create upload/download service module (path validation, save logic, replies).
+  - Refactor Router to delegate to the service; keep orchestration in Router.
+  - Add tests for upload/download flows with mocked attachments/sinks.
+
+49) TODO - Expand threading tests for Discord/Telegram (issue plan)
+- Owner: TBD
+- Subtasks:
+  - Add adapter tests for Discord thread id mapping and Telegram reply/topic mapping.
+  - Add Router test verifying thread context propagation via sink wrapper.
 
 37) DONE - Telegram adapter completion
 - Implement Telegram runtime wiring (polling/webhook) and response sending.
@@ -216,10 +256,15 @@
 - Define security constraints (path containment, size limits, allowed extensions) and audit logging.
 - Add command UX (e.g., `!c upload`, `!c download`) and adapter-specific handling.
 
-44) TODO - Telegram file upload/download support
+44) DONE - Telegram file upload/download support
 - Replicate implicit upload flow for Telegram attachments with path prompt.
 - Add `download` support for Telegram adapter via document sending.
 - Document Telegram file transfer behavior and limits.
+
+45) DONE - Platform thread context standardization
+- Add platform thread/message identifiers to `MessageEvent`.
+- Allow `ResponseSink` to target threads or reply-to message ids.
+- Simulate threaded replies on Telegram with `reply_to_message_id` when no native thread id exists.
 
 43) DONE - Improve operational logging
 - Add structured log fields for routing decisions (platform, channel/chat, repo, session, command, DM binding changes).
@@ -263,3 +308,6 @@
 - 2026-01-29: Added audit log redaction toggle and DM command collision resolution.
 - 2026-01-29: Improved operational logging for routing and DM binding events.
 - 2026-01-29: Added implicit file upload flow and repo download command (Discord).
+- 2026-01-29: Added Telegram attachment uploads/downloads and documented file transfer behavior.
+- 2026-01-29: Standardized platform thread context fields and Telegram reply threading.
+- 2026-01-29: Added TODO for threaded replies across Slack/Teams/Google Chat adapters.

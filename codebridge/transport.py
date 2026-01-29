@@ -28,6 +28,8 @@ class MessageEvent:
     author_id: str
     author_is_bot: bool
     is_dm: bool
+    message_id: str = ""
+    platform_thread_id: str = ""
     guild_id: str | None = None
     attachments: list[Attachment] = field(default_factory=list)
     raw_event: Any | None = None
@@ -38,7 +40,7 @@ class ResponseSink(Protocol):
 
     channel_id: str
 
-    async def send(self, content: str) -> None:
+    async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
         """Send a response message to the channel."""
 
     def typing(self) -> AsyncContextManager[None]:
@@ -47,7 +49,7 @@ class ResponseSink(Protocol):
     async def update_pinned_status(self, user_id: str, session: str, text: str) -> None:
         """Update a pinned status message for the channel, if supported."""
 
-    async def send_file(self, path: str, filename: str) -> None:
+    async def send_file(self, path: str, filename: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
         """Send a file to the channel."""
 
 

@@ -136,10 +136,10 @@ Send Codex output back to the same channel.
 ## Transport abstraction
 
 - The Router consumes a platform-agnostic `MessageEvent` plus a `ResponseSink` interface.
-- `MessageEvent` carries normalized channel/user metadata and the raw content.
-- `ResponseSink` exposes `send()`, `typing()` and `update_pinned_status()` for platform adapters.
-- Discord-specific wiring lives in an adapter that translates discord.py messages into `MessageEvent` and `ResponseSink`.
-- Slack and Telegram adapters are scaffold-only and not wired to runtime yet.
+- `MessageEvent` carries normalized channel/user metadata, message ids, thread ids, and raw content.
+- `ResponseSink` exposes `send()`, `send_file()`, `typing()` and `update_pinned_status()` for platform adapters.
+- Adapters can pass a platform thread id; sinks can send into threads or reply to a message (Telegram uses reply-to when no thread).
+- Discord and Telegram adapters are wired; Slack remains scaffold-only.
 
 ---
 

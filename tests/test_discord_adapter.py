@@ -46,6 +46,7 @@ def test_discord_adapter_event_mapping():
         {
             "channel": channel,
             "content": "hello",
+            "id": "msg",
             "author": _FakeAuthor("user"),
             "guild": _FakeGuild("guild"),
         },

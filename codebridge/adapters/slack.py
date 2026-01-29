@@ -17,6 +17,8 @@ class SlackAdapter:
         user_id = str(event.get("user", ""))
         text = str(event.get("text", "") or "")
         is_bot = bool(event.get("bot_id") or event.get("bot_profile"))
+        thread_id = str(event.get("thread_ts") or "")
+        message_id = str(event.get("ts") or "")
         return MessageEvent(
             platform="slack",
             content=text,
@@ -25,6 +27,8 @@ class SlackAdapter:
             author_id=user_id,
             author_is_bot=is_bot,
             is_dm=False,
+            message_id=message_id,
+            platform_thread_id=thread_id,
             guild_id=str(payload.get("team_id")) if payload else None,
             raw_event=payload,
         )
@@ -40,8 +44,9 @@ class SlackResponseSink:
     def __init__(self, channel_id: str) -> None:
         self.channel_id = channel_id
 
-    async def send(self, content: str) -> None:
+    async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
         """Send a message to the channel."""
+        _ = (content, thread_id, reply_to_id)
         raise NotImplementedError("Slack adapter is scaffold-only; send is not wired.")
 
     def typing(self):  # type: ignore[override]

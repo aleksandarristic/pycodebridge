@@ -21,6 +21,9 @@ class DiscordAdapter:
         is_dm = isinstance(channel, (discord.DMChannel, discord.GroupChannel))
         channel_name = channel.name if hasattr(channel, "name") and channel.name else str(channel.id)
         guild_id = str(message.guild.id) if message.guild else None
+        thread_id = ""
+        if isinstance(channel, discord.Thread):
+            thread_id = str(channel.id)
         attachments = []
         for att in getattr(message, "attachments", []) or []:
             attachments.append(
@@ -39,6 +42,8 @@ class DiscordAdapter:
             author_id=str(message.author.id),
             author_is_bot=bool(message.author.bot),
             is_dm=is_dm,
+            message_id=str(message.id),
+            platform_thread_id=thread_id,
             guild_id=guild_id,
             attachments=attachments,
             raw_event=message,
@@ -80,8 +85,9 @@ class DiscordResponseSink:
         self._channel = channel
         self.channel_id = str(channel.id)
 
-    async def send(self, content: str) -> None:
+    async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
         """Send a message to the channel."""
+        _ = (thread_id, reply_to_id)
         await self._channel.send(content)
 
     def typing(self):  # type: ignore[override]
@@ -94,6 +100,7 @@ class DiscordResponseSink:
         """Update pinned status for this channel."""
         await self._adapter.update_pinned_status(self._channel, text)
 
-    async def send_file(self, path: str, filename: str) -> None:
+    async def send_file(self, path: str, filename: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
         """Send a file to the channel."""
+        _ = (thread_id, reply_to_id)
         await self._channel.send(file=discord.File(path, filename=filename))

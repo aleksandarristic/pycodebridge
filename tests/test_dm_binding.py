@@ -11,7 +11,8 @@ class _FakeSink:
         self.channel_id = channel_id
         self.sent = []
 
-    async def send(self, content: str) -> None:
+    async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
+        _ = (thread_id, reply_to_id)
         self.sent.append(content)
 
     def typing(self):

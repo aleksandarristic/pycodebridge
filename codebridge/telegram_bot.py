@@ -16,8 +16,8 @@ def build_application(router: Router, token: str) -> Application:
     adapter = TelegramAdapter()
 
     async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        event = adapter.event_from_update(update)
-        if not event.content:
+        event = adapter.event_from_update(update, context.bot)
+        if not event.content and not event.attachments:
             return
         sink = adapter.sink_for_chat(context.bot, event.channel_id)
         await router.handle_message(event, sink)

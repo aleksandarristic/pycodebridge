@@ -59,6 +59,7 @@ class Router:
         """Handle an incoming message event."""
         if event.author_is_bot:
             return
+        sink = self._contextual_sink(event, sink)
 
         self.logger.info(
             "incoming.message",
@@ -700,6 +701,17 @@ class Router:
         text = f"User {user_id} current session: {session or DEFAULT_SESSION}"
         await sink.update_pinned_status(user_id, session, text)
 
+    def _contextual_sink(self, event: MessageEvent, sink: ResponseSink) -> ResponseSink:
+        if event.platform != "telegram":
+            return sink
+        thread_id = event.platform_thread_id or ""
+        reply_to_id = ""
+        if not thread_id:
+            reply_to_id = event.message_id or ""
+        if not thread_id and not reply_to_id:
+            return sink
+        return _ThreadContextSink(sink, thread_id, reply_to_id)
+
     def seed_agents_template(self, repo_path: str) -> None:
         """Seed AGENTS.md from a template when configured."""
         tmpl = (self.cfg.repo_bootstrap.agents_template or "").strip()
@@ -834,3 +846,29 @@ class Router:
     def current_session_for_user(self, user_id: str, channel_id: str) -> str:
         """Return sticky session selection for a user or default."""
         return self.sessions.current_session_for_user(user_id, channel_id)
+
+
+class _ThreadContextSink:
+    """Wrap a sink with thread/reply metadata for message sends."""
+
+    def __init__(self, sink: ResponseSink, thread_id: str, reply_to_id: str) -> None:
+        self._sink = sink
+        self._thread_id = thread_id
+        self._reply_to_id = reply_to_id
+        self.channel_id = sink.channel_id
+
+    async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
+        use_thread = thread_id or self._thread_id or None
+        use_reply = reply_to_id or self._reply_to_id or None
+        await self._sink.send(content, thread_id=use_thread, reply_to_id=use_reply)
+
+    def typing(self):  # type: ignore[override]
+        return self._sink.typing()
+
+    async def update_pinned_status(self, user_id: str, session: str, text: str) -> None:
+        await self._sink.update_pinned_status(user_id, session, text)
+
+    async def send_file(self, path: str, filename: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
+        use_thread = thread_id or self._thread_id or None
+        use_reply = reply_to_id or self._reply_to_id or None
+        await self._sink.send_file(path, filename, thread_id=use_thread, reply_to_id=use_reply)

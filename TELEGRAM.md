@@ -25,7 +25,12 @@ For this bridge, use **DMs** and bind a repo in each chat:
 When a repo is bound, any DM message without `!c` is treated as a prompt.
 Attachments in bound DMs will prompt for a destination path before saving.
 
-## 4) Token placement
+## 4) File uploads/downloads
+- Attach a file in a bound DM or `codex-<repo>` group chat and the bot will ask where to save it.
+- Use `!c download <path>` to download a file from the repo (sent as a document).
+- Uploads respect `files.max_upload_mb` and Telegram's own file size limits.
+
+## 5) Token placement
 Telegram adapter configuration lives under `transport` and `telegram`, for example:
 ```
 transport:
@@ -38,7 +43,7 @@ telegram:
   allow_plain_prompts: false
 ```
 
-## 5) Notes
+## 6) Notes
 - Telegram DMs use repo binding (`!c bind`) to select the repo context.
 - Use `telegram.allowed_user_ids` to restrict access to your bot.
 - There is no native “typing” for bots, but chat actions are supported.
