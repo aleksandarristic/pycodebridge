@@ -216,6 +216,11 @@
 - Define security constraints (path containment, size limits, allowed extensions) and audit logging.
 - Add command UX (e.g., `!c upload`, `!c download`) and adapter-specific handling.
 
+44) TODO - Telegram file upload/download support
+- Replicate implicit upload flow for Telegram attachments with path prompt.
+- Add `download` support for Telegram adapter via document sending.
+- Document Telegram file transfer behavior and limits.
+
 43) DONE - Improve operational logging
 - Add structured log fields for routing decisions (platform, channel/chat, repo, session, command, DM binding changes).
 - Log DM bind/unbind/use/repo events and destination routing decisions.
