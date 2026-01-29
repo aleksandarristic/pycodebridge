@@ -150,9 +150,9 @@
 - Add ResponseSink pin/typing behavior tests via fakes/mocks where possible.
 - Ensure tests stay unit-level with no external API calls.
 
-30) TODO - Documentation cleanup for multi-transport + local paths
+30) DONE - Documentation cleanup for multi-transport + local paths
 - Review docs to remove Discord-specific framing where transport-agnostic wording fits.
-- Remove local filesystem references (e.g., `/home/...`) from docs including `AGENTS.md`, `instructions/instructions.md`, and `instructions/tasks.md`.
+- Remove local filesystem references from docs including `AGENTS.md`, `instructions/instructions.md`, and `instructions/tasks.md`.
 - Keep Discord mentioned only where it is a concrete adapter/example.
 
 ---
@@ -180,3 +180,4 @@
 - 2026-01-29: Added transport-agnostic MessageEvent/ResponseSink contracts with Router refactor and transport tests.
 - 2026-01-29: Added Discord adapter + transport config for MessageEvent/ResponseSink routing.
 - 2026-01-29: Added Mermaid architecture diagram and doc references.
+- 2026-01-29: Cleaned up docs for transport-agnostic wording and removed local path references.

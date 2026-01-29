@@ -1,19 +1,19 @@
-# Discord <-> Codex CLI Bridge (Python)
+# Codex CLI Bridge (Python)
 
-Python service that connects Discord channels (`codex-<repo>`) to Codex CLI sessions in the matching local repo under `code_root`. One channel = one Codex thread with queueing, multi-session support, and run control.
+Python service that connects transport channels (`codex-<repo>`) to Codex CLI sessions in the matching local repo under `code_root`. One channel = one Codex thread with queueing, multi-session support, and run control.
 
 ## Features
 - Maps `#codex-<repo>` to `<code_root>/<repo>` (must exist, be inside root, and contain `.git`).
-- Runs Codex in JSONL streaming mode; forwards output to Discord, strips control codes, and flags prompts needing user input.
+- Runs Codex in JSONL streaming mode; forwards output to transport adapters, strips control codes, and flags prompts needing user input.
 - Per-channel queue, multi-session support (max 3 per channel), and run control (stop/kill/quit).
-- Optional DM admin mode for owner-only repo management.
-- Transport-agnostic router core using `MessageEvent` + `ResponseSink` for future adapters (e.g., Slack).
+- Optional DM admin mode for owner-only repo management (Discord adapter).
+- Transport-agnostic router core using `MessageEvent` + `ResponseSink` for adapters (Discord now, Slack later).
 
 ## Setup
 Prereqs:
 - Python 3.14+ (3.13/3.12 fallback)
 - Codex CLI installed and signed in (binary on PATH or set `codex.binary`).
-- Discord bot token with Message Content intent enabled.
+- Discord bot token with Message Content intent enabled (current adapter).
 
 Quick start:
 1) Create `config.yaml` (start from `config.example.yaml`).
@@ -61,7 +61,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `agents_template` (default empty) — optional AGENTS.md template for `!c createrepo`.
 - `spec_prompt` (default template) — prompt used by `!c spec`.
 
-## Discord commands
+## Commands
 Prefix default is `!c`. Channels should be named `codex-<repo>`.
 
 General:
@@ -102,7 +102,7 @@ Passthrough:
 - Any other `!c` text is sent as a prompt to Codex.
 
 ## DM admin commands (optional)
-Enable with `discord.dm_admin_enabled: true`. Commands require the same `!c` prefix in DMs.
+Enable with `discord.dm_admin_enabled: true`. Commands require the same `!c` prefix in DMs (Discord adapter only).
 
 - `!c help`
 - `!c repos`

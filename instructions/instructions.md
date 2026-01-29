@@ -160,7 +160,7 @@ discord:
 
 codex:
   binary: "codex"
-  code_root: "/home/you/Code"
+  code_root: "/path/to/code"
   sandbox: "workspace-write"
   json: true
   start_prompt: |
@@ -170,10 +170,10 @@ codex:
   env: {}
 
 state:
-  data_dir: "/home/you/.discord-codex-bridge"
+  data_dir: "/path/to/bridge-data"
   lock_timeout_seconds: 600
   conflict_ttl_seconds: 60
-  log_dir: "/home/you/.discord-codex-bridge/logs"
+  log_dir: "/path/to/bridge-data/logs"
 
 runtime:
   log_level: "info"
