@@ -24,10 +24,9 @@ dependencies = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-q"
+addopts = "-q -p no:debugging"
 pythonpath = ["."]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["codebridge*"]
-

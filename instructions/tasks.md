@@ -72,7 +72,7 @@
 - stdlib logging, human-readable format.
 - Log to stdout and rotating file in log_dir.
 
-13) TODO - Tests
+13) DONE - Tests
 - Pytest suite mirroring Go tests: config/path/state/audit/router/queue/codex.
 - Add small integration tests with fake codex output.
 
@@ -104,3 +104,4 @@
 - 2026-01-29: Added typing keepalive and pinned status helpers for Discord wiring.
 - 2026-01-29: Implemented core command routing, queue controls, and DM admin basics.
 - 2026-01-29: Added repo bootstrap commands, GitHub clone parsing, and DM repo management.
+- 2026-01-29: Added pytest coverage for core modules and helper logic.
