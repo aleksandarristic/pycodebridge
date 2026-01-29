@@ -249,6 +249,12 @@ async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, rep
     if not model:
         await router.reply_forbidden(sink, "Model id required.")
         return
+    if model.strip().lower() == "list":
+        await router.reply_forbidden(
+            sink,
+            "Model id 'list' is not supported. Pick a real model id (try `!c models`), or set the session model back to your configured default.",
+        )
+        return
     state = router.state.load()
     if not session_exists(state, message.channel_id, session_name) and count_active_sessions(
         state, message.channel_id
@@ -296,7 +302,8 @@ async def _cmd_models(router: Any, message: MessageEvent, sink: ResponseSink, re
         )
         return
 
-    model = router.session_model(channel_id, session_name)
+    # Listing models should not depend on (or be blocked by) the current session's model override.
+    model = ""
     prompt = "/models"
     thread_id = existing_thread(state, channel_id, session_name)
     if thread_id:
@@ -317,7 +324,7 @@ async def _cmd_models(router: Any, message: MessageEvent, sink: ResponseSink, re
         await router.run_codex(message, sink, repo_name, repo_path, session_name, model, args, on_output=on_output)
         models = parse_models_from_lines(collected)
         if not models:
-            await router.reply_forbidden(sink, "No models parsed from /models output.")
+            await router.reply(sink, "No models parsed from /models output.")
             return
         lines = [f"Available models ({len(models)}):"] + [f"- {m}" for m in models]
         await router.reply(sink, "\n".join(lines))
