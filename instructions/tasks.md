@@ -212,7 +212,7 @@
   - Document capabilities (threads/replies/uploads/downloads/typing) in `README.md`.
   - Add adapter-specific notes in `DISCORD.md` and `TELEGRAM.md`.
 
-53) TODO - SessionCoordinator consolidation (issue plan)
+53) DONE - SessionCoordinator consolidation (issue plan)
 - Owner: TBD
 - Subtasks:
   - Design a coordinator API that owns queue + active process lifecycle.
@@ -226,7 +226,7 @@
   - Add golden payload tests for Slack/Telegram/Discord mappings.
   - Add tests for thread/reply extraction across adapters.
 
-55) TODO - Adapter integration harness (issue plan)
+55) DONE - Adapter integration harness (issue plan)
 - Owner: TBD
 - Subtasks:
   - Build an in-memory adapter harness to simulate end-to-end flows.
@@ -327,3 +327,5 @@
 - 2026-01-29: Moved adapter implementation tasks to `instructions/backlog.md`.
 - 2026-01-29: Added backlog file reference in docs and updated architecture diagram for adapters.
 - 2026-01-29: Added adapter contract fixtures and golden payload tests.
+- 2026-01-29: Introduced SessionCoordinator and added transition tests.
+- 2026-01-29: Added adapter integration harness tests for end-to-end flows.

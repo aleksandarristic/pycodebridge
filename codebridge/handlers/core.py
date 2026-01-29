@@ -45,7 +45,7 @@ async def handle_start(
             return
     thread_id = existing_thread(state, channel_id, session)
     if thread_id:
-        await router.sessions.set_pending_conflict(
+        await router.coordinator.set_pending_conflict(
             channel_id,
             session,
             PendingConflict(
@@ -65,7 +65,7 @@ async def handle_start(
     async def job() -> None:
         await router.run_codex(event, sink, repo_name, repo_path, session, model, args)
 
-    pos, job_id, _ = await router.queue.enqueue(channel_id, session, job)
+    pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, job)
     router.logger.info("enqueue.start", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
 
 
@@ -92,7 +92,7 @@ async def handle_resume(
     async def job() -> None:
         await router.run_codex(event, sink, repo_name, repo_path, session, model, args)
 
-    pos, job_id, _ = await router.queue.enqueue(channel_id, session, job)
+    pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, job)
     router.logger.info("enqueue.resume", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
 
 
@@ -229,7 +229,7 @@ async def handle_spec(
     async def job() -> None:
         await router.run_codex(event, sink, repo_name, repo_path, session, model, args)
 
-    pos, job_id, _ = await router.queue.enqueue(channel_id, session, job)
+    pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, job)
     router.logger.info("enqueue.spec", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
 
 

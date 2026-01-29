@@ -13,8 +13,8 @@ from codebridge.audit import Logger as AuditLogger
 from codebridge.codex import Runner
 from codebridge.discord_bot import build_client
 from codebridge.telegram_bot import build_application, run_polling
-from codebridge.queue import Manager
 from codebridge.router import Router
+from codebridge.session_coordinator import SessionCoordinator
 from codebridge.state import Store
 
 
@@ -48,8 +48,8 @@ async def main() -> None:
         redactor = Redactor(cfg.audit.redact_patterns)
     audit_logger = AuditLogger(cfg.state.log_dir, redactor=redactor)
     runner = Runner(cfg.codex.binary, cfg.codex.sandbox, cfg.codex.env)
-    queue = Manager()
-    router = Router(cfg, state_store, audit_logger, runner, queue, logger)
+    coordinator = SessionCoordinator(state_store, cfg)
+    router = Router(cfg, state_store, audit_logger, runner, coordinator, logger)
 
     adapter = (cfg.transport.adapter or "discord").lower()
     if adapter == "discord":

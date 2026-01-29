@@ -125,7 +125,7 @@ async def dm_list_sessions(router: "Router") -> str:
 
 async def dm_status(router: "Router") -> str:
     """Return a summary of queued/running jobs across channels."""
-    snapshots = await router.queue.snapshot_all()
+    snapshots = await router.coordinator.snapshot_all()
     lines = []
     for channel_id, statuses in snapshots.items():
         for st in statuses:

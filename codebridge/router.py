@@ -9,8 +9,7 @@ from typing import Any, Dict, Optional
 from . import config as cfgmod
 from .audit import Entry, Logger as AuditLogger
 from .codex import Event, Options, Runner, display_texts, parse_event
-from .queue import Manager
-from .session_service import SessionService
+from .session_coordinator import SessionCoordinator
 from .state import Store, utc_now_iso
 from .transport import Capabilities, MessageEvent, ResponseSink, null_typing
 from .util import path as pathutil
@@ -32,7 +31,6 @@ from .router_helpers import (
     forbidden_message,
     normalize_session,
     pending_key,
-    set_sticky,
     usage_from_event,
 )
 
@@ -41,15 +39,14 @@ from .router_helpers import (
 
 class Router:
     """Main command router for Discord messages."""
-    def __init__(self, cfg: cfgmod.Config, state: Store, audit: AuditLogger, runner: Runner, queue: Manager, logger):
+    def __init__(self, cfg: cfgmod.Config, state: Store, audit: AuditLogger, runner: Runner, coordinator: SessionCoordinator, logger):
         self.cfg = cfg
         self.state = state
         self.audit = audit
         self.runner = runner
-        self.queue = queue
         self.logger = logger
         self._usage: Dict[str, Dict[str, UsageStats]] = {}
-        self.sessions = SessionService(state, cfg)
+        self.coordinator = coordinator
         self._command_registry, self._command_specs = command_registry.build_registry()
         self.file_transfers = FileTransferService(cfg, logger)
 
@@ -322,7 +319,7 @@ class Router:
 
     async def handle_ps(self, sink: ResponseSink) -> None:
         """Show queued/running jobs for the channel."""
-        statuses = await self.queue.snapshot(sink.channel_id)
+        statuses = await self.coordinator.snapshot(sink.channel_id)
         if not statuses:
             await self.reply_forbidden(sink, "No jobs queued or running.")
             return
@@ -334,7 +331,7 @@ class Router:
 
     async def handle_cancel(self, sink: ResponseSink, job_id: str) -> None:
         """Cancel a queued job by id."""
-        ok = await self.queue.cancel(sink.channel_id, job_id)
+        ok = await self.coordinator.cancel(sink.channel_id, job_id)
         if not ok:
             await self.reply_forbidden(sink, "Unknown job id.")
             return
@@ -342,7 +339,7 @@ class Router:
 
     async def handle_rerun(self, sink: ResponseSink) -> None:
         """Requeue the last job for the channel."""
-        job_id = await self.queue.rerun(sink.channel_id)
+        job_id = await self.coordinator.rerun(sink.channel_id)
         if not job_id:
             await self.reply_forbidden(sink, "No prior job to rerun.")
             return
@@ -352,7 +349,7 @@ class Router:
         """Set the sticky session selection for a user."""
         user_id = event.author_id
         channel_id = event.channel_id
-        self.set_sticky(channel_id, user_id, session)
+        self.coordinator.set_sticky(channel_id, user_id, session)
         await self.update_state(channel_id, session, "", "", "", "")
         await self.reply(sink, f"Using session '{session}' by default.")
         await self.update_pinned_status(sink, user_id, session)
@@ -632,7 +629,7 @@ class Router:
                 if sess.repo_name == repo_name:
                     if await self.has_active(channel_id):
                         return True
-                    statuses = await self.queue.snapshot(channel_id)
+                    statuses = await self.coordinator.snapshot(channel_id)
                     if statuses:
                         return True
         return False
@@ -681,15 +678,15 @@ class Router:
 
     def update_state(self, channel_id: str, session: str, repo_name: str, repo_path: str, thread_id: str, model: str) -> None:
         """Update persistent state for a session."""
-        self.sessions.update_state(channel_id, session, repo_name, repo_path, thread_id, model)
+        self.coordinator.update_state(channel_id, session, repo_name, repo_path, thread_id, model)
 
     def session_model(self, channel_id: str, session: str) -> str:
         """Return model override for a session or fallback to default."""
-        return self.sessions.session_model(channel_id, session)
+        return self.coordinator.session_model(channel_id, session)
 
     def set_session_model(self, channel_id: str, session: str, repo_name: str, repo_path: str, model: str) -> None:
         """Set a model override for a session."""
-        self.sessions.set_session_model(channel_id, session, repo_name, repo_path, model)
+        self.coordinator.set_session_model(channel_id, session, repo_name, repo_path, model)
 
     def update_usage(self, channel_id: str, session: str, evt: Event) -> None:
         """Update usage counters from a Codex event."""
@@ -711,35 +708,35 @@ class Router:
 
     def update_activity(self, channel_id: str, session: str) -> None:
         """Record last output time for a session."""
-        self.sessions.update_activity(channel_id, session or DEFAULT_SESSION)
+        self.coordinator.update_activity(channel_id, session or DEFAULT_SESSION)
 
     def get_activity(self, channel_id: str, session: str) -> Optional[str]:
         """Return last output time for a session."""
-        return self.sessions.get_activity(channel_id, session or DEFAULT_SESSION)
+        return self.coordinator.get_activity(channel_id, session or DEFAULT_SESSION)
 
     async def set_active(self, channel_id: str, session: str, proc: Any) -> None:
         """Track a running Codex process for a session."""
-        await self.sessions.set_active(channel_id, session or DEFAULT_SESSION, proc)
+        await self.coordinator.set_active(channel_id, session or DEFAULT_SESSION, proc)
 
     async def clear_active(self, channel_id: str, session: str) -> None:
         """Clear the running process for a session."""
-        await self.sessions.clear_active(channel_id, session or DEFAULT_SESSION)
+        await self.coordinator.clear_active(channel_id, session or DEFAULT_SESSION)
 
     async def get_active(self, channel_id: str, session: str) -> Optional[Any]:
         """Return the running process for a session, if any."""
-        return await self.sessions.get_active(channel_id, session or DEFAULT_SESSION)
+        return await self.coordinator.get_active(channel_id, session or DEFAULT_SESSION)
 
     async def has_active(self, channel_id: str) -> bool:
         """Return True if any session is active in a channel."""
-        return await self.sessions.has_active(channel_id)
+        return await self.coordinator.has_active(channel_id)
 
     async def consume_pending(self, channel_id: str, session: str) -> Optional[PendingConflict]:
         """Consume a pending conflict if present and not expired."""
-        return await self.sessions.consume_pending(channel_id, session)
+        return await self.coordinator.consume_pending(channel_id, session)
 
     def current_session_for_user(self, user_id: str, channel_id: str) -> str:
         """Return sticky session selection for a user or default."""
-        return self.sessions.current_session_for_user(user_id, channel_id)
+        return self.coordinator.current_session_for_user(user_id, channel_id)
 
 
 class _ThreadContextSink:

@@ -50,6 +50,7 @@ class _FakeRouter:
         self.logger = _FakeLogger()
         self.pending_handled = False
         self.uploads_requested = False
+        self.coordinator = _FakeCoordinator()
 
     def _transport_prefix(self, event: MessageEvent) -> str:
         if event.platform == "telegram":
@@ -104,6 +105,11 @@ class _FakeRouter:
 
     def audit_start(self, channel_id: str, session: str, thread_id: str, meta):
         return None
+
+
+class _FakeCoordinator:
+    async def snapshot_all(self):
+        return {}
 
 
 def test_dm_binding_flow(tmp_path):
