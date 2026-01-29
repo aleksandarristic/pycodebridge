@@ -17,7 +17,9 @@
 - `instructions/instructions.md` — full Python implementation spec.
 - `instructions/tasks.md` — task list and progress log (mark tasks with `- DONE`).
 - `/home/leka/Code/codebridge/AGENTS.md` and `/home/leka/Code/codebridge/instructions` — Go reference for intended behavior.
+- `.codex/skills/README.md` and skill `SKILL.md` files — use when tasks match their descriptions.
 
 ## Workflow note
 - When unsure about behavior, check the Go implementation in `/home/leka/Code/codebridge` first. If the Go approach is not suitable for Python, ask the user for guidance before diverging.
 - Update `instructions/tasks.md` (task status and progress log) when completing milestones.
+- Use relevant skills under `.codex/skills` when tasks align (refactor, API changes, packaging/deps, performance triage, architecture review).

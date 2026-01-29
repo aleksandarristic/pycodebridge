@@ -92,6 +92,10 @@
 - Add `requirements.txt` and `requirements-dev.txt` with pinned versions.
 - Keep dev requirements installing into `.venv`.
 
+18) DONE - Skills documentation
+- Add `.codex/skills/README.md` with when-to-use guidance and overlap notes.
+- Reference skill usage in `AGENTS.md` and `instructions/instructions.md`.
+
 ---
 
 ## progress.log
@@ -107,3 +111,4 @@
 - 2026-01-29: Added pytest coverage for core modules and helper logic.
 - 2026-01-29: Added __main__ entrypoint and README run notes for editable installs.
 - 2026-01-29: Added Windows-compatible process group handling for Codex interrupts.
+- 2026-01-29: Added skills overview and instructions to use skills when appropriate.

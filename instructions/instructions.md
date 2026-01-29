@@ -32,6 +32,7 @@ This is a “turn-based interactive” bridge: Codex asks questions in its outpu
 - **File locks**: `filelock`.
 - **Tests**: `pytest`.
 - **Logging**: stdlib `logging`, human-readable format.
+- **Skills**: use repo-local skills in `.codex/skills` when tasks match (refactor, API stability, packaging/deps, performance triage, architecture review).
 
 ---
 
@@ -308,4 +309,3 @@ Followed by a fenced text block describing the reason.
 - Run control: stop/kill; no hard timeout.
 - Formatting: ANSI stripped, diffs fenced, chunking enforced.
 - DM admin (if enabled) commands work and are restricted by allowlist.
-
