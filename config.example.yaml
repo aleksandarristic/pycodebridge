@@ -1,0 +1,35 @@
+discord:
+  token_env: "DISCORD_TOKEN"
+  guild_id: ""
+  allowed_user_ids: ["1234567890"]
+  prefix: "!c"
+  channel_name_regex: "^codex-([A-Za-z0-9._-]+)$"
+  allow_plain_prompts: false
+  dm_admin_enabled: false
+  dm_admin_user_ids: []
+  max_discord_message_chars: 1800
+
+codex:
+  binary: "codex"
+  code_root: "/home/you/Code"
+  sandbox: "workspace-write"
+  json: true
+  model: ""
+  start_prompt: |
+    Hello. This is a Discord-bridged Codex session for repo: {{REPO_NAME}}.
+    Operate inside this repo directory. Stream outputs plainly.
+  env: {}
+
+state:
+  data_dir: "/home/you/.discord-codex-bridge"
+  lock_timeout_seconds: 600
+  conflict_ttl_seconds: 60
+  log_dir: "/home/you/.discord-codex-bridge/logs"
+
+runtime:
+  log_level: "info"
+
+repo_bootstrap:
+  agents_template: ""
+  spec_prompt: ""
+
