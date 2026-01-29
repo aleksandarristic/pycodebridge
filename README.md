@@ -9,6 +9,11 @@ Python service that connects transport channels (`codex-<repo>`) to Codex CLI se
 - Optional DM admin mode for owner-only repo management (Discord adapter).
 - Transport-agnostic router core using `MessageEvent` + `ResponseSink` for adapters (Discord now, Slack later).
 
+## Integrations
+- Discord (supported): `DISCORD.md`
+- Slack (scaffold only): `SLACK.md`
+- Telegram (supported via long polling): `TELEGRAM.md`
+
 ## Setup
 Prereqs:
 - Python 3.14+ (3.13/3.12 fallback)
