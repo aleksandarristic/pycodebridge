@@ -109,7 +109,8 @@ class Options:
     on_jsonl: Optional[Callable[[str], Awaitable[None]]] = None
     on_thread: Optional[Callable[[str], Awaitable[None]]] = None
     on_output: Optional[Callable[[str], Awaitable[None]]] = None
-    on_exit: Optional[Callable[[Optional[BaseException]], Awaitable[None]]] = None
+    on_stderr: Optional[Callable[[str], Awaitable[None]]] = None
+    on_exit: Optional[Callable[[Optional[BaseException], int], Awaitable[None]]] = None
 
 
 class Process:
@@ -216,21 +217,29 @@ class Runner:
             except Exception as exc:
                 return exc
 
-        async def _read_stderr() -> None:
+        async def _read_stderr() -> Optional[BaseException]:
             if not proc.stderr:
-                return
-            async for raw in proc.stderr:
-                _ = raw.decode("utf-8", errors="replace")
+                return None
+            try:
+                async for raw in proc.stderr:
+                    line = raw.decode("utf-8", errors="replace").rstrip("\n")
+                    if opts.on_stderr:
+                        await opts.on_stderr(line)
+                return None
+            except Exception as exc:
+                return exc
 
         stdout_task = asyncio.create_task(_read_stdout())
         stderr_task = asyncio.create_task(_read_stderr())
 
         async def _waiter() -> None:
             err = await stdout_task
-            await stderr_task
-            await proc.wait()
+            stderr_err = await stderr_task
+            rc = await proc.wait()
+            if err is None and stderr_err is not None:
+                err = stderr_err
             if opts.on_exit:
-                await opts.on_exit(err)
+                await opts.on_exit(err, rc)
 
         asyncio.create_task(_waiter())
         return process
@@ -269,4 +278,3 @@ def _merge_env(base: Dict[str, str], extra: Dict[str, str]) -> Dict[str, str]:
     env.update(base or {})
     env.update(extra or {})
     return env
-

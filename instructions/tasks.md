@@ -31,12 +31,12 @@
 - Write request.json, codex.jsonl, discord_out.txt, codex.stderr.txt.
 - Read summaries for `!c logs`.
 
-6) IN PROGRESS - Codex runner
+6) DONE - Codex runner
 - Async subprocess runner for `codex exec --json ...`.
 - Parse JSONL, extract agent messages and thread_id.
 - Provide stop (ESC), interrupt (SIGINT), kill controls.
 - Allow per-session model overrides.
-- PENDING: connect stderr stream to audit logger and capture exit status for router.
+- Connect stderr stream to audit logger and capture exit status for router.
 
 7) DONE - Message formatting utilities
 - ANSI/control stripping.
@@ -100,3 +100,4 @@
 - 2026-01-29: Added pending task notes for remaining porting work.
 - 2026-01-29: Added DISCORD.md and refreshed README/AGENTS for the Python port.
 - 2026-01-29: Added requirements.txt / requirements-dev.txt with pinned versions.
+- 2026-01-29: Completed codex runner stderr streaming and exit status handling.
