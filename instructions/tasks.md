@@ -96,6 +96,16 @@
 - Add `.codex/skills/README.md` with when-to-use guidance and overlap notes.
 - Reference skill usage in `AGENTS.md` and `instructions/instructions.md`.
 
+19) TODO - Graceful shutdown on Ctrl-C
+- Catch KeyboardInterrupt/CancelledError and close the Discord client cleanly to avoid traceback spam.
+- Optional: add SIGINT/SIGTERM handlers (non-Windows) to call `client.close()` and log a single shutdown line.
+- Validate by starting the app, pressing Ctrl-C, and confirming no traceback.
+
+20) TODO - Reliable typing indicator
+- Replace `channel.trigger_typing()` loop with `async with channel.typing():` (or manage a long-lived typing context) so typing stays visible.
+- Keep fallback timer if needed, but prefer the official typing context.
+- Validate by sending a long-running command and confirming the typing indicator stays on.
+
 ---
 
 ## progress.log
