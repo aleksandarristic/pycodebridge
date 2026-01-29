@@ -80,7 +80,7 @@
 - README with setup, config reference, commands, DM admin notes.
 - DISCORD.md with bot intents and invite setup.
 
-15) TODO - Packaging/runtime ergonomics
+15) DONE - Packaging/runtime ergonomics
 - Add `__main__.py` or console script entrypoint.
 - Add `pip install -e .` and `python -m cmd.bridge` run notes.
 
@@ -105,3 +105,4 @@
 - 2026-01-29: Implemented core command routing, queue controls, and DM admin basics.
 - 2026-01-29: Added repo bootstrap commands, GitHub clone parsing, and DM repo management.
 - 2026-01-29: Added pytest coverage for core modules and helper logic.
+- 2026-01-29: Added __main__ entrypoint and README run notes for editable installs.

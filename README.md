@@ -17,7 +17,9 @@ Prereqs:
 Quick start:
 1) Create `config.yaml` (start from `config.example.yaml`).
 2) Set `DISCORD_TOKEN` (or the env named by `discord.token_env`) in `.env` at the repo root.
-3) Run: `./.venv/bin/python -m cmd.bridge -config config.yaml`
+3) Optional: `pip install -e .` to add an editable install.
+4) Run: `./.venv/bin/python -m cmd.bridge -config config.yaml`
+   - Alternative: `./.venv/bin/python -m codebridge -config config.yaml`
 
 ## Configuration reference
 Paths support `$VAR`/`%APPDATA%`/`~` expansion.
