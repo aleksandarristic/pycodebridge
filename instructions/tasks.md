@@ -63,7 +63,7 @@
 - “I’m sorry, Dave...” wrapper for forbidden/invalid commands.
 - Session limit (max 3) and sticky session selection.
 
-11) TODO - Repo bootstrap commands
+11) DONE - Repo bootstrap commands
 - `createrepo`, `clonerepo`, `copyrepo` with containment rules.
 - Optional AGENTS.md template seeding.
 - `spec` flow to generate instructions/spec.md + tasks.
@@ -103,3 +103,4 @@
 - 2026-01-29: Completed codex runner stderr streaming and exit status handling.
 - 2026-01-29: Added typing keepalive and pinned status helpers for Discord wiring.
 - 2026-01-29: Implemented core command routing, queue controls, and DM admin basics.
+- 2026-01-29: Added repo bootstrap commands, GitHub clone parsing, and DM repo management.

@@ -121,7 +121,7 @@ class Router:
             except Exception as exc:
                 await self.reply_forbidden(channel, f"Repo error: {exc}")
                 return
-            await self.reply_forbidden(channel, "createrepo not implemented yet.")
+            await self.handle_create_repo(message, repo_name, repo_path)
             return
 
         try:
@@ -333,13 +333,37 @@ class Router:
             await self.reply(channel, f"Model for session '{session_name}' set to {model}")
             return
         if cmd == "spec":
-            await self.reply_forbidden(channel, "spec not implemented yet.")
+            session = rest.strip() or self.current_session_for_user(str(message.author.id), str(channel.id))
+            try:
+                session = normalize_session(session)
+            except ValueError as exc:
+                await self.reply_forbidden(channel, str(exc))
+                return
+            await self.handle_spec(message, repo_name, repo_path, session)
             return
         if cmd == "clonerepo":
-            await self.reply_forbidden(channel, "clonerepo not implemented yet.")
+            url = rest.strip()
+            if not url:
+                await self.reply_forbidden(channel, "Usage: !c clonerepo <github-url>")
+                return
+            try:
+                repo_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, repo_name)
+            except Exception as exc:
+                await self.reply_forbidden(channel, f"Repo error: {exc}")
+                return
+            await self.handle_clone_repo(message, repo_name, repo_path, url)
             return
         if cmd == "copyrepo":
-            await self.reply_forbidden(channel, "copyrepo not implemented yet.")
+            new_name = rest.strip()
+            if not new_name:
+                await self.reply_forbidden(channel, "Usage: !c copyrepo <new-repo-name>")
+                return
+            try:
+                target_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, new_name)
+            except Exception as exc:
+                await self.reply_forbidden(channel, f"Repo error: {exc}")
+                return
+            await self.handle_copy_repo(message, repo_name, repo_path, new_name, target_path)
             return
 
         await self.handle_resume(message, repo_name, repo_path, DEFAULT_SESSION, cmdline)
@@ -380,8 +404,50 @@ class Router:
         if cmd == "config":
             await send(self.config_text())
             return
-        if cmd in {"createrepo", "clonerepo", "copyrepo", "deleterepo", "delete", "renamerepo", "rename"}:
-            await send_forbidden("DM repo commands not implemented yet.")
+        if cmd == "createrepo":
+            name = rest.strip()
+            if not name:
+                await send_forbidden("Usage: !c createrepo <name>")
+                return
+            err = await self.dm_create_repo(message, name, entry)
+            if err:
+                await send_forbidden(str(err))
+            return
+        if cmd == "clonerepo":
+            parts = rest.split(maxsplit=1)
+            if len(parts) < 2:
+                await send_forbidden("Usage: !c clonerepo <name> <url>")
+                return
+            err = await self.dm_clone_repo(message, parts[0], parts[1], entry)
+            if err:
+                await send_forbidden(str(err))
+            return
+        if cmd == "copyrepo":
+            parts = rest.split(maxsplit=1)
+            if len(parts) < 2:
+                await send_forbidden("Usage: !c copyrepo <from> <to>")
+                return
+            err = await self.dm_copy_repo(message, parts[0], parts[1], entry)
+            if err:
+                await send_forbidden(str(err))
+            return
+        if cmd in {"deleterepo", "delete"}:
+            name = rest.strip()
+            if not name:
+                await send_forbidden("Usage: !c deleterepo <name>")
+                return
+            err = await self.dm_delete_repo(message, name, entry)
+            if err:
+                await send_forbidden(str(err))
+            return
+        if cmd in {"renamerepo", "rename"}:
+            parts = rest.split(maxsplit=1)
+            if len(parts) < 2:
+                await send_forbidden("Usage: !c renamerepo <from> <to>")
+                return
+            err = await self.dm_rename_repo(message, parts[0], parts[1], entry)
+            if err:
+                await send_forbidden(str(err))
             return
 
         await send_forbidden("Unknown DM command. Try !c help.")
@@ -433,6 +499,114 @@ class Router:
 
         pos, job_id, _ = await self.queue.enqueue(channel_id, session, job)
         self.logger.info("enqueue.resume", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
+
+    async def handle_create_repo(self, message: discord.Message, repo_name: str, repo_path: str) -> None:
+        channel_id = str(message.channel.id)
+        if os.path.isdir(repo_path):
+            if os.path.isdir(os.path.join(repo_path, ".git")):
+                await self.reply_forbidden(message.channel, "Repo already exists; use !c start.")
+                self.logger.warning("createrepo.exists", extra={"channel_id": channel_id, "repo": repo_name, "path": repo_path})
+                return
+            await self.reply_forbidden(message.channel, "Directory already exists and is not a git repo.")
+            self.logger.warning("createrepo.exists_non_git", extra={"channel_id": channel_id, "repo": repo_name, "path": repo_path})
+            return
+        try:
+            os.makedirs(repo_path, exist_ok=False)
+        except Exception as exc:
+            await self.reply_forbidden(message.channel, f"Create repo dir: {exc}")
+            self.logger.error("createrepo.mkdir_failed", extra={"channel_id": channel_id, "repo": repo_name, "error": str(exc)})
+            return
+        _, err = await run_limited_command(repo_path, ["git", "init"])
+        if err:
+            await self.reply_forbidden(message.channel, f"git init failed: {err}")
+            self.logger.error("createrepo.git_init_failed", extra={"channel_id": channel_id, "repo": repo_name, "error": str(err)})
+            return
+        try:
+            self.seed_agents_template(repo_path)
+        except Exception as exc:
+            await self.reply_forbidden(message.channel, str(exc))
+            self.logger.error("createrepo.agents_failed", extra={"channel_id": channel_id, "repo": repo_name, "error": str(exc)})
+            return
+        await self.reply(message.channel, f"Created repo at {repo_path}")
+        self.logger.info("createrepo.ok", extra={"channel_id": channel_id, "repo": repo_name, "path": repo_path})
+
+        session_name = self.current_session_for_user(str(message.author.id), channel_id)
+        try:
+            session_name = normalize_session(session_name)
+        except ValueError as exc:
+            await self.reply_forbidden(message.channel, str(exc))
+            return
+        await self.handle_start(message, repo_name, repo_path, session_name)
+
+    async def handle_clone_repo(self, message: discord.Message, repo_name: str, repo_path: str, raw_url: str) -> None:
+        channel_id = str(message.channel.id)
+        if os.path.exists(repo_path):
+            await self.reply_forbidden(message.channel, "Repo directory already exists.")
+            return
+        try:
+            clone_url = parse_github_clone_url(raw_url)
+        except ValueError as exc:
+            await self.reply_forbidden(message.channel, str(exc))
+            return
+        _, err = await run_limited_command(os.path.dirname(repo_path), ["git", "clone", clone_url, repo_path], timeout=HELPER_TIMEOUT * 2)
+        if err:
+            await self.reply_forbidden(message.channel, f"git clone failed: {err}")
+            self.logger.error("clonerepo.failed", extra={"channel_id": channel_id, "repo": repo_name, "url": clone_url, "error": str(err)})
+            return
+        await self.reply(message.channel, f"Cloned {clone_url} into {repo_path}")
+        self.logger.info("clonerepo.ok", extra={"channel_id": channel_id, "repo": repo_name, "url": clone_url, "path": repo_path})
+
+    async def handle_copy_repo(
+        self,
+        message: discord.Message,
+        repo_name: str,
+        repo_path: str,
+        new_name: str,
+        target_path: str,
+    ) -> None:
+        channel_id = str(message.channel.id)
+        if os.path.exists(target_path):
+            await self.reply_forbidden(message.channel, "Target repo directory already exists.")
+            return
+        try:
+            copy_dir_excluding_git(repo_path, target_path)
+        except Exception as exc:
+            await self.reply_forbidden(message.channel, f"Copy repo failed: {exc}")
+            self.logger.error("copyrepo.failed", extra={"channel_id": channel_id, "repo": repo_name, "target": target_path, "error": str(exc)})
+            return
+        _, err = await run_limited_command(target_path, ["git", "init"])
+        if err:
+            await self.reply_forbidden(message.channel, f"git init failed: {err}")
+            self.logger.error("copyrepo.git_init_failed", extra={"channel_id": channel_id, "repo": repo_name, "target": target_path, "error": str(err)})
+            return
+        await self.reply(message.channel, f"Copied repo to {target_path}. Continue in #codex-{new_name}")
+        self.logger.info("copyrepo.ok", extra={"channel_id": channel_id, "repo": repo_name, "target": target_path})
+
+    async def handle_spec(self, message: discord.Message, repo_name: str, repo_path: str, session: str) -> None:
+        channel_id = str(message.channel.id)
+        session = normalize_session(session)
+        try:
+            os.makedirs(os.path.join(repo_path, "instructions"), exist_ok=True)
+        except Exception as exc:
+            await self.reply_forbidden(message.channel, f"Create instructions dir: {exc}")
+            return
+        state = self.state.load()
+        if count_active_sessions(state, channel_id) >= MAX_SESSIONS_PER_CHANNEL and not session_exists(state, channel_id, session):
+            await self.reply_forbidden(message.channel, f"Session limit reached ({MAX_SESSIONS_PER_CHANNEL}). Stop or reuse an existing session.")
+            return
+        thread_id = existing_thread(state, channel_id, session)
+        model = self.session_model(channel_id, session)
+        prompt = self.spec_prompt(repo_name)
+        if thread_id:
+            args = self.runner.build_resume_args(repo_path, thread_id, prompt, model)
+        else:
+            args = self.runner.build_start_args(repo_path, prompt, model)
+
+        async def job() -> None:
+            await self.run_codex(message, repo_name, repo_path, session, model, args)
+
+        pos, job_id, _ = await self.queue.enqueue(channel_id, session, job)
+        self.logger.info("enqueue.spec", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
 
     async def handle_choose(self, message: discord.Message, repo_name: str, repo_path: str, session: str, choice: str) -> None:
         channel_id = str(message.channel.id)
@@ -946,6 +1120,135 @@ class Router:
                 lines.append(f"{channel_id}: {st.job_id} [{st.status}] session:{st.session or DEFAULT_SESSION} pos:{st.position}")
         return "\n".join(lines) if lines else "No queued or running jobs."
 
+    async def dm_create_repo(self, message: discord.Message, repo_name: str, entry: Optional[Entry]) -> Optional[Exception]:
+        try:
+            repo_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, repo_name)
+        except Exception as exc:
+            return exc
+        if os.path.isdir(repo_path):
+            if os.path.isdir(os.path.join(repo_path, ".git")):
+                return RuntimeError("Repo already exists.")
+            return RuntimeError("Directory already exists and is not a git repo.")
+        try:
+            os.makedirs(repo_path, exist_ok=False)
+        except Exception as exc:
+            return exc
+        _, err = await run_limited_command(repo_path, ["git", "init"])
+        if err:
+            return err
+        try:
+            self.seed_agents_template(repo_path)
+        except Exception as exc:
+            return exc
+        await self.dm_reply(message.channel, entry, f"Created repo at {repo_path}. Continue in #codex-{repo_name}")
+        self.logger.info("dm.createrepo.ok", extra={"user_id": str(message.author.id), "repo": repo_name, "path": repo_path})
+        return None
+
+    async def dm_clone_repo(self, message: discord.Message, repo_name: str, raw_url: str, entry: Optional[Entry]) -> Optional[Exception]:
+        try:
+            repo_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, repo_name)
+        except Exception as exc:
+            return exc
+        if os.path.exists(repo_path):
+            return RuntimeError("Repo directory already exists.")
+        try:
+            clone_url = parse_github_clone_url(raw_url)
+        except ValueError as exc:
+            return exc
+        _, err = await run_limited_command(os.path.dirname(repo_path), ["git", "clone", clone_url, repo_path], timeout=HELPER_TIMEOUT * 2)
+        if err:
+            return err
+        await self.dm_reply(message.channel, entry, f"Cloned {clone_url} into {repo_path}. Continue in #codex-{repo_name}")
+        self.logger.info("dm.clonerepo.ok", extra={"user_id": str(message.author.id), "repo": repo_name, "url": clone_url, "path": repo_path})
+        return None
+
+    async def dm_copy_repo(self, message: discord.Message, from_name: str, to_name: str, entry: Optional[Entry]) -> Optional[Exception]:
+        try:
+            src_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, from_name)
+            dst_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, to_name)
+        except Exception as exc:
+            return exc
+        if os.path.exists(dst_path):
+            return RuntimeError("Target repo directory already exists.")
+        try:
+            copy_dir_excluding_git(src_path, dst_path)
+        except Exception as exc:
+            return exc
+        _, err = await run_limited_command(dst_path, ["git", "init"])
+        if err:
+            return err
+        await self.dm_reply(message.channel, entry, f"Copied repo to {dst_path}. Continue in #codex-{to_name}")
+        self.logger.info("dm.copyrepo.ok", extra={"user_id": str(message.author.id), "repo": from_name, "target": dst_path})
+        return None
+
+    async def dm_delete_repo(self, message: discord.Message, repo_name: str, entry: Optional[Entry]) -> Optional[Exception]:
+        try:
+            repo_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, repo_name)
+        except Exception as exc:
+            return exc
+        if await self.repo_busy(repo_name):
+            return RuntimeError("Repo has active or queued jobs. Stop/kill them first.")
+        try:
+            for root, dirs, files in os.walk(repo_path, topdown=False):
+                for name in files:
+                    os.remove(os.path.join(root, name))
+                for name in dirs:
+                    os.rmdir(os.path.join(root, name))
+            os.rmdir(repo_path)
+        except Exception as exc:
+            return exc
+        self.state.update(lambda fs: prune_state_for_repo(fs, repo_name, repo_path))
+        await self.dm_reply(message.channel, entry, f"Deleted repo {repo_name}")
+        self.logger.info("dm.deleterepo.ok", extra={"user_id": str(message.author.id), "repo": repo_name})
+        return None
+
+    async def dm_rename_repo(self, message: discord.Message, from_name: str, to_name: str, entry: Optional[Entry]) -> Optional[Exception]:
+        try:
+            src_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, from_name)
+            dst_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, to_name)
+        except Exception as exc:
+            return exc
+        if await self.repo_busy(from_name):
+            return RuntimeError("Repo has active or queued jobs. Stop/kill them first.")
+        if os.path.exists(dst_path):
+            return RuntimeError("Target repo directory already exists.")
+        try:
+            os.rename(src_path, dst_path)
+        except Exception as exc:
+            return exc
+        self.state.update(lambda fs: rename_state_repo(fs, from_name, src_path, to_name, dst_path))
+        await self.dm_reply(message.channel, entry, f"Renamed repo {from_name} to {to_name}. Continue in #codex-{to_name}")
+        self.logger.info("dm.renamerepo.ok", extra={"user_id": str(message.author.id), "repo": from_name, "target": dst_path})
+        return None
+
+    def seed_agents_template(self, repo_path: str) -> None:
+        tmpl = (self.cfg.repo_bootstrap.agents_template or "").strip()
+        if not tmpl:
+            return
+        agents_path = os.path.join(repo_path, "AGENTS.md")
+        if os.path.exists(agents_path):
+            return
+        data = Path(tmpl).read_text(encoding="utf-8")
+        Path(agents_path).write_text(data, encoding="utf-8")
+
+    def spec_prompt(self, repo_name: str) -> str:
+        prompt = (self.cfg.repo_bootstrap.spec_prompt or "").strip()
+        if not prompt:
+            prompt = "Please ask me for a project spec."
+        return prompt.replace("{{REPO_NAME}}", repo_name)
+
+    async def repo_busy(self, repo_name: str) -> bool:
+        state = self.state.load()
+        for channel_id, ch in state.channels.items():
+            for sess in ch.sessions.values():
+                if sess.repo_name == repo_name:
+                    if await self.has_active(channel_id):
+                        return True
+                    statuses = await self.queue.snapshot(channel_id)
+                    if statuses:
+                        return True
+        return False
+
     def audit_start(self, channel_id: str, session: str, thread_id: str, meta: Any) -> Optional[Entry]:
         if not self.audit:
             return None
@@ -1245,6 +1548,35 @@ def set_sticky(fs, channel_id: str, user_id: str, session: str) -> None:
     fs.channels[channel_id] = ch
 
 
+def prune_state_for_repo(fs, repo_name: str, repo_path: str) -> None:
+    for channel_id, ch in list(fs.channels.items()):
+        changed = False
+        for sess_name, sess in list(ch.sessions.items()):
+            if sess.repo_name == repo_name or sess.repo_path == repo_path:
+                del ch.sessions[sess_name]
+                changed = True
+        if changed:
+            for user_id, sess_name in list(ch.sticky.items()):
+                if sess_name not in ch.sessions:
+                    del ch.sticky[user_id]
+            if not ch.sessions and not ch.sticky:
+                del fs.channels[channel_id]
+            else:
+                fs.channels[channel_id] = ch
+
+
+def rename_state_repo(fs, from_name: str, from_path: str, to_name: str, to_path: str) -> None:
+    for channel_id, ch in fs.channels.items():
+        changed = False
+        for sess_name, sess in ch.sessions.items():
+            if sess.repo_name == from_name or sess.repo_path == from_path:
+                sess.repo_name = to_name
+                sess.repo_path = to_path
+                changed = True
+        if changed:
+            fs.channels[channel_id] = ch
+
+
 def build_tree(repo_path: str, max_depth: int = 3) -> str:
     lines: list[str] = []
     base = Path(repo_path)
@@ -1271,6 +1603,62 @@ def build_tree(repo_path: str, max_depth: int = 3) -> str:
 
     walk(base, 1)
     return "\n".join(lines) if lines else "(empty)"
+
+
+def parse_github_clone_url(raw: str) -> str:
+    raw = raw.strip()
+    if not raw:
+        raise ValueError("GitHub URL required")
+    if raw.startswith("git@github.com:"):
+        path = raw.replace("git@github.com:", "", 1)
+        return normalize_github_path(path)
+    if raw.startswith("github.com/") or raw.startswith("www.github.com/"):
+        raw = "https://" + raw
+    if raw.startswith("https://github.com/") or raw.startswith("https://www.github.com/"):
+        path = raw.split("github.com/", 1)[1]
+        return normalize_github_path(path)
+    raise ValueError("Only github.com URLs are supported")
+
+
+def normalize_github_path(path: str) -> str:
+    path = path.strip().strip("/")
+    if path.endswith(".git"):
+        path = path[: -len(".git")]
+    parts = path.split("/")
+    if len(parts) < 2 or not parts[0] or not parts[1]:
+        raise ValueError("Invalid GitHub repo path")
+    owner = parts[0]
+    repo = parts[1]
+    return f"https://github.com/{owner}/{repo}.git"
+
+
+def copy_dir_excluding_git(src: str, dst: str) -> None:
+    if not os.path.isdir(src):
+        raise ValueError("source is not a directory")
+    os.makedirs(dst, exist_ok=True)
+    for root, dirs, files in os.walk(src):
+        rel = os.path.relpath(root, src)
+        if rel == ".git" or rel.startswith(".git" + os.sep):
+            dirs[:] = []
+            continue
+        if ".git" in dirs:
+            dirs.remove(".git")
+        target_dir = dst if rel == "." else os.path.join(dst, rel)
+        os.makedirs(target_dir, exist_ok=True)
+        for name in files:
+            src_path = os.path.join(root, name)
+            dst_path = os.path.join(target_dir, name)
+            if os.path.islink(src_path):
+                continue
+            copy_file(src_path, dst_path)
+
+
+def copy_file(src: str, dst: str) -> None:
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    with open(src, "rb") as fsrc:
+        data = fsrc.read()
+    with open(dst, "wb") as fdst:
+        fdst.write(data)
 
 
 def trim_output(text: str, max_lines: int, max_bytes: int) -> str:
