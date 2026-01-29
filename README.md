@@ -36,6 +36,13 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `dm_admin_user_ids` (default empty) — allowlist for DM admin (falls back to `allowed_user_ids`).
 - `max_discord_message_chars` (default `1800`) — outbound chunk size.
 
+### `telegram`
+- `token_env` (default `TELEGRAM_TOKEN`) — environment variable containing bot token.
+- `allowed_user_ids` (default empty) — allowlist for channel commands; if non-empty, ignore others.
+- `prefix` (default `!c`) — command prefix.
+- `channel_name_regex` (default `^codex-([A-Za-z0-9._-]+)$`) — maps chat title to repo name.
+- `allow_plain_prompts` (default `false`) — treat non-prefixed messages as prompts in matching chats.
+
 ### `codex`
 - `binary` (default `codex`) — path/name of Codex CLI.
 - `code_root` (required) — directory containing git repos.

@@ -12,6 +12,7 @@ from codebridge import logging as logmod
 from codebridge.audit import Logger as AuditLogger
 from codebridge.codex import Runner
 from codebridge.discord_bot import build_client
+from codebridge.telegram_bot import build_application, run_polling
 from codebridge.queue import Manager
 from codebridge.router import Router
 from codebridge.state import Store
@@ -52,7 +53,10 @@ async def main() -> None:
     elif adapter == "slack":
         raise ValueError("Slack adapter scaffolded but not yet wired; use transport.adapter: discord")
     elif adapter == "telegram":
-        raise ValueError("Telegram adapter scaffolded but not yet wired; use transport.adapter: discord")
+        token = cfg.telegram_token()
+        app = build_application(router, token)
+        await run_polling(app)
+        return
     else:
         raise ValueError(f"Unsupported transport adapter: {adapter}")
 

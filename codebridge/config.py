@@ -13,6 +13,7 @@ DEFAULT_MAX_DISCORD_CHARS = 1800
 DEFAULT_SANDBOX = "workspace-write"
 DEFAULT_LOG_LEVEL = "info"
 DEFAULT_TOKEN_ENV = "DISCORD_TOKEN"
+DEFAULT_TELEGRAM_TOKEN_ENV = "TELEGRAM_TOKEN"
 DEFAULT_LOCK_TIMEOUT_SECONDS = 600
 DEFAULT_CONFLICT_TTL_SECONDS = 60
 DEFAULT_TRANSPORT_ADAPTER = "discord"
@@ -43,6 +44,18 @@ class DiscordConfig:
     allow_plain_prompts: bool = False
     dm_admin_enabled: bool = False
     dm_admin_user_ids: List[str] = field(default_factory=list)
+
+    _compiled_regex: Optional[re.Pattern] = field(default=None, init=False, repr=False)
+
+
+@dataclass
+class TelegramConfig:
+    """Telegram-related configuration."""
+    token_env: str = DEFAULT_TELEGRAM_TOKEN_ENV
+    allowed_user_ids: List[str] = field(default_factory=list)
+    prefix: str = DEFAULT_PREFIX
+    channel_name_regex: str = DEFAULT_CHANNEL_REGEX
+    allow_plain_prompts: bool = False
 
     _compiled_regex: Optional[re.Pattern] = field(default=None, init=False, repr=False)
 
@@ -91,6 +104,7 @@ class RepoBootstrapConfig:
 class Config:
     """Top-level configuration container."""
     discord: DiscordConfig = field(default_factory=DiscordConfig)
+    telegram: TelegramConfig = field(default_factory=TelegramConfig)
     codex: CodexConfig = field(default_factory=CodexConfig)
     state: StateConfig = field(default_factory=StateConfig)
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
@@ -106,10 +120,26 @@ class Config:
         return token
 
     def channel_regex(self) -> re.Pattern:
-        """Compile and return the channel name regex."""
+        """Compile and return the Discord channel name regex."""
         if self.discord._compiled_regex is None:
             self.discord._compiled_regex = re.compile(self.discord.channel_name_regex)
         return self.discord._compiled_regex
+
+    def channel_regex_for(self, platform: str) -> re.Pattern:
+        """Compile and return the channel name regex for a platform."""
+        if platform == "telegram":
+            if self.telegram._compiled_regex is None:
+                self.telegram._compiled_regex = re.compile(self.telegram.channel_name_regex)
+            return self.telegram._compiled_regex
+        return self.channel_regex()
+
+    def telegram_token(self) -> str:
+        """Return the Telegram token from the configured env var."""
+        env_name = self.telegram.token_env or DEFAULT_TELEGRAM_TOKEN_ENV
+        token = os.getenv(env_name, "").strip()
+        if not token:
+            raise ValueError(f"telegram token env {env_name!r} is empty")
+        return token
 
 
 def load(path: str) -> Config:
@@ -141,6 +171,13 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.discord.allow_plain_prompts = bool(discord.get("allow_plain_prompts", cfg.discord.allow_plain_prompts))
     cfg.discord.dm_admin_enabled = bool(discord.get("dm_admin_enabled", cfg.discord.dm_admin_enabled))
     cfg.discord.dm_admin_user_ids = list(discord.get("dm_admin_user_ids", cfg.discord.dm_admin_user_ids) or [])
+
+    telegram = raw.get("telegram", {}) or {}
+    cfg.telegram.token_env = telegram.get("token_env", cfg.telegram.token_env)
+    cfg.telegram.allowed_user_ids = list(telegram.get("allowed_user_ids", cfg.telegram.allowed_user_ids) or [])
+    cfg.telegram.prefix = telegram.get("prefix", cfg.telegram.prefix)
+    cfg.telegram.channel_name_regex = telegram.get("channel_name_regex", cfg.telegram.channel_name_regex)
+    cfg.telegram.allow_plain_prompts = bool(telegram.get("allow_plain_prompts", cfg.telegram.allow_plain_prompts))
 
     codex = raw.get("codex", {}) or {}
     cfg.codex.binary = codex.get("binary", cfg.codex.binary)
@@ -180,6 +217,12 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.discord.channel_name_regex = DEFAULT_CHANNEL_REGEX
     if not cfg.discord.max_discord_message_chars:
         cfg.discord.max_discord_message_chars = DEFAULT_MAX_DISCORD_CHARS
+    if not cfg.telegram.token_env:
+        cfg.telegram.token_env = DEFAULT_TELEGRAM_TOKEN_ENV
+    if not cfg.telegram.prefix:
+        cfg.telegram.prefix = DEFAULT_PREFIX
+    if not cfg.telegram.channel_name_regex:
+        cfg.telegram.channel_name_regex = DEFAULT_CHANNEL_REGEX
 
     if not cfg.codex.binary:
         cfg.codex.binary = "codex"
@@ -235,11 +278,17 @@ def _validate(cfg: Config) -> None:
     if len(cfg.discord.allowed_user_ids) == 0:
         if not cfg.discord.dm_admin_enabled or len(cfg.discord.dm_admin_user_ids) == 0:
             raise ValueError("discord.allowed_user_ids must list at least one user (or enable DM admin with dm_admin_user_ids)")
+    if cfg.transport.adapter.lower() == "telegram" and len(cfg.telegram.allowed_user_ids) == 0:
+        raise ValueError("telegram.allowed_user_ids must list at least one user")
 
     try:
         cfg.discord._compiled_regex = re.compile(cfg.discord.channel_name_regex)
     except re.error as exc:
         raise ValueError(f"discord.channel_name_regex invalid: {exc}")
+    try:
+        cfg.telegram._compiled_regex = re.compile(cfg.telegram.channel_name_regex)
+    except re.error as exc:
+        raise ValueError(f"telegram.channel_name_regex invalid: {exc}")
 
 
 _PERCENT_VAR_RE = re.compile(r"%([^%]+)%")

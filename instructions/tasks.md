@@ -185,10 +185,14 @@
 - Add configuration and validation for Teams bot credentials/app settings.
 - Add integration tests with mocked payloads.
 
-37) TODO - Telegram adapter completion
+37) DONE - Telegram adapter completion
 - Implement Telegram runtime wiring (polling/webhook) and response sending.
 - Add Telegram config fields and validation.
 - Expand `TELEGRAM.md` with real setup steps once wiring is implemented.
+
+38) TODO - README integrations section
+- Add an "Integrations" section in `README.md`.
+- List supported/scaffolded integrations and link to docs (e.g., `DISCORD.md`, `SLACK.md`, `TELEGRAM.md`).
 
 
 ---
@@ -220,3 +224,4 @@
 - 2026-01-29: Added Slack adapter scaffold and expanded transport adapter tests.
 - 2026-01-29: Added Slack/Telegram setup docs with README references.
 - 2026-01-29: Added Telegram adapter scaffold and noted scaffold-only status.
+- 2026-01-29: Completed Telegram adapter wiring with long polling and config updates.

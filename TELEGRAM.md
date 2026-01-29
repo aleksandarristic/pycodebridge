@@ -1,7 +1,7 @@
 # Telegram setup
 
 This document describes how to set up a Telegram bot for this bridge.
-The Telegram adapter is scaffold-only, so use this as planning guidance.
+The Telegram adapter uses long polling and expects chat titles to map to repos.
 
 ## 1) Create a bot with BotFather
 1) Open Telegram and chat with `@BotFather`.
@@ -9,9 +9,7 @@ The Telegram adapter is scaffold-only, so use this as planning guidance.
 3) Copy the token provided by BotFather.
 
 ## 2) Choose update delivery
-You have two typical options:
-- **Webhook:** A public HTTPS endpoint where Telegram sends updates.
-- **Long polling:** The bot periodically fetches updates (simpler to start).
+This bridge currently uses **long polling**. Webhooks are not wired yet.
 
 ## 3) Chat types and routing
 Telegram does not have Discord-like “channels + DMs” semantics.
@@ -20,22 +18,25 @@ Instead, messages arrive from a **chat**, which can be:
 - **Group chat**: a small group with the bot added.
 - **Supergroup**: large groups with extra moderation features.
 
-For this bridge, treat the Telegram **chat ID** as the channel identifier
-(`MessageEvent.channel_id`) and map to repo names using the same `codex-<repo>`
-convention in the message text (or via a per-chat config if you add it later).
+For this bridge, the Telegram **chat title** must match `codex-<repo>` so the
+router can resolve the repo name. Private chats do not have titles, so they
+are ignored by default. Use a group/supergroup and set its title to `codex-<repo>`.
 
-## 4) Token placement (planned)
-Telegram adapter configuration will live under `transport` (plus Telegram-specific fields), for example:
+## 4) Token placement
+Telegram adapter configuration lives under `transport` and `telegram`, for example:
 ```
 transport:
   adapter: "telegram"
 telegram:
-  bot_token: "123456:ABC-DEF..."
-  mode: "polling"   # or "webhook"
-  webhook_url: "https://..."
+  token_env: "TELEGRAM_TOKEN"
+  allowed_user_ids: ["1234567890"]
+  prefix: "!c"
+  channel_name_regex: "^codex-([A-Za-z0-9._-]+)$"
+  allow_plain_prompts: false
 ```
 
 ## 5) Notes
-- Telegram uses chat IDs for routing instead of channels/threads.
-- There is no native “typing” for bots, but you can send chat actions.
+- Telegram uses chat titles for repo mapping in this bridge.
+- Use `telegram.allowed_user_ids` to restrict access to your bot.
+- There is no native “typing” for bots, but chat actions are supported.
 - Rate limits apply; handle retries and backoff.

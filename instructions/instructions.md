@@ -159,6 +159,13 @@ discord:
   dm_admin_enabled: false
   dm_admin_user_ids: []
 
+telegram:
+  token_env: "TELEGRAM_TOKEN"
+  allowed_user_ids: []
+  prefix: "!c"
+  channel_name_regex: "^codex-([A-Za-z0-9._-]+)$"
+  allow_plain_prompts: false
+
 codex:
   binary: "codex"
   code_root: "/path/to/code"

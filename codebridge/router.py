@@ -58,7 +58,7 @@ class Router:
 
         channel_name = event.channel_name or event.channel_id
 
-        if event.is_dm:
+        if event.is_dm and event.platform == "discord":
             if not self.cfg.discord.dm_admin_enabled:
                 return
             if not self._dm_admin_allowed(event.author_id):
@@ -66,28 +66,28 @@ class Router:
                 return
             await dm_admin_handlers.handle_dm_message(self, event, sink)
             return
-        if not event.guild_id:
+        if event.platform == "discord" and not event.guild_id:
             await self.reply_forbidden(sink, "This bot only works in guild channels.")
             return
 
-        if self.cfg.discord.guild_id and event.guild_id != self.cfg.discord.guild_id:
+        if event.platform == "discord" and self.cfg.discord.guild_id and event.guild_id != self.cfg.discord.guild_id:
             await self.reply_forbidden(sink, "This bot is not configured for this guild.")
             return
 
-        if self.cfg.discord.allowed_user_ids and event.author_id not in self.cfg.discord.allowed_user_ids:
+        if not self._transport_user_allowed(event):
             await self.reply_forbidden(sink, "You are not allowed to use this bot.")
             return
 
-        rexp = self.cfg.channel_regex()
+        rexp = self.cfg.channel_regex_for(event.platform)
         match = rexp.match(channel_name)
         if not match:
             return
 
         repo_name = match.group(1)
-        prefix = self.cfg.discord.prefix or "!c"
+        prefix = self._transport_prefix(event)
         content = (event.content or "").strip()
         if not content.startswith(prefix):
-            if not self.cfg.discord.allow_plain_prompts:
+            if not self._transport_allow_plain_prompts(event):
                 return
             prompt = content.strip()
             if not prompt:
@@ -481,6 +481,25 @@ class Router:
         if self.cfg.discord.dm_admin_user_ids:
             return user_id in self.cfg.discord.dm_admin_user_ids
         return user_id in self.cfg.discord.allowed_user_ids
+
+    def _transport_user_allowed(self, event: MessageEvent) -> bool:
+        if event.platform == "telegram":
+            if not self.cfg.telegram.allowed_user_ids:
+                return True
+            return event.author_id in self.cfg.telegram.allowed_user_ids
+        if self.cfg.discord.allowed_user_ids and event.author_id not in self.cfg.discord.allowed_user_ids:
+            return False
+        return True
+
+    def _transport_prefix(self, event: MessageEvent) -> str:
+        if event.platform == "telegram":
+            return self.cfg.telegram.prefix or "!c"
+        return self.cfg.discord.prefix or "!c"
+
+    def _transport_allow_plain_prompts(self, event: MessageEvent) -> bool:
+        if event.platform == "telegram":
+            return self.cfg.telegram.allow_plain_prompts
+        return self.cfg.discord.allow_plain_prompts
 
     @asynccontextmanager
     async def typing_context(self, sink: ResponseSink):
