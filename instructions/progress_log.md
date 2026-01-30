@@ -47,3 +47,5 @@
 - 2026-01-30: Added per-session reasoning effort overrides and surfaced them in status/pinned outputs.
 - 2026-01-30: Suppressed queued start/resume/models chatter and added a startup DM ping.
 - 2026-01-30: Split task list and progress log references in docs (tasks.md vs progress_log.md).
+- 2026-01-30: Enriched startup DM summary and covered it with tests.
+- 2026-01-30: Consolidated audit helper calls and added tests for the helper.

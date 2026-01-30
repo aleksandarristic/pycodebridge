@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 
 from . import config as cfgmod
 from .audit import Entry, Logger as AuditLogger
+from .audit_helpers import AuditHelper
 from .codex import Event, Options, Runner, display_texts, parse_event
 from .session_coordinator import SessionCoordinator
 from .state import Store, utc_now_iso
@@ -69,6 +70,7 @@ class Router:
         self._command_registry, self._command_specs = command_registry.build_registry()
         self.file_transfers = FileTransferService(cfg, logger)
         self._commit = _git_commit_hash()
+        self._audit_helper = AuditHelper(audit, logger)
 
     async def handle_message(self, event: MessageEvent, sink: ResponseSink) -> None:
         """Handle an incoming message event."""
@@ -519,7 +521,7 @@ class Router:
             "timestamp": utc_now_iso(),
             "channel": channel_id,
         }
-        entry = self.audit_start(channel_id, session or DEFAULT_SESSION, "pending", meta)
+        entry = self._audit_helper.start(channel_id, session or DEFAULT_SESSION, "pending", meta)
         async with self.typing_context(sink):
             try:
                 proc = await self.runner.run(
@@ -532,12 +534,12 @@ class Router:
                             channel_id, session, repo_name, repo_path, model, reasoning_effort, entry, tid
                         ),
                         on_output=on_output,
-                        on_stderr=lambda line: self.append_audit_stderr(entry, line),
+                        on_stderr=lambda line: self._audit_helper.append_stderr(entry, line),
                         on_exit=lambda err, rc: self.on_exit(channel_id, session, repo_name, err, rc),
                     )
                 )
             except Exception as exc:
-                self.close_audit(entry)
+                self._audit_helper.close(entry)
                 raise exc
 
             await self.set_active(channel_id, session, proc)
@@ -547,7 +549,7 @@ class Router:
                     self.logger.warning("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "code": rc})
             finally:
                 await self.clear_active(channel_id, session)
-                self.close_audit(entry)
+                self._audit_helper.close(entry)
 
     async def on_jsonl(
         self,
@@ -559,13 +561,13 @@ class Router:
         relay_output: bool,
     ) -> None:
         """Handle a JSONL line from Codex and relay output."""
-        self.append_audit_codex(entry, line)
+        self._audit_helper.append_codex(entry, line)
         evt = parse_event(line)
         if not evt:
             text = strip_control_codes(line).strip()
             if text and relay_output:
                 for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
-                    self.append_audit_output(entry, chunk)
+                    self._audit_helper.append_output(entry, chunk)
                     await self.reply(sink, chunk)
             return
         self.update_usage(channel_id, session, evt)
@@ -576,7 +578,7 @@ class Router:
                 text = f"Codex asks: {text}"
             if relay_output:
                 for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
-                    self.append_audit_output(entry, chunk)
+                    self._audit_helper.append_output(entry, chunk)
                     await self.reply(sink, chunk)
 
     async def on_thread(
@@ -734,45 +736,23 @@ class Router:
 
     def audit_start(self, channel_id: str, session: str, thread_id: str, meta: Any) -> Optional[Entry]:
         """Start an audit entry with error handling."""
-        if not self.audit:
-            return None
-        try:
-            return self.audit.start(channel_id, session, thread_id, meta)
-        except Exception as exc:
-            self.logger.error("audit.start_failed", extra={"channel_id": channel_id, "session": session, "error": str(exc)})
-            return None
+        return self._audit_helper.start(channel_id, session, thread_id, meta)
 
     def append_audit_codex(self, entry: Optional[Entry], line: str) -> None:
         """Append a JSONL line to the audit log."""
-        if entry:
-            try:
-                entry.append_codex_line(line)
-            except Exception:
-                pass
+        self._audit_helper.append_codex(entry, line)
 
     def append_audit_output(self, entry: Optional[Entry], msg: str) -> None:
         """Append a message to the audit log."""
-        if entry:
-            try:
-                entry.append_discord_out(msg)
-            except Exception:
-                pass
+        self._audit_helper.append_output(entry, msg)
 
     def append_audit_stderr(self, entry: Optional[Entry], msg: str) -> None:
         """Append stderr output to the audit log."""
-        if entry:
-            try:
-                entry.append_stderr(msg)
-            except Exception:
-                pass
+        self._audit_helper.append_stderr(entry, msg)
 
     def close_audit(self, entry: Optional[Entry]) -> None:
         """Close an audit entry safely."""
-        if entry:
-            try:
-                entry.close()
-            except Exception:
-                pass
+        self._audit_helper.close(entry)
 
     def update_state(
         self,
