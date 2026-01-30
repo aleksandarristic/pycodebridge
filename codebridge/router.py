@@ -36,6 +36,7 @@ from .router_helpers import (
     session_exists,
     usage_from_event,
 )
+from .status_parse import format_status_summary, parse_status_lines
 from .router_config import render_config_text
 from .router_status import format_current_selection_line, format_session_line
 
@@ -421,9 +422,13 @@ class Router:
                 current_model = self.session_model(sink.channel_id, current)
                 current_reasoning = self.session_reasoning_effort(sink.channel_id, current)
                 lines.append(format_current_selection_line(current, current_model, current_reasoning))
+                status_lines = await self._formatted_codex_status_lines(sink.channel_id, repo_path, current)
+                if status_lines:
+                    lines.append("Codex /status:")
+                    lines.extend(status_lines)
             await self.reply(sink, "\n".join(lines))
             return
-            await self.reply(sink, f"Repo: {repo_name}\nPath: {repo_path}\nNo session attached.")
+        await self.reply(sink, f"Repo: {repo_name}\nPath: {repo_path}\nNo session attached.")
 
     async def fetch_session_status_output(
         self,
@@ -477,6 +482,17 @@ class Router:
     async def send_help(self, sink: ResponseSink) -> None:
         """Send help text for supported commands."""
         await self.reply(sink, command_registry.render_help(self._command_specs))
+
+    async def _formatted_codex_status_lines(self, channel_id: str, repo_path: str, session: str) -> list[str]:
+        """Return formatted `/status` summary for a session."""
+        if not session:
+            return []
+        lines = await self.fetch_session_status_output(channel_id, repo_path, session)
+        if not lines:
+            return []
+        summary = parse_status_lines(lines)
+        formatted = format_status_summary(summary)
+        return formatted
 
     async def startup_summary(self) -> str:
         """Return a concise summary of the current bridge state."""

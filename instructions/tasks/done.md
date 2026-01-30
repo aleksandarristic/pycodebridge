@@ -51,6 +51,8 @@
 - 65) DONE - Add shutdown summary message (issue plan)
 - 66) DONE - Enrich startup DM (issue plan)
 - 67) DONE - Add immediate Codex `/status` retrieval path (issue plan)
+- 68) DONE - Parse and format Codex `/status` output (issue plan)
+- 69) DONE - Integrate parsed `/status` into `!c status` (issue plan)
 - 37) DONE - Telegram adapter completion
 - 38) DONE - README integrations section
 - 39) DONE - Audit log redaction toggle
@@ -417,3 +419,11 @@
   - Parse `/status` output lines into a structured summary that tolerates box art and extra text.
   - Build a formatter that emits the key fields (`Model`, `Directory`, `Context window`, `5h limit`, `Weekly limit`) in stable lines for reuse in status updates and usage reports.
   - Cover the parser/formatter with unit tests including normal and degraded outputs.
+
+69) DONE - Integrate parsed `/status` into `!c status` (issue plan)
+- Owner: TBD
+- Complexity: Medium
+- Subtasks:
+  - Include parsed `/status` lines (model/directory/context window/limits) in the `!c status` reply when the current session exists.
+  - Trigger an immediate `/status` request without queuing and only append data when parsing succeeds.
+  - Add tests covering the integrated output while jobs are running.

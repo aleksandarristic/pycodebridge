@@ -1,20 +1,11 @@
 # Pending Tasks
+
 ## TOC
-- 69) TODO - Integrate parsed `/status` into `!c status` (issue plan)
 - 70) TODO - Add best-effort usage snapshot on quit/stop/kill (issue plan)
 - 63) TODO - Unify command parsing utilities (issue plan)
 - 64) TODO - Formalize session lifecycle invariants (issue plan)
 
 ---
-
-69) TODO - Integrate parsed `/status` into `!c status` (issue plan)
-- Owner: TBD
-- Complexity: Medium
-- Depends on: 68
-- Subtasks:
-  - Extend `!c status` output to include parsed `/status` summary.
-  - Ensure the output remains concise and stable across platforms.
-  - Add tests for `!c status` formatting.
 
 70) TODO - Add best-effort usage snapshot on quit/stop/kill (issue plan)
 - Owner: TBD

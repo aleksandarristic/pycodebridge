@@ -90,8 +90,11 @@ class _FakeRunner:
             await opts.on_output("- `gpt-5.2-codex` (recommended)")
             await opts.on_output("- o3-mini")
         if opts.on_output and any(a == "/status" for a in opts.args):
-            await opts.on_output("Status summary")
-            await opts.on_output("- Running session default")
+            await opts.on_output("Model: gpt-5.1-codex-mini (reasoning medium)")
+            await opts.on_output("Directory: ~/Code/pycodebridge")
+            await opts.on_output("Context window: 75% left (74.5K used / 258K)")
+            await opts.on_output("5h limit: [█████░░░] 57% left (resets 16:04)")
+            await opts.on_output("Weekly limit: [█░░░] 27% left (resets 08:19 on 5 Feb)")
 
         done = asyncio.Event()
         # Block "start" calls so tests can queue commands behind an active job.
@@ -201,7 +204,10 @@ def test_start_resume_reports_model_and_model_change_is_queued(tmp_path):
         assert any("Model for session 'default' set to gpt-new" in s for s in sink.sent)
 
         await router.handle_message(_discord_event("!c status", "codex-repo"), sink)
-        assert any("model gpt-new" in s for s in sink.sent)
+        status_reply = sink.sent[-1]
+        assert "Codex /status" in status_reply
+        assert "Context window" in status_reply
+        assert any("model gpt-new" in s.lower() for s in sink.sent)
 
         await router.handle_message(_discord_event("!c models", "codex-repo"), sink)
         for _ in range(200):
@@ -229,7 +235,7 @@ def test_status_command_runs_immediately_during_active_job(tmp_path):
         assert await router.get_active("chan", "default") is not None
         lines = await router.fetch_session_status_output("chan", str(repo), "default")
         assert lines is not None
-        assert any("Status summary" in line for line in lines)
+        assert any("Model:" in line for line in lines)
         runner.finish_blocking()
         for _ in range(200):
             if await router.get_active("chan", "default") is None:
