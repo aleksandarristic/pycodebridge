@@ -446,7 +446,7 @@ class Router:
         async def capture(line: str) -> None:
             output.append(line)
 
-        await self._run_prompt_immediate(repo_path, args, on_jsonl=capture)
+        await self._run_prompt_immediate(repo_path, args, on_output=capture)
         return output
 
     def _session_prompt_args(
@@ -472,10 +472,10 @@ class Router:
         self,
         repo_path: str,
         args: list[str],
-        on_jsonl: Callable[[str], Awaitable[None]] | None = None,
+        on_output: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         """Run a Codex prompt immediately without queuing."""
-        opts = Options(repo_path=repo_path, args=args, env=self.cfg.codex.env, on_jsonl=on_jsonl)
+        opts = Options(repo_path=repo_path, args=args, env=self.cfg.codex.env, on_output=on_output)
         proc = await self.runner.run(opts)
         await proc.wait()
 
