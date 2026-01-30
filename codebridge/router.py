@@ -422,7 +422,8 @@ class Router:
                 current_model = self.session_model(sink.channel_id, current)
                 current_reasoning = self.session_reasoning_effort(sink.channel_id, current)
                 lines.append(format_current_selection_line(current, current_model, current_reasoning))
-                status_lines = await self._formatted_codex_status_lines(sink.channel_id, repo_path, current)
+                async with self.typing_context(sink):
+                    status_lines = await self._formatted_codex_status_lines(sink.channel_id, repo_path, current)
                 if status_lines:
                     lines.append("Codex /status:")
                     lines.extend(status_lines)
@@ -444,6 +445,11 @@ class Router:
         output: list[str] = []
 
         async def capture_jsonl(line: str) -> None:
+            evt = parse_event(line)
+            if evt:
+                for text in display_texts(evt):
+                    output.append(text)
+                return
             output.append(line)
 
         async def capture_output(line: str) -> None:
