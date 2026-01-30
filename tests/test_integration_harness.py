@@ -72,16 +72,16 @@ class _FakeRunner:
         self.calls = []
         self.last_proc = None
 
-    def build_start_args(self, repo_path: str, prompt: str, model: str) -> list[str]:
-        _ = (repo_path, prompt, model)
+    def build_start_args(self, repo_path: str, prompt: str, model: str, reasoning: str) -> list[str]:
+        _ = (repo_path, prompt, model, reasoning)
         return ["start"]
 
-    def build_resume_args(self, repo_path: str, thread_id: str, prompt: str, model: str) -> list[str]:
-        _ = (repo_path, thread_id, prompt, model)
+    def build_resume_args(self, repo_path: str, thread_id: str, prompt: str, model: str, reasoning: str) -> list[str]:
+        _ = (repo_path, thread_id, prompt, model, reasoning)
         return ["resume", thread_id]
 
-    def build_resume_last_args(self, repo_path: str, prompt: str, model: str) -> list[str]:
-        _ = (repo_path, prompt, model)
+    def build_resume_last_args(self, repo_path: str, prompt: str, model: str, reasoning: str) -> list[str]:
+        _ = (repo_path, prompt, model, reasoning)
         return ["resume", "--last"]
 
     async def run(self, opts: Options):

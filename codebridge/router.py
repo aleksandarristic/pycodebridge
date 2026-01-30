@@ -33,6 +33,7 @@ from .router_helpers import (
     pending_key,
     usage_from_event,
 )
+from .router_status import format_current_selection_line, format_session_line
 
 
 
@@ -387,19 +388,21 @@ class Router:
         if ch and ch.sessions:
             lines = [f"Repo: {repo_name}", f"Path: {repo_path}", f"Sessions ({len(ch.sessions)}/{MAX_SESSIONS_PER_CHANNEL}):"]
             for name, sess in ch.sessions.items():
-                active = " (active)" if await self.get_active(sink.channel_id, name) is not None else ""
-                model = sess.model or self.cfg.codex.model
-                model_info = f" model {model}" if model else ""
-                reasoning = sess.reasoning_effort or self.cfg.codex.model_reasoning_effort
-                reasoning_info = f" reasoning {reasoning}" if reasoning else ""
-                lines.append(f"- {name}: thread {sess.thread_id}{active}{model_info}{reasoning_info} last {sess.last_used_at}")
+                active = await self.get_active(sink.channel_id, name) is not None
+                lines.append(
+                    format_session_line(
+                        name,
+                        sess,
+                        active,
+                        self.cfg.codex.model,
+                        self.cfg.codex.model_reasoning_effort,
+                    )
+                )
             current = self.current_session_for_user("", sink.channel_id)
             if current:
                 current_model = self.session_model(sink.channel_id, current)
                 current_reasoning = self.session_reasoning_effort(sink.channel_id, current)
-                model_info = f" model {current_model}" if current_model else ""
-                reasoning_info = f" reasoning {current_reasoning}" if current_reasoning else ""
-                lines.append(f"Current selection: {current}{model_info}{reasoning_info}")
+                lines.append(format_current_selection_line(current, current_model, current_reasoning))
             await self.reply(sink, "\n".join(lines))
             return
         await self.reply(sink, f"Repo: {repo_name}\nPath: {repo_path}\nNo session attached.")
