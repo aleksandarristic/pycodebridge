@@ -20,7 +20,7 @@
 - `instructions/tasks/done.md` — completed tasks.
 - `instructions/tasks/removed.md` — removed tasks.
 - `instructions/tasks/backlog.md` — backlog for future tasks to promote into pending.
-- Each new task must include a `Complexity:` grade (Low/Medium/High).
+- Each new task must include a `Complexity:` grade (Very Low/Low/Medium/High/Very High).
 - `instructions/progress_log.md` — progress log entries (append new milestones here).
 - `docs/architecture.mmd` — mermaid architecture diagram.
 - `<GO_CODEBRIDGE>/AGENTS.md` and `<GO_CODEBRIDGE>/instructions` — Go reference for intended behavior.
