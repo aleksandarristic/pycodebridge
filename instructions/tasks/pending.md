@@ -2,6 +2,10 @@
 
 ## TOC
 - 61) TODO - Extend `!c status` with Codex `/status` details (issue plan)
+- 62) TODO - Finish Router surface cleanup (issue plan)
+- 63) TODO - Unify command parsing utilities (issue plan)
+- 64) TODO - Formalize session lifecycle invariants (issue plan)
+- 65) TODO - Add shutdown message (issue plan)
 
 ---
 
@@ -14,3 +18,35 @@
   - This must be an immediate command: it can run even when other jobs are already running (do not queue behind the per-channel job queue).
   - Ensure it does not mutate session state (thread id/model) and does not interfere with the currently running job.
   - Add unit tests for parsing and for the "immediate while running" behavior using fakes/mocks.
+
+62) TODO - Finish Router surface cleanup (issue plan)
+- Owner: TBD
+- Complexity: Medium
+- Subtasks:
+  - Extract additional low-risk Router helpers (status formatting, reply helpers, config rendering) into dedicated modules.
+  - Reduce direct state/audit/queue calls in Router where a helper already exists.
+  - Add/update unit tests for the extracted helpers.
+
+63) TODO - Unify command parsing utilities (issue plan)
+- Owner: TBD
+- Complexity: Medium
+- Subtasks:
+  - Centralize duplicated parsing/validation in `command_parse.py`.
+  - Replace ad-hoc handler parsing in `command_registry.py` with shared helpers.
+  - Add regression tests for session parsing, limits, and error handling.
+
+64) TODO - Formalize session lifecycle invariants (issue plan)
+- Owner: TBD
+- Complexity: High
+- Subtasks:
+  - Define explicit lifecycle methods in `SessionService` for start/resume/stop/model changes.
+  - Move state mutation logic from Router/handlers into the service.
+  - Add tests covering lifecycle invariants and active process transitions.
+
+65) TODO - Add shutdown message (issue plan)
+- Owner: TBD
+- Complexity: Low
+- Subtasks:
+  - Send a one-time shutdown summary to admin users (similar to startup DM).
+  - Include key stats (uptime, active/queued jobs, sessions tracked) and log it locally.
+  - Add tests to ensure the shutdown message fires once per shutdown.

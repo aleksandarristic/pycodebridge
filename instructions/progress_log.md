@@ -55,3 +55,5 @@
 - 2026-01-30: Extracted router config formatting helper and added tests.
 - 2026-01-30: Standardized session normalization utilities in command registry.
 - 2026-01-30: Clarified adapter contract usage by routing reply context via capabilities.
+- 2026-01-30: Added new architecture review tasks to pending with complexity grades.
+- 2026-01-30: Added shutdown message task to pending.
