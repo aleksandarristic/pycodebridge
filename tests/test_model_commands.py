@@ -95,6 +95,17 @@ class _FakeRunner:
             await opts.on_output("Context window: 75% left (74.5K used / 258K)")
             await opts.on_output("5h limit: [█████░░░] 57% left (resets 16:04)")
             await opts.on_output("Weekly limit: [█░░░] 27% left (resets 08:19 on 5 Feb)")
+        if opts.on_jsonl and any(a == "/status" for a in opts.args):
+            await opts.on_jsonl("╭────────────────────────────────────────────────────────────────────────────╮")
+            await opts.on_jsonl("│  >_ OpenAI Codex (v0.92.0)                                                 │")
+            await opts.on_jsonl("│                                                                            │")
+            await opts.on_jsonl("│  Model:            gpt-5.1-codex-mini (reasoning medium, summaries auto)   │")
+            await opts.on_jsonl("│  Directory:        ~/Code/pycodebridge                                     │")
+            await opts.on_jsonl("│                                                                            │")
+            await opts.on_jsonl("│  Context window:   75% left (74.5K used / 258K)                            │")
+            await opts.on_jsonl("│  5h limit:         [███████████░░░░░░░░░] 57% left (resets 16:04)          │")
+            await opts.on_jsonl("│  Weekly limit:     [█████░░░░░░░░░░░░░░░] 27% left (resets 08:19 on 5 Feb) │")
+            await opts.on_jsonl("╰────────────────────────────────────────────────────────────────────────────╯")
 
         done = asyncio.Event()
         # Block "start" calls so tests can queue commands behind an active job.
