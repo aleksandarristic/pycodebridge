@@ -60,7 +60,7 @@ async def main() -> None:
     elif adapter == "telegram":
         token = cfg.telegram_token()
         app = build_application(router, token)
-        await run_polling(app)
+        await run_polling(app, router)
         return
     else:
         raise ValueError(f"Unsupported transport adapter: {adapter}")

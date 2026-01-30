@@ -5,7 +5,6 @@
 - 62) TODO - Finish Router surface cleanup (issue plan)
 - 63) TODO - Unify command parsing utilities (issue plan)
 - 64) TODO - Formalize session lifecycle invariants (issue plan)
-- 65) TODO - Add shutdown message (issue plan)
 
 ---
 
@@ -42,11 +41,3 @@
   - Define explicit lifecycle methods in `SessionService` for start/resume/stop/model changes.
   - Move state mutation logic from Router/handlers into the service.
   - Add tests covering lifecycle invariants and active process transitions.
-
-65) TODO - Add shutdown message (issue plan)
-- Owner: TBD
-- Complexity: Low
-- Subtasks:
-  - Send a one-time shutdown summary to admin users (similar to startup DM).
-  - Include key stats (uptime, active/queued jobs, sessions tracked) and log it locally.
-  - Add tests to ensure the shutdown message fires once per shutdown.

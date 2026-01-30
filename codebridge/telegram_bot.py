@@ -27,7 +27,7 @@ def build_application(router: Router, token: str) -> Application:
     return app
 
 
-async def run_polling(app: Application) -> None:
+async def run_polling(app: Application, router: Router) -> None:
     """Run Telegram long polling until stopped."""
     await app.initialize()
     await app.start()
@@ -37,5 +37,10 @@ async def run_polling(app: Application) -> None:
         await app.updater.start_polling()
         await app.updater.idle()
     finally:
+        try:
+            summary = await router.shutdown_summary()
+            router.logger.info("telegram.shutdown_summary", extra={"summary": summary})
+        except Exception:
+            pass
         await app.stop()
         await app.shutdown()

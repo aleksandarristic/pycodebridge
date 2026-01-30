@@ -317,7 +317,7 @@
   - Add tests to ensure audit entries are still written correctly.
 
 59) DONE - Model selection and reporting (issue plan)
- - Owner: TBD
+- Owner: TBD
 - Subtasks:
   - Always report the effective model for a session when starting/resuming (and include it in any "started/resumed" acknowledgement messages).
   - Ensure model is included in status outputs (including per-session listings/pinned status where applicable).
@@ -376,6 +376,7 @@
 
 62) DONE - Enrich startup DM (issue plan)
 - Owner: TBD
+- Complexity: Low
 - Subtasks:
   - When the bridge becomes ready, send a DM (or channel ping) that goes beyond “I’m alive!” with useful context for operators.
   - Include information such as current bot version/commit, configured default model + reasoning, repository code root, number of bound repos/sessions, active job counts, and optional rate-limit/token usage hints.

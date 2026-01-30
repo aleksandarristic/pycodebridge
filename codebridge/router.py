@@ -482,6 +482,41 @@ class Router:
         )
         return summary
 
+    async def shutdown_summary(self) -> str:
+        """Return a concise shutdown summary for the bridge."""
+        state = self.state.load()
+        channel_count = len(state.channels)
+        session_count = sum(len(ch.sessions) for ch in state.channels.values())
+        snapshot = await self.coordinator.snapshot_all()
+        running = sum(
+            1
+            for statuses in snapshot.values()
+            for status in statuses
+            if status.status == "running"
+        )
+        queued = sum(
+            1
+            for statuses in snapshot.values()
+            for status in statuses
+            if status.status == "queued"
+        )
+        lines = [
+            f"Shutdown summary (commit {self._commit})",
+            f"Tracking {channel_count} channels and {session_count} sessions",
+            f"Queue at shutdown: {running} running, {queued} queued",
+        ]
+        summary = "\n".join(lines)
+        self.logger.info(
+            "shutdown.summary",
+            extra={
+                "channels": channel_count,
+                "sessions": session_count,
+                "running_jobs": running,
+                "queued_jobs": queued,
+            },
+        )
+        return summary
+
     def config_text(self) -> str:
         """Render a concise config summary."""
         return render_config_text(self.cfg)

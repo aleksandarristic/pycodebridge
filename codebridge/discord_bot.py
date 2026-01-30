@@ -19,6 +19,7 @@ class BridgeClient(discord.Client):
         self.router = router
         self.adapter = DiscordAdapter()
         self._startup_notified = False
+        self._shutdown_notified = False
 
     async def on_ready(self) -> None:
         """Log when the Discord client is ready."""
@@ -42,6 +43,32 @@ class BridgeClient(discord.Client):
                 await user.send(message)
             except Exception:
                 self.router.logger.warning("discord.startup_dm_failed", extra={"user_id": user_id})
+
+    async def close(self) -> None:
+        """Send a shutdown summary before closing the Discord client."""
+        await self._send_shutdown_summary()
+        await super().close()
+
+    async def _send_shutdown_summary(self) -> None:
+        if self._shutdown_notified:
+            return
+        self._shutdown_notified = True
+        cfg = self.router.cfg.discord
+        recipients = cfg.dm_admin_user_ids or cfg.allowed_user_ids
+        if not recipients:
+            return
+        summary = await self.router.shutdown_summary()
+        message = f"Shutdown summary:\n{summary}"
+        for user_id in recipients:
+            try:
+                user = await self.fetch_user(int(user_id))
+            except Exception:
+                self.router.logger.warning("discord.shutdown_dm_failed", extra={"user_id": user_id})
+                continue
+            try:
+                await user.send(message)
+            except Exception:
+                self.router.logger.warning("discord.shutdown_dm_failed", extra={"user_id": user_id})
 
     async def on_message(self, message: discord.Message) -> None:
         """Dispatch incoming messages to the Router."""
