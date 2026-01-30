@@ -1,21 +1,50 @@
 # Pending Tasks
 
 ## TOC
-- 61) TODO - Extend `!c status` with Codex `/status` details (issue plan)
+- 67) TODO - Add immediate Codex `/status` retrieval path (issue plan)
+- 68) TODO - Parse and format Codex `/status` output (issue plan)
+- 69) TODO - Integrate parsed `/status` into `!c status` (issue plan)
+- 70) TODO - Add best-effort usage snapshot on quit/stop/kill (issue plan)
 - 63) TODO - Unify command parsing utilities (issue plan)
 - 64) TODO - Formalize session lifecycle invariants (issue plan)
 
 ---
 
-61) TODO - Extend `!c status` with Codex `/status` details (issue plan)
- - Owner: TBD
- - Complexity: Very High
+67) TODO - Add immediate Codex `/status` retrieval path (issue plan)
+- Owner: TBD
+- Complexity: High
+- Depends on: None
 - Subtasks:
-  - Extend `!c status` output to include parsed information from Codex `/status` output (as currently reported by Codex), e.g. context window + token usage, 5h limit, weekly limit, current directory, and any other key fields present.
-  - Implement `/status` retrieval by issuing the Codex `/status` command and parsing the response into a stable, chat-friendly summary (tolerate format drift).
-  - This must be an immediate command: it can run even when other jobs are already running (do not queue behind the per-channel job queue).
-  - Ensure it does not mutate session state (thread id/model) and does not interfere with the currently running job.
-  - Add unit tests for parsing and for the "immediate while running" behavior using fakes/mocks.
+  - Issue Codex `/status` for a session without queuing behind the per-channel job queue.
+  - Ensure it does not mutate session state (thread id/model) or interfere with running jobs.
+  - Add unit tests for the "immediate while running" behavior using fakes/mocks.
+
+68) TODO - Parse and format Codex `/status` output (issue plan)
+- Owner: TBD
+- Complexity: High
+- Depends on: 67
+- Subtasks:
+  - Parse Codex `/status` output into a structured summary (tolerate format drift).
+  - Format a chat-friendly summary (context window, token usage, 5h limit, weekly limit, current directory, and other key fields present).
+  - Add unit tests for parsing and formatting.
+
+69) TODO - Integrate parsed `/status` into `!c status` (issue plan)
+- Owner: TBD
+- Complexity: Medium
+- Depends on: 68
+- Subtasks:
+  - Extend `!c status` output to include parsed `/status` summary.
+  - Ensure the output remains concise and stable across platforms.
+  - Add tests for `!c status` formatting.
+
+70) TODO - Add best-effort usage snapshot on quit/stop/kill (issue plan)
+- Owner: TBD
+- Complexity: Medium
+- Depends on: 68
+- Subtasks:
+  - Reuse `/status` parsing to attach a best-effort usage snapshot to explicit end commands (`!c quit/stop/kill`).
+  - Skip aggregation across sessions; report only the session being ended.
+  - Add tests for end-command usage snapshot behavior.
 
 63) TODO - Unify command parsing utilities (issue plan)
 - Owner: TBD
