@@ -30,6 +30,8 @@ class BridgeClient(discord.Client):
         recipients = cfg.dm_admin_user_ids or cfg.allowed_user_ids
         if not recipients:
             return
+        summary = await self.router.startup_summary()
+        message = f"Startup summary:\n{summary}"
         for user_id in recipients:
             try:
                 user = await self.fetch_user(int(user_id))
@@ -37,7 +39,7 @@ class BridgeClient(discord.Client):
                 self.router.logger.warning("discord.startup_dm_failed", extra={"user_id": user_id})
                 continue
             try:
-                await user.send("I'm alive!")
+                await user.send(message)
             except Exception:
                 self.router.logger.warning("discord.startup_dm_failed", extra={"user_id": user_id})
 

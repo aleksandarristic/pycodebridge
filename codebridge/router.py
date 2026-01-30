@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import subprocess
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -36,6 +37,23 @@ from .router_helpers import (
 from .router_status import format_current_selection_line, format_session_line
 
 
+def _git_commit_hash() -> str:
+    try:
+        root = Path(__file__).resolve().parents[1]
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout.strip()
+    except Exception:
+        return "unknown"
+from .router_status import format_current_selection_line, format_session_line
+from .router_status import format_current_selection_line, format_session_line
+
+
 
 
 class Router:
@@ -50,6 +68,7 @@ class Router:
         self.coordinator = coordinator
         self._command_registry, self._command_specs = command_registry.build_registry()
         self.file_transfers = FileTransferService(cfg, logger)
+        self._commit = _git_commit_hash()
 
     async def handle_message(self, event: MessageEvent, sink: ResponseSink) -> None:
         """Handle an incoming message event."""
@@ -410,6 +429,55 @@ class Router:
     async def send_help(self, sink: ResponseSink) -> None:
         """Send help text for supported commands."""
         await self.reply(sink, command_registry.render_help(self._command_specs))
+
+    async def startup_summary(self) -> str:
+        """Return a concise summary of the current bridge state."""
+        state = self.state.load()
+        channel_count = len(state.channels)
+        session_count = sum(len(ch.sessions) for ch in state.channels.values())
+        repos = {
+            sess.repo_name
+            for ch in state.channels.values()
+            for sess in ch.sessions.values()
+            if sess.repo_name
+        }
+        snapshot = await self.coordinator.snapshot_all()
+        running = sum(
+            1
+            for statuses in snapshot.values()
+            for status in statuses
+            if status.status == "running"
+        )
+        queued = sum(
+            1
+            for statuses in snapshot.values()
+            for status in statuses
+            if status.status == "queued"
+        )
+        default_model = self.cfg.codex.model or "<default>"
+        default_reasoning = self.cfg.codex.model_reasoning_effort or "<default>"
+        code_root = self.cfg.codex.code_root or "<unset>"
+        state_dir = self.cfg.state.data_dir or "<unset>"
+        lines = [
+            f"Bot ready (commit {self._commit})",
+            f"Default model: {default_model} (reasoning {default_reasoning})",
+            f"Code root: {code_root}",
+            f"State dir: {state_dir}",
+            f"Tracking {len(repos)} repos across {channel_count} channels and {session_count} sessions",
+            f"Queue: {running} running, {queued} queued",
+        ]
+        summary = "\n".join(lines)
+        self.logger.info(
+            "startup.summary",
+            extra={
+                "channels": channel_count,
+                "sessions": session_count,
+                "repos": len(repos),
+                "running_jobs": running,
+                "queued_jobs": queued,
+            },
+        )
+        return summary
 
     def config_text(self) -> str:
         """Render a concise config summary."""

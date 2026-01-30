@@ -255,7 +255,7 @@
   - Add tests to ensure audit entries are still written correctly.
 
 59) DONE - Model selection and reporting (issue plan)
-- Owner: TBD
+ - Owner: TBD
 - Subtasks:
   - Always report the effective model for a session when starting/resuming (and include it in any "started/resumed" acknowledgement messages).
   - Ensure model is included in status outputs (including per-session listings/pinned status where applicable).
@@ -273,7 +273,7 @@
   - Add tests covering any adjusted routing behavior.
 
 61) TODO - Extend `!c status` with Codex `/status` details (issue plan)
-- Owner: TBD
+ - Owner: TBD
 - Subtasks:
   - Extend `!c status` output to include parsed information from Codex `/status` output (as currently reported by Codex), e.g. context window + token usage, 5h limit, weekly limit, current directory, and any other key fields present.
   - Implement `/status` retrieval by issuing the Codex `/status` command and parsing the response into a stable, chat-friendly summary (tolerate format drift).
@@ -380,3 +380,10 @@
 - 2026-01-29: Implemented session model reporting, queued `!c model` changes, and `!c models` via parsing Codex `/models` output.
 - 2026-01-30: Added per-session reasoning effort overrides and surfaced them in status/pinned outputs.
 - 2026-01-30: Suppressed queued start/resume/models chatter and added a startup DM ping.
+62) TODO - Enrich startup DM (issue plan)
+- Owner: TBD
+- Subtasks:
+  - When the bridge becomes ready, send a DM (or channel ping) that goes beyond “I’m alive!” with useful context for operators.
+  - Include information such as current bot version/commit, configured default model + reasoning, repository code root, number of bound repos/sessions, active job counts, and optional rate-limit/token usage hints.
+  - Keep the message concise but informative for debugging, and log the same summary locally.
+  - Add tests/mocks to ensure the DM is sent once per session and include the extra context.
