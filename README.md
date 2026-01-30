@@ -148,8 +148,8 @@ Attachments in channels or bound DMs will prompt for a destination path before s
 
 ## Docs
 - Full behavior/spec: `instructions/instructions.md`
-- Task log/plan: `instructions/tasks.md`
-- Backlog: `instructions/backlog.md`
+- Task log/plan: `instructions/tasks/pending.md`
+- Backlog: `instructions/tasks/backlog.md`
 - Intent summary for agents: `AGENTS.md`
 - Architecture diagram (Mermaid): `docs/architecture.mmd`
 - Slack setup: `SLACK.md`

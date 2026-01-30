@@ -49,3 +49,4 @@
 - 2026-01-30: Split task list and progress log references in docs (tasks.md vs progress_log.md).
 - 2026-01-30: Enriched startup DM summary and covered it with tests.
 - 2026-01-30: Consolidated audit helper calls and added tests for the helper.
+- 2026-01-30: Split tasks into pending/done/removed/backlog files with TOCs and template.

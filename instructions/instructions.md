@@ -64,9 +64,13 @@ pycodebridge/
       path.py
   instructions/
     instructions.md
-    tasks.md
+    tasks/
+      pending.md
+      done.md
+      removed.md
+      backlog.md
+      _template.md
     progress_log.md
-    backlog.md
   tests/
     ...
 ```

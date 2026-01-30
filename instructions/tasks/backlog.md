@@ -1,6 +1,13 @@
 # Backlog
 
-This backlog holds longer-term items that can generate future tasks in `instructions/tasks.md`.
+## TOC
+- 31) TODO - Slack adapter implementation (backlog)
+- 35) TODO - Google Chat adapter implementation (backlog)
+- 36) TODO - Microsoft Teams adapter implementation (backlog)
+- 46) TODO - Threaded replies for Slack/Teams/Google Chat (backlog)
+
+---
+This backlog holds longer-term items that can generate future tasks in `instructions/tasks/pending.md`.
 Promote items from here into the active task list when ready to schedule work.
 
 31) TODO - Slack adapter implementation (backlog)

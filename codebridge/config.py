@@ -28,7 +28,8 @@ DEFAULT_START_PROMPT = (
 DEFAULT_SPEC_PROMPT = (
     "Please ask me for a project spec for repo {{REPO_NAME}}.\n"
     "When the spec is finalized, write it to instructions/spec.md.\n"
-    "Then create instructions/tasks.md with a numbered task list and a progress log section, "
+    "Then create instructions/tasks/pending.md with a numbered task list and "
+    "append a milestone entry to instructions/progress_log.md, "
     "following the pattern used in this repo.\n"
     "After writing the files, summarize what you produced."
     "Be concise in your responses.\n"

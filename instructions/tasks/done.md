@@ -1,4 +1,61 @@
-# Implementation Task List
+# Done Tasks
+
+## TOC
+- 1) DONE - Project bootstrap
+- 2) DONE - Config loader (YAML only)
+- 3) DONE - Path containment utility
+- 4) DONE - State management
+- 5) DONE - Audit logging
+- 6) DONE - Codex runner
+- 7) DONE - Message formatting utilities
+- 8) DONE - Per-channel queue and job controls
+- 9) DONE - Discord bot wiring
+- 10) DONE - Command routing
+- 11) DONE - Repo bootstrap commands
+- 12) DONE - Logging
+- 13) DONE - Tests
+- 14) DONE - Docs
+- 15) DONE - Packaging/runtime ergonomics
+- 16) DONE - Windows/macOS compatibility pass
+- 17) DONE - Requirements files
+- 18) DONE - Skills documentation
+- 19) DONE - Graceful shutdown on Ctrl-C
+- 20) DONE - Reliable typing indicator
+- 21) DONE - PEP8 docstrings
+- 22) DONE - Router refactor (1-2 day wins)
+- 23) DONE - SessionService layer
+- 24) DONE - Command registry
+- 25) DONE - Transport abstraction (phase 1)
+- 26) DONE - Transport abstraction (phase 2)
+- 27) DONE - Architecture diagram (Mermaid)
+- 28) DONE - Slack adapter skeleton
+- 29) DONE - Transport test expansion
+- 30) DONE - Documentation cleanup for multi-transport + local paths
+- 32) DONE - Slack/Telegram setup docs
+- 33) DONE - Telegram adapter scaffold
+- 47) DONE - Add transport capabilities and guard router behaviors (issue plan)
+- 48) DONE - Extract upload/download handling from Router (issue plan)
+- 49) DONE - Expand threading tests for Discord/Telegram (issue plan)
+- 50) DONE - Capability conformance tests (issue plan)
+- 51) DONE - Router tests for DM uploads/download gating (issue plan)
+- 52) DONE - Document transport capabilities (issue plan)
+- 53) DONE - SessionCoordinator consolidation (issue plan)
+- 54) DONE - Adapter contract fixtures (issue plan)
+- 55) DONE - Adapter integration harness (issue plan)
+- 58) DONE - Consolidate audit helper calls (issue plan)
+- 59) DONE - Model selection and reporting (issue plan)
+- 37) DONE - Telegram adapter completion
+- 38) DONE - README integrations section
+- 39) DONE - Audit log redaction toggle
+- 40) DONE - DM command collision resolution
+- 41) DONE - DM repo binding commands (prefix-only)
+- 42) DONE - Repo file upload/download support
+- 44) DONE - Telegram file upload/download support
+- 45) DONE - Platform thread context standardization
+- 43) DONE - Improve operational logging
+- 62) DONE - Enrich startup DM (issue plan)
+
+---
 
 1) DONE - Project bootstrap
 - Initialize Python package layout under `codebridge/` and `cmd/`.
@@ -165,14 +222,6 @@
 - Keep it behind `transport.adapter` selection without changing default behavior.
 - Add docs note that Telegram is scaffold-only until API integration is completed.
 
-34) REMOVED - Discord threads-only adapter variant (issue plan)
-- Owner: TBD
-- Subtasks:
-  - Add config flag for threads-only mode and document in `DISCORD.md`/`README.md`.
-  - Implement thread creation/selection on first message; persist thread id per session.
-  - Route responses to thread sink; ensure uploads/downloads work in threads.
-  - Add adapter tests covering thread routing + session mapping.
-
 47) DONE - Add transport capabilities and guard router behaviors (issue plan)
 - Owner: TBD
 - Subtasks:
@@ -233,20 +282,6 @@
   - Add scenarios for start/resume/stop/kill, file transfers, and threading.
   - Run harness in CI (unit-level, no external API calls).
 
-56) TODO - Router surface cleanup (issue plan)
-- Owner: TBD
-- Subtasks:
-  - Identify Router methods that can move into `handlers/*` or small service helpers.
-  - Extract at least one low-risk block (status formatting or reply helpers) into a dedicated module.
-  - Add/update unit tests covering the moved behavior.
-
-57) TODO - Standardize command routing utilities (issue plan)
-- Owner: TBD
-- Subtasks:
-  - Audit duplicated parsing/validation logic across handlers.
-  - Add shared helpers in `command_parse.py` or `command_registry.py`.
-  - Update handlers to use shared utilities and add regression tests.
-
 58) DONE - Consolidate audit helper calls (issue plan)
 - Owner: TBD
 - Subtasks:
@@ -264,22 +299,6 @@
   - Provide a way to list available models (from config) and show which model is currently effective for each session.
   - Provide a way to list available models by parsing output of the Codex `/models` command (and present them in a chat-friendly list).
   - Persist model choice per session and cover the behavior with unit tests (status text + start/resume reporting + queued model changes).
-
-60) TODO - Clarify adapter contract usage (issue plan)
-- Owner: TBD
-- Subtasks:
-  - Identify adapter-specific conditionals in Router and handlers.
-  - Prefer capabilities checks or adapter-layer behavior where possible.
-  - Add tests covering any adjusted routing behavior.
-
-61) TODO - Extend `!c status` with Codex `/status` details (issue plan)
- - Owner: TBD
-- Subtasks:
-  - Extend `!c status` output to include parsed information from Codex `/status` output (as currently reported by Codex), e.g. context window + token usage, 5h limit, weekly limit, current directory, and any other key fields present.
-  - Implement `/status` retrieval by issuing the Codex `/status` command and parsing the response into a stable, chat-friendly summary (tolerate format drift).
-  - This must be an immediate command: it can run even when other jobs are already running (do not queue behind the per-channel job queue).
-  - Ensure it does not mutate session state (thread id/model) and does not interfere with the currently running job.
-  - Add unit tests for parsing and for the "immediate while running" behavior using fakes/mocks.
 
 37) DONE - Telegram adapter completion
 - Implement Telegram runtime wiring (polling/webhook) and response sending.
