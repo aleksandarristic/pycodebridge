@@ -42,6 +42,8 @@
 - 53) DONE - SessionCoordinator consolidation (issue plan)
 - 54) DONE - Adapter contract fixtures (issue plan)
 - 55) DONE - Adapter integration harness (issue plan)
+- 56) DONE - Router surface cleanup (issue plan)
+- 57) DONE - Standardize command routing utilities (issue plan)
 - 58) DONE - Consolidate audit helper calls (issue plan)
 - 59) DONE - Model selection and reporting (issue plan)
 - 37) DONE - Telegram adapter completion
@@ -281,6 +283,22 @@
   - Build an in-memory adapter harness to simulate end-to-end flows.
   - Add scenarios for start/resume/stop/kill, file transfers, and threading.
   - Run harness in CI (unit-level, no external API calls).
+
+56) DONE - Router surface cleanup (issue plan)
+- Owner: TBD
+- Complexity: Medium
+- Subtasks:
+  - Identify Router methods that can move into `handlers/*` or small service helpers.
+  - Extract at least one low-risk block (status formatting or reply helpers) into a dedicated module.
+  - Add/update unit tests covering the moved behavior.
+
+57) DONE - Standardize command routing utilities (issue plan)
+- Owner: TBD
+- Complexity: Medium
+- Subtasks:
+  - Audit duplicated parsing/validation logic across handlers.
+  - Add shared helpers in `command_parse.py` or `command_registry.py`.
+  - Update handlers to use shared utilities and add regression tests.
 
 58) DONE - Consolidate audit helper calls (issue plan)
 - Owner: TBD

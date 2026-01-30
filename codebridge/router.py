@@ -35,6 +35,7 @@ from .router_helpers import (
     pending_key,
     usage_from_event,
 )
+from .router_config import render_config_text
 from .router_status import format_current_selection_line, format_session_line
 
 
@@ -483,19 +484,7 @@ class Router:
 
     def config_text(self) -> str:
         """Render a concise config summary."""
-        cfg = self.cfg
-        return (
-            f"code_root: {cfg.codex.code_root}\n"
-            f"sandbox: {cfg.codex.sandbox}\n"
-            f"model: {cfg.codex.model}\n"
-            f"model_reasoning_effort: {cfg.codex.model_reasoning_effort}\n"
-            f"prefix: {cfg.discord.prefix}\n"
-            f"allow_plain_prompts: {cfg.discord.allow_plain_prompts}\n"
-            f"channel regex: {cfg.discord.channel_name_regex}\n"
-            f"allowed_user_ids: {len(cfg.discord.allowed_user_ids)}\n"
-            f"dm_admin_enabled: {cfg.discord.dm_admin_enabled}\n"
-            f"dm_admin_user_ids: {len(cfg.discord.dm_admin_user_ids)}"
-        )
+        return render_config_text(self.cfg)
 
     async def run_codex(
         self,

@@ -93,6 +93,30 @@ def _read_models_cache(path: str = _DEFAULT_MODELS_CACHE) -> List[str]:
     return models
 
 
+async def _normalize_session_or_reply(router: Any, sink: ResponseSink, session: str) -> str | None:
+    try:
+        return normalize_session(session)
+    except ValueError as exc:
+        await router.reply_forbidden(sink, str(exc))
+        return None
+
+
+async def _resolve_session_name(
+    router: Any,
+    message: MessageEvent,
+    sink: ResponseSink,
+    session: str,
+    default_from_user: bool = True,
+    default_value: str = DEFAULT_SESSION,
+) -> str | None:
+    if not session:
+        if default_from_user:
+            session = router.current_session_for_user(message.author_id, message.channel_id)
+        else:
+            session = default_value
+    return await _normalize_session_or_reply(router, sink, session)
+
+
 @dataclass(frozen=True)
 class CommandSpec:
     """Definition for a single command."""
@@ -219,21 +243,15 @@ async def _cmd_status(router: Any, message: MessageEvent, sink: ResponseSink, re
 
 
 async def _cmd_stats(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
-    session = rest.strip() or router.current_session_for_user(message.author_id, message.channel_id)
-    try:
-        session = normalize_session(session)
-    except ValueError as exc:
-        await router.reply_forbidden(sink, str(exc))
+    session = await _resolve_session_name(router, message, sink, rest.strip())
+    if not session:
         return
     await router.handle_stats(sink, session)
 
 
 async def _cmd_peek(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
-    session = rest.strip() or router.current_session_for_user(message.author_id, message.channel_id)
-    try:
-        session = normalize_session(session)
-    except ValueError as exc:
-        await router.reply_forbidden(sink, str(exc))
+    session = await _resolve_session_name(router, message, sink, rest.strip())
+    if not session:
         return
     await router.handle_peek(sink, session)
 
@@ -244,24 +262,16 @@ async def _cmd_config(router: Any, message: MessageEvent, sink: ResponseSink, re
 
 async def _cmd_start(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     session_name, _ = parse_session_and_prompt(rest)
+    session_name = await _resolve_session_name(router, message, sink, session_name)
     if not session_name:
-        session_name = router.current_session_for_user(message.author_id, message.channel_id)
-    try:
-        session_name = normalize_session(session_name)
-    except ValueError as exc:
-        await router.reply_forbidden(sink, str(exc))
         return
     await router.handle_start(message, sink, repo_name, repo_path, session_name)
 
 
 async def _cmd_resume(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     session_name, prompt = parse_session_and_prompt(rest)
+    session_name = await _resolve_session_name(router, message, sink, session_name)
     if not session_name:
-        session_name = router.current_session_for_user(message.author_id, message.channel_id)
-    try:
-        session_name = normalize_session(session_name)
-    except ValueError as exc:
-        await router.reply_forbidden(sink, str(exc))
         return
     await router.handle_resume(message, sink, repo_name, repo_path, session_name, prompt)
 
@@ -272,10 +282,7 @@ async def _cmd_choose(router: Any, message: MessageEvent, sink: ResponseSink, re
         await router.reply_forbidden(sink, "Usage: !c choose [session] resume|replace|cancel")
         return
     if sess:
-        try:
-            _ = normalize_session(sess)
-        except ValueError as exc:
-            await router.reply_forbidden(sink, str(exc))
+        if not await _normalize_session_or_reply(router, sink, sess):
             return
     await router.handle_choose(message, sink, repo_name, repo_path, sess, choice)
 
@@ -285,10 +292,8 @@ async def _cmd_use(router: Any, message: MessageEvent, sink: ResponseSink, repo_
     if not parts:
         await router.reply_forbidden(sink, "Usage: !c use <session>")
         return
-    try:
-        session_name = normalize_session(parts[0])
-    except ValueError as exc:
-        await router.reply_forbidden(sink, str(exc))
+    session_name = await _normalize_session_or_reply(router, sink, parts[0])
+    if not session_name:
         return
     await router.handle_select_session(message, sink, session_name)
 
@@ -319,10 +324,8 @@ async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, rep
             session_name = parts[0]
             model = parts[1] if len(parts) > 1 else ""
             reasoning_raw = " ".join(parts[2:]).strip()
-    try:
-        session_name = normalize_session(session_name)
-    except ValueError as exc:
-        await router.reply_forbidden(sink, str(exc))
+    session_name = await _resolve_session_name(router, message, sink, session_name)
+    if not session_name:
         return
     if not model:
         await router.reply_forbidden(sink, "Model id required.")
@@ -380,10 +383,8 @@ async def _cmd_models(router: Any, message: MessageEvent, sink: ResponseSink, re
     session_name = router.current_session_for_user(message.author_id, message.channel_id) or DEFAULT_SESSION
     if parts:
         session_name = parts[0]
-    try:
-        session_name = normalize_session(session_name)
-    except ValueError as exc:
-        await router.reply_forbidden(sink, str(exc))
+    session_name = await _resolve_session_name(router, message, sink, session_name, default_from_user=False)
+    if not session_name:
         return
 
     channel_id = message.channel_id
@@ -450,20 +451,15 @@ async def _cmd_thread(router: Any, message: MessageEvent, sink: ResponseSink, re
         await router.reply_forbidden(sink, "Usage: !c thread [session] <id>")
         return
     if session_name:
-        try:
-            session_name = normalize_session(session_name)
-        except ValueError as exc:
-            await router.reply_forbidden(sink, str(exc))
+        session_name = await _normalize_session_or_reply(router, sink, session_name)
+        if not session_name:
             return
     await router.handle_thread(sink, session_name, repo_name, repo_path, thread_id)
 
 
 async def _cmd_spec(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
-    session = rest.strip() or router.current_session_for_user(message.author_id, message.channel_id)
-    try:
-        session = normalize_session(session)
-    except ValueError as exc:
-        await router.reply_forbidden(sink, str(exc))
+    session = await _resolve_session_name(router, message, sink, rest.strip())
+    if not session:
         return
     await router.handle_spec(message, sink, repo_name, repo_path, session)
 
@@ -506,10 +502,8 @@ async def _cmd_copyrepo(router: Any, message: MessageEvent, sink: ResponseSink, 
 async def _cmd_stop(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     session = rest.strip()
     if session:
-        try:
-            session = normalize_session(session)
-        except ValueError as exc:
-            await router.reply_forbidden(sink, str(exc))
+        session = await _normalize_session_or_reply(router, sink, session)
+        if not session:
             return
     await router.handle_stop(sink, session)
 
@@ -517,10 +511,8 @@ async def _cmd_stop(router: Any, message: MessageEvent, sink: ResponseSink, repo
 async def _cmd_kill(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     session = rest.strip()
     if session:
-        try:
-            session = normalize_session(session)
-        except ValueError as exc:
-            await router.reply_forbidden(sink, str(exc))
+        session = await _normalize_session_or_reply(router, sink, session)
+        if not session:
             return
     await router.handle_kill(sink, session)
 
@@ -528,10 +520,8 @@ async def _cmd_kill(router: Any, message: MessageEvent, sink: ResponseSink, repo
 async def _cmd_quit(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     session = rest.strip()
     if session:
-        try:
-            session = normalize_session(session)
-        except ValueError as exc:
-            await router.reply_forbidden(sink, str(exc))
+        session = await _normalize_session_or_reply(router, sink, session)
+        if not session:
             return
     await router.handle_quit(sink, session)
 
@@ -564,10 +554,8 @@ async def _cmd_logs(router: Any, message: MessageEvent, sink: ResponseSink, repo
     if limit <= 0:
         limit = 5
     if session_name:
-        try:
-            session_name = normalize_session(session_name)
-        except ValueError as exc:
-            await router.reply_forbidden(sink, str(exc))
+        session_name = await _normalize_session_or_reply(router, sink, session_name)
+        if not session_name:
             return
     await router.handle_logs(sink, session_name, limit)
 

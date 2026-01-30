@@ -1,28 +1,10 @@
 # Pending Tasks
 
 ## TOC
-- 56) TODO - Router surface cleanup (issue plan)
-- 57) TODO - Standardize command routing utilities (issue plan)
 - 60) TODO - Clarify adapter contract usage (issue plan)
 - 61) TODO - Extend `!c status` with Codex `/status` details (issue plan)
 
 ---
-
-56) TODO - Router surface cleanup (issue plan)
-- Owner: TBD
- - Complexity: Medium
-- Subtasks:
-  - Identify Router methods that can move into `handlers/*` or small service helpers.
-  - Extract at least one low-risk block (status formatting or reply helpers) into a dedicated module.
-  - Add/update unit tests covering the moved behavior.
-
-57) TODO - Standardize command routing utilities (issue plan)
-- Owner: TBD
- - Complexity: Medium
-- Subtasks:
-  - Audit duplicated parsing/validation logic across handlers.
-  - Add shared helpers in `command_parse.py` or `command_registry.py`.
-  - Update handlers to use shared utilities and add regression tests.
 
 60) TODO - Clarify adapter contract usage (issue plan)
 - Owner: TBD

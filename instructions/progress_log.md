@@ -52,3 +52,5 @@
 - 2026-01-30: Split tasks into pending/done/removed/backlog files with TOCs and template.
 - 2026-01-30: Added complexity grading requirement to task docs and annotated pending/backlog tasks.
 - 2026-01-30: Expanded complexity grading scale to five levels.
+- 2026-01-30: Extracted router config formatting helper and added tests.
+- 2026-01-30: Standardized session normalization utilities in command registry.
