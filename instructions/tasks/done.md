@@ -44,6 +44,7 @@
 - 55) DONE - Adapter integration harness (issue plan)
 - 56) DONE - Router surface cleanup (issue plan)
 - 57) DONE - Standardize command routing utilities (issue plan)
+- 60) DONE - Clarify adapter contract usage (issue plan)
 - 58) DONE - Consolidate audit helper calls (issue plan)
 - 59) DONE - Model selection and reporting (issue plan)
 - 37) DONE - Telegram adapter completion
@@ -299,6 +300,14 @@
   - Audit duplicated parsing/validation logic across handlers.
   - Add shared helpers in `command_parse.py` or `command_registry.py`.
   - Update handlers to use shared utilities and add regression tests.
+
+60) DONE - Clarify adapter contract usage (issue plan)
+- Owner: TBD
+- Complexity: Medium
+- Subtasks:
+  - Identify adapter-specific conditionals in Router and handlers.
+  - Prefer capabilities checks or adapter-layer behavior where possible.
+  - Add tests covering any adjusted routing behavior.
 
 58) DONE - Consolidate audit helper calls (issue plan)
 - Owner: TBD

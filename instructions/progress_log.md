@@ -54,3 +54,4 @@
 - 2026-01-30: Expanded complexity grading scale to five levels.
 - 2026-01-30: Extracted router config formatting helper and added tests.
 - 2026-01-30: Standardized session normalization utilities in command registry.
+- 2026-01-30: Clarified adapter contract usage by routing reply context via capabilities.

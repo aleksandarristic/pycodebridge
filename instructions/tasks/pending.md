@@ -1,18 +1,9 @@
 # Pending Tasks
 
 ## TOC
-- 60) TODO - Clarify adapter contract usage (issue plan)
 - 61) TODO - Extend `!c status` with Codex `/status` details (issue plan)
 
 ---
-
-60) TODO - Clarify adapter contract usage (issue plan)
-- Owner: TBD
- - Complexity: Medium
-- Subtasks:
-  - Identify adapter-specific conditionals in Router and handlers.
-  - Prefer capabilities checks or adapter-layer behavior where possible.
-  - Add tests covering any adjusted routing behavior.
 
 61) TODO - Extend `!c status` with Codex `/status` details (issue plan)
  - Owner: TBD
