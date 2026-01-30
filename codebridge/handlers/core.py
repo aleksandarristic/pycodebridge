@@ -60,14 +60,15 @@ async def handle_start(
         return
 
     model = router.session_model(channel_id, session)
-    args = router.runner.build_start_args(repo_path, router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name), model)
+    reasoning = router.session_reasoning_effort(channel_id, session)
+    args = router.runner.build_start_args(
+        repo_path, router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name), model, reasoning
+    )
 
     async def job() -> None:
-        await router.run_codex(event, sink, repo_name, repo_path, session, model, args)
+        await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args)
 
     pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, job)
-    model_info = f"model {model}" if model else "default model"
-    await router.reply(sink, f"Queued start for session '{session}' ({model_info}) as {job_id} (pos {pos}).")
     router.logger.info("enqueue.start", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
 
 
@@ -86,17 +87,16 @@ async def handle_resume(
     state = router.state.load()
     thread_id = existing_thread(state, channel_id, session)
     model = router.session_model(channel_id, session)
+    reasoning = router.session_reasoning_effort(channel_id, session)
     if thread_id:
-        args = router.runner.build_resume_args(repo_path, thread_id, prompt, model)
+        args = router.runner.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
     else:
-        args = router.runner.build_resume_last_args(repo_path, prompt, model)
+        args = router.runner.build_resume_last_args(repo_path, prompt, model, reasoning)
 
     async def job() -> None:
-        await router.run_codex(event, sink, repo_name, repo_path, session, model, args)
+        await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args)
 
     pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, job)
-    model_info = f"model {model}" if model else "default model"
-    await router.reply(sink, f"Queued resume for session '{session}' ({model_info}) as {job_id} (pos {pos}).")
     router.logger.info("enqueue.resume", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
 
 
@@ -224,14 +224,15 @@ async def handle_spec(
         return
     thread_id = existing_thread(state, channel_id, session)
     model = router.session_model(channel_id, session)
+    reasoning = router.session_reasoning_effort(channel_id, session)
     prompt = router.spec_prompt(repo_name)
     if thread_id:
-        args = router.runner.build_resume_args(repo_path, thread_id, prompt, model)
+        args = router.runner.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
     else:
-        args = router.runner.build_start_args(repo_path, prompt, model)
+        args = router.runner.build_start_args(repo_path, prompt, model, reasoning)
 
     async def job() -> None:
-        await router.run_codex(event, sink, repo_name, repo_path, session, model, args)
+        await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args)
 
     pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, job)
     router.logger.info("enqueue.spec", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})

@@ -18,6 +18,7 @@ class SessionState:
     repo_path: str
     thread_id: str
     model: str = ""
+    reasoning_effort: str = ""
     created_at: str = ""
     last_used_at: str = ""
 
@@ -102,6 +103,7 @@ def _from_dict(data: Dict[str, Any]) -> FileState:
                 repo_path=s.get("repo_path", ""),
                 thread_id=s.get("thread_id", ""),
                 model=s.get("model", ""),
+                reasoning_effort=s.get("reasoning_effort", ""),
                 created_at=s.get("created_at", ""),
                 last_used_at=s.get("last_used_at", ""),
             )
@@ -147,6 +149,7 @@ def _to_dict(state: FileState) -> Dict[str, Any]:
                 "repo_path": s.repo_path,
                 "thread_id": s.thread_id,
                 "model": s.model,
+                "reasoning_effort": s.reasoning_effort,
                 "created_at": s.created_at,
                 "last_used_at": s.last_used_at,
             }

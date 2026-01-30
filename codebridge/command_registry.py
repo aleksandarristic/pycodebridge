@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import os
+import re
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Sequence, Tuple
 
 from .command_parse import parse_choose, parse_session_and_id, parse_session_and_prompt, parse_session_or_limit
@@ -28,6 +31,66 @@ GROUP_ORDER = (
     "Repo helpers",
     "Queue",
 )
+
+_MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{1,63}$")
+_REASONING_ALIASES = {
+    "low": "low",
+    "med": "medium",
+    "medium": "medium",
+    "high": "high",
+    "extra": "extra-high",
+    "extra-high": "extra-high",
+    "extra-highest": "extra-high",
+    "extrahigh": "extra-high",
+    "xhigh": "extra-high",
+}
+
+_DEFAULT_MODELS_CACHE = os.path.expanduser("~/.codex/models_cache.json")
+
+
+def _looks_like_model_id(token: str) -> bool:
+    token = (token or "").strip()
+    if not token:
+        return False
+    if len(token) < 3:
+        return False
+    if not _MODEL_ID_RE.match(token):
+        return False
+    if token.lower() in {"models", "model", "available", "default"}:
+        return False
+    if not any(ch in token for ch in "-._:"):
+        return False
+    return True
+
+
+def _normalize_reasoning_level(value: str) -> str | None:
+    if value is None:
+        return ""
+    raw = value.strip()
+    if not raw:
+        return ""
+    token = re.sub(r"\s+", "-", raw.lower()).replace("_", "-")
+    if token in {"default", "auto", "none"}:
+        return ""
+    return _REASONING_ALIASES.get(token)
+
+
+def _read_models_cache(path: str = _DEFAULT_MODELS_CACHE) -> List[str]:
+    if not path:
+        return []
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except FileNotFoundError:
+        return []
+    except json.JSONDecodeError:
+        return []
+    models = []
+    for entry in data.get("models", []) or []:
+        slug = (entry or {}).get("slug") or ""
+        if _looks_like_model_id(slug):
+            models.append(slug)
+    return models
 
 
 @dataclass(frozen=True)
@@ -59,8 +122,8 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             _cmd_choose,
         ),
         CommandSpec("use", "use/select <session>", "set your sticky session", "Sessions", _cmd_use, aliases=("select",)),
-        CommandSpec("model", "model [session] <id>", "set session model", "Sessions", _cmd_model),
-        CommandSpec("models", "models [session]", "list available models via /models", "Sessions", _cmd_models),
+        CommandSpec("model", "model [session] <id> [reasoning]", "set session model", "Sessions", _cmd_model),
+        CommandSpec("models", "models [session]", "list available models via /model", "Sessions", _cmd_models),
         CommandSpec("thread", "thread [session] <id>", "set thread id", "Sessions", _cmd_thread),
         CommandSpec("spec", "spec [session]", "capture repo spec and tasks", "Repo bootstrap", _cmd_spec),
         CommandSpec("createrepo", "createrepo", "create repo in code_root and git init", "Repo bootstrap", _cmd_createrepo),
@@ -232,15 +295,30 @@ async def _cmd_use(router: Any, message: MessageEvent, sink: ResponseSink, repo_
 
 async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     if not rest:
-        await router.reply_forbidden(sink, "Usage: !c model [session] <model-id>")
+        await router.reply_forbidden(sink, "Usage: !c model [session] <model-id> [reasoning]")
         return
     parts = rest.split()
     session_name = router.current_session_for_user(message.author_id, message.channel_id)
+    model = ""
+    reasoning_raw = ""
     if len(parts) == 1:
         model = parts[0]
     else:
-        session_name = parts[0]
-        model = rest[len(parts[0]) :].strip()
+        candidate_reasoning = " ".join(parts[1:]).strip()
+        normalized_reasoning = _normalize_reasoning_level(candidate_reasoning) if candidate_reasoning else None
+        if candidate_reasoning and normalized_reasoning is not None:
+            model = parts[0]
+            reasoning_raw = candidate_reasoning
+        elif candidate_reasoning and _looks_like_model_id(parts[0]):
+            await router.reply_forbidden(
+                sink,
+                "Unknown reasoning level. Use low, medium, high, or extra-high.",
+            )
+            return
+        else:
+            session_name = parts[0]
+            model = parts[1] if len(parts) > 1 else ""
+            reasoning_raw = " ".join(parts[2:]).strip()
     try:
         session_name = normalize_session(session_name)
     except ValueError as exc:
@@ -255,6 +333,16 @@ async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, rep
             "Model id 'list' is not supported. Pick a real model id (try `!c models`), or set the session model back to your configured default.",
         )
         return
+    reasoning = ""
+    if reasoning_raw:
+        normalized = _normalize_reasoning_level(reasoning_raw)
+        if normalized is None:
+            await router.reply_forbidden(
+                sink,
+                "Unknown reasoning level. Use low, medium, high, or extra-high.",
+            )
+            return
+        reasoning = normalized
     state = router.state.load()
     if not session_exists(state, message.channel_id, session_name) and count_active_sessions(
         state, message.channel_id
@@ -266,8 +354,9 @@ async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, rep
         return
 
     async def apply_model() -> None:
-        router.set_session_model(message.channel_id, session_name, repo_name, repo_path, model)
-        await router.reply(sink, f"Model for session '{session_name}' set to {model}")
+        router.set_session_model(message.channel_id, session_name, repo_name, repo_path, model, reasoning)
+        reasoning_info = f" reasoning {reasoning}" if reasoning else ""
+        await router.reply(sink, f"Model for session '{session_name}' set to {model}{reasoning_info}")
         await router.update_pinned_status(sink, message.author_id, session_name)
 
     if await router.has_active(message.channel_id):
@@ -276,7 +365,11 @@ async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, rep
             await apply_model()
 
         pos, job_id, _ = await router.coordinator.enqueue(message.channel_id, session_name, job)
-        await router.reply(sink, f"Queued model change for session '{session_name}' to {model} as {job_id} (pos {pos}).")
+        reasoning_info = f" reasoning {reasoning}" if reasoning else ""
+        await router.reply(
+            sink,
+            f"Queued model change for session '{session_name}' to {model}{reasoning_info} as {job_id} (pos {pos}).",
+        )
         return
 
     await apply_model()
@@ -304,16 +397,17 @@ async def _cmd_models(router: Any, message: MessageEvent, sink: ResponseSink, re
 
     # Listing models should not depend on (or be blocked by) the current session's model override.
     model = ""
-    prompt = "/models"
+    reasoning = ""
+    prompt = "/model"
     thread_id = existing_thread(state, channel_id, session_name)
     if thread_id:
-        args = router.runner.build_resume_args(repo_path, thread_id, prompt, model)
+        args = router.runner.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
     else:
         # If the session exists but thread id is missing, prefer resume --last to avoid creating a new session.
         if session_exists(state, channel_id, session_name):
-            args = router.runner.build_resume_last_args(repo_path, prompt, model)
+            args = router.runner.build_resume_last_args(repo_path, prompt, model, reasoning)
         else:
-            args = router.runner.build_start_args(repo_path, prompt, model)
+            args = router.runner.build_start_args(repo_path, prompt, model, reasoning)
 
     collected: list[str] = []
 
@@ -321,17 +415,33 @@ async def _cmd_models(router: Any, message: MessageEvent, sink: ResponseSink, re
         collected.append(text)
 
     async def job() -> None:
-        await router.run_codex(message, sink, repo_name, repo_path, session_name, model, args, on_output=on_output)
+        await router.run_codex(
+            message,
+            sink,
+            repo_name,
+            repo_path,
+            session_name,
+            model,
+            reasoning,
+            args,
+            on_output=on_output,
+            relay_output=False,
+        )
         models = parse_models_from_lines(collected)
+        cached = _read_models_cache()
+        if cached:
+            if models:
+                filtered = [m for m in models if m in cached]
+                models = filtered or cached
+            else:
+                models = cached
         if not models:
-            await router.reply(sink, "No models parsed from /models output.")
+            await router.reply(sink, "No models parsed from /models output or local cache.")
             return
         lines = [f"Available models ({len(models)}):"] + [f"- {m}" for m in models]
         await router.reply(sink, "\n".join(lines))
 
-    pos, job_id, _ = await router.coordinator.enqueue(channel_id, session_name, job)
-    model_info = f"model {model}" if model else "default model"
-    await router.reply(sink, f"Queued /models for session '{session_name}' ({model_info}) as {job_id} (pos {pos}).")
+    await router.coordinator.enqueue(channel_id, session_name, job)
 
 
 async def _cmd_thread(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

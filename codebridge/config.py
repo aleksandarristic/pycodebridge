@@ -72,6 +72,7 @@ class CodexConfig:
     json: bool = True
     start_prompt: str = DEFAULT_START_PROMPT
     model: str = ""
+    model_reasoning_effort: str = ""
     env: Dict[str, str] = field(default_factory=dict)
 
 
@@ -204,6 +205,7 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.codex.json = bool(codex.get("json", cfg.codex.json))
     cfg.codex.start_prompt = codex.get("start_prompt", cfg.codex.start_prompt)
     cfg.codex.model = codex.get("model", cfg.codex.model)
+    cfg.codex.model_reasoning_effort = codex.get("model_reasoning_effort", cfg.codex.model_reasoning_effort)
     cfg.codex.env = dict(codex.get("env", cfg.codex.env) or {})
 
     state = raw.get("state", {}) or {}

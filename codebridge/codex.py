@@ -180,27 +180,30 @@ class Runner:
         self.sandbox = sandbox or "workspace-write"
         self.base_env = base_env or {}
 
-    def build_start_args(self, repo_path: str, prompt: str, model: str) -> list[str]:
+    def build_start_args(self, repo_path: str, prompt: str, model: str, reasoning_effort: str) -> list[str]:
         """Build args for starting a new Codex session."""
         args = ["exec", "--json", "--cd", repo_path, "--sandbox", self.sandbox]
         if model.strip():
             args += ["--model", model]
+        args += _reasoning_args(reasoning_effort)
         args.append(prompt)
         return args
 
-    def build_resume_args(self, repo_path: str, thread_id: str, prompt: str, model: str) -> list[str]:
+    def build_resume_args(self, repo_path: str, thread_id: str, prompt: str, model: str, reasoning_effort: str) -> list[str]:
         """Build args for resuming a session by thread id."""
         args = ["exec", "--json", "--cd", repo_path, "--sandbox", self.sandbox, "resume", thread_id]
         if model.strip():
             args += ["--model", model]
+        args += _reasoning_args(reasoning_effort)
         args.append(prompt)
         return args
 
-    def build_resume_last_args(self, repo_path: str, prompt: str, model: str) -> list[str]:
+    def build_resume_last_args(self, repo_path: str, prompt: str, model: str, reasoning_effort: str) -> list[str]:
         """Build args for resuming the last session in a repo."""
         args = ["exec", "--json", "--cd", repo_path, "--sandbox", self.sandbox, "resume", "--last"]
         if model.strip():
             args += ["--model", model]
+        args += _reasoning_args(reasoning_effort)
         args.append(prompt)
         return args
 
@@ -316,3 +319,15 @@ def _merge_env(base: Dict[str, str], extra: Dict[str, str]) -> Dict[str, str]:
     env.update(base or {})
     env.update(extra or {})
     return env
+
+
+def _reasoning_args(reasoning_effort: str) -> list[str]:
+    effort = (reasoning_effort or "").strip()
+    if not effort:
+        return []
+    return ["-c", f"model_reasoning_effort={_toml_string(effort)}"]
+
+
+def _toml_string(value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'

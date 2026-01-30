@@ -22,6 +22,7 @@ codex:
   sandbox: "workspace-write"
   json: true
   model: ""
+  model_reasoning_effort: ""
   start_prompt: |
     Hello. This is a Discord-bridged Codex session for repo: {{REPO_NAME}}.
     Operate inside this repo directory. Stream outputs plainly.

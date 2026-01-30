@@ -83,7 +83,16 @@ class SessionService:
             return None
         return conflict
 
-    def update_state(self, channel_id: str, session: str, repo_name: str, repo_path: str, thread_id: str, model: str) -> None:
+    def update_state(
+        self,
+        channel_id: str,
+        session: str,
+        repo_name: str,
+        repo_path: str,
+        thread_id: str,
+        model: str,
+        reasoning_effort: str,
+    ) -> None:
         """Update persistent state for a session."""
         session = session or "default"
 
@@ -108,6 +117,10 @@ class SessionService:
                 sess.model = model
             elif not sess.model and self._cfg.codex.model:
                 sess.model = self._cfg.codex.model
+            if reasoning_effort:
+                sess.reasoning_effort = reasoning_effort
+            elif not sess.reasoning_effort and self._cfg.codex.model_reasoning_effort:
+                sess.reasoning_effort = self._cfg.codex.model_reasoning_effort
             sess.last_used_at = utc_now_iso()
             ch.sessions[session] = sess
             fs.channels[channel_id] = ch
@@ -124,8 +137,26 @@ class SessionService:
                 return sess.model
         return self._cfg.codex.model
 
-    def set_session_model(self, channel_id: str, session: str, repo_name: str, repo_path: str, model: str) -> None:
-        """Set a model override for a session."""
+    def session_reasoning_effort(self, channel_id: str, session: str) -> str:
+        """Return reasoning effort override for a session or fallback to default."""
+        state = self._state.load()
+        ch = state.channels.get(channel_id)
+        if ch:
+            sess = ch.sessions.get(session or "default")
+            if sess and sess.reasoning_effort:
+                return sess.reasoning_effort
+        return self._cfg.codex.model_reasoning_effort
+
+    def set_session_model(
+        self,
+        channel_id: str,
+        session: str,
+        repo_name: str,
+        repo_path: str,
+        model: str,
+        reasoning_effort: str,
+    ) -> None:
+        """Set model and reasoning overrides for a session."""
         state = self._state.load()
         thread_id = ""
         ch = state.channels.get(channel_id)
@@ -133,7 +164,7 @@ class SessionService:
             sess = ch.sessions.get(session or "default")
             if sess:
                 thread_id = sess.thread_id
-        self.update_state(channel_id, session, repo_name, repo_path, thread_id, model)
+        self.update_state(channel_id, session, repo_name, repo_path, thread_id, model, reasoning_effort)
 
     def current_session_for_user(self, user_id: str, channel_id: str) -> str:
         """Return sticky session selection for a user or default."""

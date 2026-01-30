@@ -350,14 +350,14 @@ class Router:
         user_id = event.author_id
         channel_id = event.channel_id
         self.coordinator.set_sticky(channel_id, user_id, session)
-        await self.update_state(channel_id, session, "", "", "", "")
+        await self.update_state(channel_id, session, "", "", "", "", "")
         await self.reply(sink, f"Using session '{session}' by default.")
         await self.update_pinned_status(sink, user_id, session)
 
     async def handle_thread(self, sink: ResponseSink, session: str, repo_name: str, repo_path: str, thread_id: str) -> None:
         """Override stored thread id for a session."""
         session = normalize_session(session or DEFAULT_SESSION)
-        self.update_state(sink.channel_id, session, repo_name, repo_path, thread_id, "")
+        self.update_state(sink.channel_id, session, repo_name, repo_path, thread_id, "", "")
         await self.reply(sink, f"Thread id for session '{session}' set to {thread_id}")
 
     async def handle_stats(self, sink: ResponseSink, session: str) -> None:
@@ -390,10 +390,16 @@ class Router:
                 active = " (active)" if await self.get_active(sink.channel_id, name) is not None else ""
                 model = sess.model or self.cfg.codex.model
                 model_info = f" model {model}" if model else ""
-                lines.append(f"- {name}: thread {sess.thread_id}{active}{model_info} last {sess.last_used_at}")
+                reasoning = sess.reasoning_effort or self.cfg.codex.model_reasoning_effort
+                reasoning_info = f" reasoning {reasoning}" if reasoning else ""
+                lines.append(f"- {name}: thread {sess.thread_id}{active}{model_info}{reasoning_info} last {sess.last_used_at}")
             current = self.current_session_for_user("", sink.channel_id)
             if current:
-                lines.append(f"Current selection: {current}")
+                current_model = self.session_model(sink.channel_id, current)
+                current_reasoning = self.session_reasoning_effort(sink.channel_id, current)
+                model_info = f" model {current_model}" if current_model else ""
+                reasoning_info = f" reasoning {current_reasoning}" if current_reasoning else ""
+                lines.append(f"Current selection: {current}{model_info}{reasoning_info}")
             await self.reply(sink, "\n".join(lines))
             return
         await self.reply(sink, f"Repo: {repo_name}\nPath: {repo_path}\nNo session attached.")
@@ -409,6 +415,7 @@ class Router:
             f"code_root: {cfg.codex.code_root}\n"
             f"sandbox: {cfg.codex.sandbox}\n"
             f"model: {cfg.codex.model}\n"
+            f"model_reasoning_effort: {cfg.codex.model_reasoning_effort}\n"
             f"prefix: {cfg.discord.prefix}\n"
             f"allow_plain_prompts: {cfg.discord.allow_plain_prompts}\n"
             f"channel regex: {cfg.discord.channel_name_regex}\n"
@@ -425,8 +432,10 @@ class Router:
         repo_path: str,
         session: str,
         model: str,
+        reasoning_effort: str,
         args: list[str],
         on_output=None,
+        relay_output: bool = True,
     ) -> None:
         """Run Codex with streaming callbacks and audit logging."""
         channel_id = event.channel_id
@@ -435,6 +444,7 @@ class Router:
             "repo_path": repo_path,
             "args": args,
             "model": model,
+            "reasoning_effort": reasoning_effort,
             "timestamp": utc_now_iso(),
             "channel": channel_id,
         }
@@ -446,8 +456,10 @@ class Router:
                         repo_path=repo_path,
                         args=args,
                         env=self.cfg.codex.env,
-                        on_jsonl=lambda line: self.on_jsonl(sink, channel_id, session, entry, line),
-                        on_thread=lambda tid: self.on_thread(channel_id, session, repo_name, repo_path, model, entry, tid),
+                        on_jsonl=lambda line: self.on_jsonl(sink, channel_id, session, entry, line, relay_output),
+                        on_thread=lambda tid: self.on_thread(
+                            channel_id, session, repo_name, repo_path, model, reasoning_effort, entry, tid
+                        ),
                         on_output=on_output,
                         on_stderr=lambda line: self.append_audit_stderr(entry, line),
                         on_exit=lambda err, rc: self.on_exit(channel_id, session, repo_name, err, rc),
@@ -466,13 +478,21 @@ class Router:
                 await self.clear_active(channel_id, session)
                 self.close_audit(entry)
 
-    async def on_jsonl(self, sink: ResponseSink, channel_id: str, session: str, entry: Optional[Entry], line: str) -> None:
+    async def on_jsonl(
+        self,
+        sink: ResponseSink,
+        channel_id: str,
+        session: str,
+        entry: Optional[Entry],
+        line: str,
+        relay_output: bool,
+    ) -> None:
         """Handle a JSONL line from Codex and relay output."""
         self.append_audit_codex(entry, line)
         evt = parse_event(line)
         if not evt:
             text = strip_control_codes(line).strip()
-            if text:
+            if text and relay_output:
                 for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
                     self.append_audit_output(entry, chunk)
                     await self.reply(sink, chunk)
@@ -483,9 +503,10 @@ class Router:
             text = strip_control_codes(msg)
             if needs_user_input(text):
                 text = f"Codex asks: {text}"
-            for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
-                self.append_audit_output(entry, chunk)
-                await self.reply(sink, chunk)
+            if relay_output:
+                for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
+                    self.append_audit_output(entry, chunk)
+                    await self.reply(sink, chunk)
 
     async def on_thread(
         self,
@@ -494,6 +515,7 @@ class Router:
         repo_name: str,
         repo_path: str,
         model: str,
+        reasoning_effort: str,
         entry: Optional[Entry],
         thread_id: str,
     ) -> None:
@@ -501,7 +523,7 @@ class Router:
         if entry:
             entry.thread_id = thread_id
             entry.session = session or DEFAULT_SESSION
-        self.update_state(channel_id, session, repo_name, repo_path, thread_id, model)
+        self.update_state(channel_id, session, repo_name, repo_path, thread_id, model, reasoning_effort)
 
     async def on_exit(self, channel_id: str, session: str, repo_name: str, err: Optional[BaseException], rc: int) -> None:
         """Handle Codex process exit events."""
@@ -593,8 +615,10 @@ class Router:
         """Update or pin the current session status message."""
         sess = session or DEFAULT_SESSION
         model = self.session_model(sink.channel_id, sess)
+        reasoning = self.session_reasoning_effort(sink.channel_id, sess)
         model_info = f" model {model}" if model else ""
-        text = f"User {user_id} current session: {sess}{model_info}"
+        reasoning_info = f" reasoning {reasoning}" if reasoning else ""
+        text = f"User {user_id} current session: {sess}{model_info}{reasoning_info}"
         await sink.update_pinned_status(user_id, session, text)
 
     def _contextual_sink(self, event: MessageEvent, sink: ResponseSink) -> ResponseSink:
@@ -681,17 +705,38 @@ class Router:
             except Exception:
                 pass
 
-    def update_state(self, channel_id: str, session: str, repo_name: str, repo_path: str, thread_id: str, model: str) -> None:
+    def update_state(
+        self,
+        channel_id: str,
+        session: str,
+        repo_name: str,
+        repo_path: str,
+        thread_id: str,
+        model: str,
+        reasoning_effort: str,
+    ) -> None:
         """Update persistent state for a session."""
-        self.coordinator.update_state(channel_id, session, repo_name, repo_path, thread_id, model)
+        self.coordinator.update_state(channel_id, session, repo_name, repo_path, thread_id, model, reasoning_effort)
 
     def session_model(self, channel_id: str, session: str) -> str:
         """Return model override for a session or fallback to default."""
         return self.coordinator.session_model(channel_id, session)
 
-    def set_session_model(self, channel_id: str, session: str, repo_name: str, repo_path: str, model: str) -> None:
-        """Set a model override for a session."""
-        self.coordinator.set_session_model(channel_id, session, repo_name, repo_path, model)
+    def session_reasoning_effort(self, channel_id: str, session: str) -> str:
+        """Return reasoning effort override for a session or fallback to default."""
+        return self.coordinator.session_reasoning_effort(channel_id, session)
+
+    def set_session_model(
+        self,
+        channel_id: str,
+        session: str,
+        repo_name: str,
+        repo_path: str,
+        model: str,
+        reasoning_effort: str,
+    ) -> None:
+        """Set model and reasoning overrides for a session."""
+        self.coordinator.set_session_model(channel_id, session, repo_name, repo_path, model, reasoning_effort)
 
     def update_usage(self, channel_id: str, session: str, evt: Event) -> None:
         """Update usage counters from a Codex event."""

@@ -378,3 +378,5 @@
 - 2026-01-29: Introduced SessionCoordinator and added transition tests.
 - 2026-01-29: Added adapter integration harness tests for end-to-end flows.
 - 2026-01-29: Implemented session model reporting, queued `!c model` changes, and `!c models` via parsing Codex `/models` output.
+- 2026-01-30: Added per-session reasoning effort overrides and surfaced them in status/pinned outputs.
+- 2026-01-30: Suppressed queued start/resume/models chatter and added a startup DM ping.

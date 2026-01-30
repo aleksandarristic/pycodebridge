@@ -64,14 +64,34 @@ class SessionCoordinator:
     async def consume_pending(self, channel_id: str, session: str) -> Optional[PendingConflict]:
         return await self._sessions.consume_pending(channel_id, session)
 
-    def update_state(self, channel_id: str, session: str, repo_name: str, repo_path: str, thread_id: str, model: str) -> None:
-        self._sessions.update_state(channel_id, session, repo_name, repo_path, thread_id, model)
+    def update_state(
+        self,
+        channel_id: str,
+        session: str,
+        repo_name: str,
+        repo_path: str,
+        thread_id: str,
+        model: str,
+        reasoning_effort: str,
+    ) -> None:
+        self._sessions.update_state(channel_id, session, repo_name, repo_path, thread_id, model, reasoning_effort)
 
     def session_model(self, channel_id: str, session: str) -> str:
         return self._sessions.session_model(channel_id, session)
 
-    def set_session_model(self, channel_id: str, session: str, repo_name: str, repo_path: str, model: str) -> None:
-        self._sessions.set_session_model(channel_id, session, repo_name, repo_path, model)
+    def session_reasoning_effort(self, channel_id: str, session: str) -> str:
+        return self._sessions.session_reasoning_effort(channel_id, session)
+
+    def set_session_model(
+        self,
+        channel_id: str,
+        session: str,
+        repo_name: str,
+        repo_path: str,
+        model: str,
+        reasoning_effort: str,
+    ) -> None:
+        self._sessions.set_session_model(channel_id, session, repo_name, repo_path, model, reasoning_effort)
 
     def update_activity(self, channel_id: str, session: str) -> None:
         self._sessions.update_activity(channel_id, session)

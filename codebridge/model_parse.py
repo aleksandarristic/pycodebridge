@@ -46,10 +46,11 @@ def _looks_like_model_id(token: str) -> bool:
     if not _MODEL_ID_RE.match(token):
         return False
     # Avoid listing common words that happen to match the charset.
-    if token.lower() in {"models", "model", "available", "default"}:
+    if token.lower() in {"models", "model", "available", "default", "openai_api_key"}:
+        return False
+    if "api_key" in token.lower():
         return False
     # Model ids usually include a separator.
     if not any(ch in token for ch in "-._:"):
         return False
     return True
-
