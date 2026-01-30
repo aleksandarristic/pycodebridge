@@ -85,10 +85,34 @@ class DiscordResponseSink:
         self._channel = channel
         self.channel_id = str(channel.id)
 
+    async def _resolve_channel(self, thread_id: str | None) -> discord.abc.Messageable:
+        if not thread_id:
+            return self._channel
+        current_id = str(getattr(self._channel, "id", ""))
+        if current_id == thread_id:
+            return self._channel
+        guild = getattr(self._channel, "guild", None)
+        if guild is None:
+            return self._channel
+        try:
+            tid = int(thread_id)
+        except ValueError:
+            return self._channel
+        thread = guild.get_thread(tid)
+        if thread is None:
+            try:
+                channel = await guild.fetch_channel(tid)
+            except Exception:
+                return self._channel
+            if isinstance(channel, discord.Thread):
+                thread = channel
+        return thread or self._channel
+
     async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
         """Send a message to the channel."""
-        _ = (thread_id, reply_to_id)
-        await self._channel.send(content)
+        _ = reply_to_id
+        target = await self._resolve_channel(thread_id)
+        await target.send(content)
 
     def capabilities(self) -> Capabilities:
         return Capabilities(threads=True, replies=False, uploads=True, downloads=True, typing=True)
@@ -105,5 +129,6 @@ class DiscordResponseSink:
 
     async def send_file(self, path: str, filename: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
         """Send a file to the channel."""
-        _ = (thread_id, reply_to_id)
-        await self._channel.send(file=discord.File(path, filename=filename))
+        _ = reply_to_id
+        target = await self._resolve_channel(thread_id)
+        await target.send(file=discord.File(path, filename=filename))

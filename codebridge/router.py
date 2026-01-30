@@ -622,11 +622,9 @@ class Router:
         await sink.update_pinned_status(user_id, session, text)
 
     def _contextual_sink(self, event: MessageEvent, sink: ResponseSink) -> ResponseSink:
-        if event.platform != "telegram":
-            return sink
         thread_id = event.platform_thread_id or ""
         reply_to_id = ""
-        if not thread_id:
+        if event.platform == "telegram" and not thread_id:
             reply_to_id = event.message_id or ""
         if not thread_id and not reply_to_id:
             return sink
