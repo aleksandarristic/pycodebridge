@@ -58,3 +58,4 @@
 - 2026-01-30: Added shutdown summary messaging and tests.
 - 2026-01-30: Added new architecture review tasks to pending with complexity grades.
 - 2026-01-30: Added shutdown message task to pending.
+- 2026-01-30: Extracted router reply helpers and added tests for chunking/forbidden messaging.

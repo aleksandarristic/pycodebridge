@@ -21,6 +21,7 @@ from .handlers import git_helpers as git_handlers
 from .handlers import repo_helpers as repo_handlers
 from . import command_registry
 from .file_transfer import FileTransferService
+from .reply_helpers import send_forbidden, send_reply
 from .util.ansi import strip_control_codes
 from .util.chunk import chunk_text
 from .util.prompt import needs_user_input
@@ -30,7 +31,6 @@ from .router_helpers import (
     PendingConflict,
     UsageStats,
     existing_thread,
-    forbidden_message,
     normalize_session,
     pending_key,
     usage_from_event,
@@ -52,11 +52,6 @@ def _git_commit_hash() -> str:
         return result.stdout.strip()
     except Exception:
         return "unknown"
-from .router_status import format_current_selection_line, format_session_line
-from .router_status import format_current_selection_line, format_session_line
-
-
-
 
 class Router:
     """Main command router for Discord messages."""
@@ -632,13 +627,11 @@ class Router:
 
     async def reply(self, sink: ResponseSink, content: str) -> None:
         """Send a reply to a channel, chunking as needed."""
-        content = strip_control_codes(content)
-        for chunk in chunk_text(content, self.cfg.discord.max_discord_message_chars):
-            await sink.send(chunk)
+        await send_reply(sink, content, self.cfg.discord.max_discord_message_chars)
 
     async def reply_forbidden(self, sink: ResponseSink, detail: str) -> None:
         """Send a standardized forbidden/invalid response."""
-        await sink.send(forbidden_message(detail))
+        await send_forbidden(sink, detail, self.cfg.discord.max_discord_message_chars)
 
     def _dm_admin_allowed(self, user_id: str) -> bool:
         if self.cfg.discord.dm_admin_user_ids:

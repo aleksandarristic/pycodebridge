@@ -2,7 +2,6 @@
 
 ## TOC
 - 61) TODO - Extend `!c status` with Codex `/status` details (issue plan)
-- 62) TODO - Finish Router surface cleanup (issue plan)
 - 63) TODO - Unify command parsing utilities (issue plan)
 - 64) TODO - Formalize session lifecycle invariants (issue plan)
 
@@ -17,14 +16,6 @@
   - This must be an immediate command: it can run even when other jobs are already running (do not queue behind the per-channel job queue).
   - Ensure it does not mutate session state (thread id/model) and does not interfere with the currently running job.
   - Add unit tests for parsing and for the "immediate while running" behavior using fakes/mocks.
-
-62) TODO - Finish Router surface cleanup (issue plan)
-- Owner: TBD
-- Complexity: Medium
-- Subtasks:
-  - Extract additional low-risk Router helpers (status formatting, reply helpers, config rendering) into dedicated modules.
-  - Reduce direct state/audit/queue calls in Router where a helper already exists.
-  - Add/update unit tests for the extracted helpers.
 
 63) TODO - Unify command parsing utilities (issue plan)
 - Owner: TBD

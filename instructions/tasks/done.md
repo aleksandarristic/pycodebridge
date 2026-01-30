@@ -44,9 +44,12 @@
 - 55) DONE - Adapter integration harness (issue plan)
 - 56) DONE - Router surface cleanup (issue plan)
 - 57) DONE - Standardize command routing utilities (issue plan)
-- 60) DONE - Clarify adapter contract usage (issue plan)
 - 58) DONE - Consolidate audit helper calls (issue plan)
 - 59) DONE - Model selection and reporting (issue plan)
+- 60) DONE - Clarify adapter contract usage (issue plan)
+- 62) DONE - Finish Router surface cleanup (issue plan)
+- 65) DONE - Add shutdown summary message (issue plan)
+- 66) DONE - Enrich startup DM (issue plan)
 - 37) DONE - Telegram adapter completion
 - 38) DONE - README integrations section
 - 39) DONE - Audit log redaction toggle
@@ -56,7 +59,6 @@
 - 44) DONE - Telegram file upload/download support
 - 45) DONE - Platform thread context standardization
 - 43) DONE - Improve operational logging
-- 62) DONE - Enrich startup DM (issue plan)
 
 ---
 
@@ -309,6 +311,22 @@
   - Prefer capabilities checks or adapter-layer behavior where possible.
   - Add tests covering any adjusted routing behavior.
 
+62) DONE - Finish Router surface cleanup (issue plan)
+- Owner: TBD
+- Complexity: Medium
+- Subtasks:
+  - Extract additional low-risk Router helpers (status formatting, reply helpers, config rendering) into dedicated modules.
+  - Reduce direct state/audit/queue calls in Router where a helper already exists.
+  - Add/update unit tests for the extracted helpers.
+
+65) DONE - Add shutdown summary message (issue plan)
+- Owner: TBD
+- Complexity: Low
+- Subtasks:
+  - Send a shutdown summary message on disconnect/close that mirrors the startup summary context.
+  - Log the same shutdown summary for operators.
+  - Add tests to ensure the shutdown summary triggers once per session.
+
 58) DONE - Consolidate audit helper calls (issue plan)
 - Owner: TBD
 - Subtasks:
@@ -374,7 +392,7 @@
 - Log adapter-specific events (Discord/Telegram) with context; include error details for failed routing.
 - Review log verbosity and add config to tune (info/debug).
 
-62) DONE - Enrich startup DM (issue plan)
+66) DONE - Enrich startup DM (issue plan)
 - Owner: TBD
 - Complexity: Low
 - Subtasks:
