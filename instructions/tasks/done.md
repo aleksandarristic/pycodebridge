@@ -50,6 +50,7 @@
 - 62) DONE - Finish Router surface cleanup (issue plan)
 - 65) DONE - Add shutdown summary message (issue plan)
 - 66) DONE - Enrich startup DM (issue plan)
+- 67) DONE - Add immediate Codex `/status` retrieval path (issue plan)
 - 37) DONE - Telegram adapter completion
 - 38) DONE - README integrations section
 - 39) DONE - Audit log redaction toggle
@@ -399,4 +400,12 @@
   - When the bridge becomes ready, send a DM (or channel ping) that goes beyond “I’m alive!” with useful context for operators.
   - Include information such as current bot version/commit, configured default model + reasoning, repository code root, number of bound repos/sessions, active job counts, and optional rate-limit/token usage hints.
   - Keep the message concise but informative for debugging, and log the same summary locally.
-  - Add tests/mocks to ensure the DM is sent once per session and include the extra context.
+ - Add tests/mocks to ensure the DM is sent once per session and include the extra context.
+
+67) DONE - Add immediate Codex `/status` retrieval path (issue plan)
+- Owner: TBD
+- Complexity: High
+- Subtasks:
+  - Provide a Router helper that builds `/status` prompt args for an existing session without mutating thread or model state.
+  - Run the prompt directly via the runner (bypassing the per-channel queue) and capture sanitized output lines for later parsing.
+  - Add unit tests showing the immediate status call works while a session is still running.

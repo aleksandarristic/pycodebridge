@@ -89,6 +89,9 @@ class _FakeRunner:
             await opts.on_output("Available models:")
             await opts.on_output("- `gpt-5.2-codex` (recommended)")
             await opts.on_output("- o3-mini")
+        if opts.on_output and any(a == "/status" for a in opts.args):
+            await opts.on_output("Status summary")
+            await opts.on_output("- Running session default")
 
         done = asyncio.Event()
         # Block "start" calls so tests can queue commands behind an active job.
@@ -206,5 +209,31 @@ def test_start_resume_reports_model_and_model_change_is_queued(tmp_path):
                 break
             await asyncio.sleep(0.01)
         assert any("gpt-5.2-codex" in s for s in sink.sent)
+
+    asyncio.run(run())
+
+
+def test_status_command_runs_immediately_during_active_job(tmp_path):
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        for _ in range(200):
+            if await router.get_active("chan", "default") is not None:
+                break
+            await asyncio.sleep(0.01)
+        assert await router.get_active("chan", "default") is not None
+        lines = await router.fetch_session_status_output("chan", str(repo), "default")
+        assert lines is not None
+        assert any("Status summary" in line for line in lines)
+        runner.finish_blocking()
+        for _ in range(200):
+            if await router.get_active("chan", "default") is None:
+                break
+            await asyncio.sleep(0.01)
 
     asyncio.run(run())

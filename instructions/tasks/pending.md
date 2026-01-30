@@ -1,7 +1,6 @@
 # Pending Tasks
 
 ## TOC
-- 67) TODO - Add immediate Codex `/status` retrieval path (issue plan)
 - 68) TODO - Parse and format Codex `/status` output (issue plan)
 - 69) TODO - Integrate parsed `/status` into `!c status` (issue plan)
 - 70) TODO - Add best-effort usage snapshot on quit/stop/kill (issue plan)
@@ -9,15 +8,6 @@
 - 64) TODO - Formalize session lifecycle invariants (issue plan)
 
 ---
-
-67) TODO - Add immediate Codex `/status` retrieval path (issue plan)
-- Owner: TBD
-- Complexity: High
-- Depends on: None
-- Subtasks:
-  - Issue Codex `/status` for a session without queuing behind the per-channel job queue.
-  - Ensure it does not mutate session state (thread id/model) or interfere with running jobs.
-  - Add unit tests for the "immediate while running" behavior using fakes/mocks.
 
 68) TODO - Parse and format Codex `/status` output (issue plan)
 - Owner: TBD
