@@ -1,22 +1,11 @@
 # Pending Tasks
-
 ## TOC
-- 68) TODO - Parse and format Codex `/status` output (issue plan)
 - 69) TODO - Integrate parsed `/status` into `!c status` (issue plan)
 - 70) TODO - Add best-effort usage snapshot on quit/stop/kill (issue plan)
 - 63) TODO - Unify command parsing utilities (issue plan)
 - 64) TODO - Formalize session lifecycle invariants (issue plan)
 
 ---
-
-68) TODO - Parse and format Codex `/status` output (issue plan)
-- Owner: TBD
-- Complexity: High
-- Depends on: 67
-- Subtasks:
-  - Parse Codex `/status` output into a structured summary (tolerate format drift).
-  - Format a chat-friendly summary (context window, token usage, 5h limit, weekly limit, current directory, and other key fields present).
-  - Add unit tests for parsing and formatting.
 
 69) TODO - Integrate parsed `/status` into `!c status` (issue plan)
 - Owner: TBD

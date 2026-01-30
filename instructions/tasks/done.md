@@ -409,3 +409,11 @@
   - Provide a Router helper that builds `/status` prompt args for an existing session without mutating thread or model state.
   - Run the prompt directly via the runner (bypassing the per-channel queue) and capture sanitized output lines for later parsing.
   - Add unit tests showing the immediate status call works while a session is still running.
+
+68) DONE - Parse and format Codex `/status` output (issue plan)
+- Owner: TBD
+- Complexity: High
+- Subtasks:
+  - Parse `/status` output lines into a structured summary that tolerates box art and extra text.
+  - Build a formatter that emits the key fields (`Model`, `Directory`, `Context window`, `5h limit`, `Weekly limit`) in stable lines for reuse in status updates and usage reports.
+  - Cover the parser/formatter with unit tests including normal and degraded outputs.

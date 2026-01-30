@@ -309,6 +309,12 @@ Follow behavior described in the Go spec (ported):
 - In DMs, admin commands take precedence; `status` includes admin status for admins.
 - Attachments in channels or bound DMs prompt for a destination path before saving.
 
+### `/status` parsing helpers
+
+- The bridge should expose a helper in `codebridge/status_parse.py` that consumes the raw `/status` lines, strips the box art, and harvests `key: value` pairs (Model, Directory, Session, context window, limits, etc.).
+- Build a concise summary from the parsed data (e.g., model line, directory, context window, 5h/weekly limits) so `!c status` can include it without duplicating the crate formatting logic.
+- Reuse the same helper later when reporting usage on explicit end commands (`quit`, `stop`, `kill`), so the field extraction happens in one place.
+
 All invalid/forbidden actions should respond:
 
 ```
