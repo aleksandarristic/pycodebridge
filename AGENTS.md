@@ -16,7 +16,8 @@
 
 ## Files to consult
 - `instructions/instructions.md` — full Python implementation spec.
-- `instructions/tasks.md` — task list and progress log (mark tasks with `- DONE`).
+- `instructions/tasks.md` — task list (mark tasks with `- DONE`).
+- `instructions/progress_log.md` — progress log entries (append new milestones here).
 - `instructions/backlog.md` — backlog for future tasks to promote into tasks.md.
 - `docs/architecture.mmd` — mermaid architecture diagram.
 - `<GO_CODEBRIDGE>/AGENTS.md` and `<GO_CODEBRIDGE>/instructions` — Go reference for intended behavior.
@@ -24,5 +25,5 @@
 
 ## Workflow note
 - When unsure about behavior, check the Go implementation in `<GO_CODEBRIDGE>` first. If the Go approach is not suitable for Python, ask the user for guidance before diverging.
-- Update `instructions/tasks.md` (task status and progress log) when completing milestones.
+- Update `instructions/tasks.md` (task status) and append to `instructions/progress_log.md` when completing milestones.
 - Use relevant skills under `.codex/skills` when tasks align (refactor, API changes, packaging/deps, performance triage, architecture review).
