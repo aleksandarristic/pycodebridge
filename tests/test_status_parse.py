@@ -45,3 +45,11 @@ class TestStatusParse:
         summary = parse_status_lines(["Extra line without colon", "Key: value"])
         assert summary.fields.get("Key") == "value"
         assert "Extra line" not in summary.fields
+
+    def test_parses_jsonl_text_payloads(self):
+        payload = {
+            "type": "agent_message",
+            "item": {"type": "text", "text": "Model: gpt-5.2-codex"},
+        }
+        summary = parse_status_lines([__import__("json").dumps(payload)])
+        assert summary.model == "gpt-5.2-codex"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from typing import Iterable, Dict, List
 
 @dataclass(frozen=True)
@@ -39,25 +40,57 @@ def parse_status_lines(lines: Iterable[str]) -> StatusSummary:
     """Parse `/status` output into a StatusSummary."""
     parsed: Dict[str, str] = {}
     for raw in lines:
-        line = raw.strip()
-        if not line:
-            continue
-        if line.startswith("╭") or line.startswith("╰"):
-            continue
-        if line.startswith("│"):  # drop box art
-            line = line.strip("│").strip()
-        if not line:
-            continue
-        if line.startswith(">_") or line.startswith("Visit"):
-            continue
-        if ":" not in line:
-            continue
-        key, value = line.split(":", 1)
-        key = key.strip()
-        value = value.strip()
-        if key and value:
-            parsed[key] = value
+        for line in _expand_status_lines(raw):
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith("╭") or line.startswith("╰"):
+                continue
+            if line.startswith("│"):  # drop box art
+                line = line.strip("│").strip()
+            if not line:
+                continue
+            if line.startswith(">_") or line.startswith("Visit"):
+                continue
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            key = key.strip()
+            value = value.strip()
+            if key and value:
+                parsed[key] = value
     return StatusSummary(fields=parsed)
+
+
+def _expand_status_lines(raw: str) -> List[str]:
+    """Return zero or more status lines extracted from raw output."""
+    if not raw:
+        return []
+    line = raw.strip()
+    if not line:
+        return []
+    if not line.startswith("{"):
+        return [line]
+    try:
+        payload = json.loads(line)
+    except json.JSONDecodeError:
+        return [line]
+    out: List[str] = []
+    text = payload.get("text") or payload.get("content") or payload.get("message")
+    if isinstance(text, str) and text.strip():
+        out.append(text)
+    item = payload.get("item") or {}
+    if isinstance(item, dict):
+        item_text = item.get("text")
+        if isinstance(item_text, str) and item_text.strip():
+            out.append(item_text)
+        for entry in item.get("content", []) or []:
+            if not isinstance(entry, dict):
+                continue
+            entry_text = entry.get("text")
+            if isinstance(entry_text, str) and entry_text.strip():
+                out.append(entry_text)
+    return out or [line]
 
 
 def format_status_summary(summary: StatusSummary) -> List[str]:
