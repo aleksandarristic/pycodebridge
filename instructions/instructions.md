@@ -33,6 +33,7 @@ This is a “turn-based interactive” bridge: Codex asks questions in its outpu
 - **Tests**: `pytest`.
 - **Logging**: stdlib `logging`, human-readable format.
 - **Skills**: use repo-local skills in `.codex/skills` when tasks match (refactor, API stability, packaging/deps, performance triage, architecture review).
+- **Task formatting**: each new task must include a `Complexity:` grade (Low/Medium/High).
 
 ---
 

@@ -10,6 +10,7 @@
 
 56) TODO - Router surface cleanup (issue plan)
 - Owner: TBD
+- Complexity: Medium
 - Subtasks:
   - Identify Router methods that can move into `handlers/*` or small service helpers.
   - Extract at least one low-risk block (status formatting or reply helpers) into a dedicated module.
@@ -17,6 +18,7 @@
 
 57) TODO - Standardize command routing utilities (issue plan)
 - Owner: TBD
+- Complexity: Medium
 - Subtasks:
   - Audit duplicated parsing/validation logic across handlers.
   - Add shared helpers in `command_parse.py` or `command_registry.py`.
@@ -24,6 +26,7 @@
 
 60) TODO - Clarify adapter contract usage (issue plan)
 - Owner: TBD
+- Complexity: Medium
 - Subtasks:
   - Identify adapter-specific conditionals in Router and handlers.
   - Prefer capabilities checks or adapter-layer behavior where possible.
@@ -31,6 +34,7 @@
 
 61) TODO - Extend `!c status` with Codex `/status` details (issue plan)
  - Owner: TBD
+- Complexity: High
 - Subtasks:
   - Extend `!c status` output to include parsed information from Codex `/status` output (as currently reported by Codex), e.g. context window + token usage, 5h limit, weekly limit, current directory, and any other key fields present.
   - Implement `/status` retrieval by issuing the Codex `/status` command and parsing the response into a stable, chat-friendly summary (tolerate format drift).

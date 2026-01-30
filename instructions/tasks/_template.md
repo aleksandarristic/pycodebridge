@@ -7,6 +7,6 @@
 
 NN) STATUS - Title (issue plan)
 - Owner: TBD
+- Complexity: TBD
 - Subtasks:
   - Task detail
-

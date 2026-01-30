@@ -12,6 +12,7 @@ Promote items from here into the active task list when ready to schedule work.
 
 31) TODO - Slack adapter implementation (backlog)
 - Owner: TBD
+- Complexity: High
 - Subtasks:
   - Define Slack config schema (tokens/signing secret/app settings) and validation in `codebridge/config.py`.
   - Implement Slack adapter runtime wiring (event ingestion, response send, typing).
@@ -20,6 +21,7 @@ Promote items from here into the active task list when ready to schedule work.
 
 35) TODO - Google Chat adapter implementation (backlog)
 - Owner: TBD
+- Complexity: High
 - Subtasks:
   - Define Google Chat config schema (credentials/webhook) and validation.
   - Implement adapter mapping for events + responses (MessageEvent + ResponseSink).
@@ -28,6 +30,7 @@ Promote items from here into the active task list when ready to schedule work.
 
 36) TODO - Microsoft Teams adapter implementation (backlog)
 - Owner: TBD
+- Complexity: High
 - Subtasks:
   - Define Teams config schema (bot credentials/app settings) and validation.
   - Implement adapter mapping for events + responses (MessageEvent + ResponseSink).
@@ -36,6 +39,7 @@ Promote items from here into the active task list when ready to schedule work.
 
 46) TODO - Threaded replies for Slack/Teams/Google Chat (backlog)
 - Owner: TBD
+- Complexity: Medium
 - Subtasks:
   - Add thread id extraction in Slack/Teams/Chat adapters.
   - Implement threaded send/reply behavior in corresponding ResponseSinks.
