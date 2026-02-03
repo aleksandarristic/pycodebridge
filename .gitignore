@@ -13,13 +13,13 @@ config.yaml
 screenshots
 
 # ignore project management specific instructions
-instructions
+instructions/
 
 # iognore AGENTS.md
 AGENTS.md
 GEMINI.md
 
 # ignore agent specific directories
-.codex
-.gemini
-.claude
+.codex/
+.gemini/
+.claude/
