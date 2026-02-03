@@ -146,10 +146,6 @@ Attachments in channels or bound DMs will prompt for a destination path before s
 - DM admin: enable `discord.dm_admin_enabled` and ensure `dm_admin_user_ids` or `allowed_user_ids` includes you.
 
 ## Docs
-- Full behavior/spec: `instructions/instructions.md`
-- Task log/plan: `instructions/tasks/pending.md`
-- Backlog: `instructions/tasks/backlog.md`
-- Intent summary for agents: `AGENTS.md`
 - Architecture diagram (Mermaid): `docs/architecture.mmd`
 - Slack setup: `SLACK.md`
 - Telegram setup: `TELEGRAM.md`
