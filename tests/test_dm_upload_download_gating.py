@@ -3,7 +3,6 @@ from dataclasses import dataclass
 
 from codebridge import config as cfgmod
 from codebridge.file_transfer import FileTransferService
-from codebridge.state import Store
 from codebridge.transport import Attachment, Capabilities, MessageEvent
 
 

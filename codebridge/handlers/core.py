@@ -17,7 +17,6 @@ from ..router_helpers import (
     existing_thread,
     normalize_session,
     parse_github_clone_url,
-    pending_key,
     run_limited_command,
     session_exists,
 )

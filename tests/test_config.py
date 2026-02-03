@@ -1,5 +1,3 @@
-import os
-from pathlib import Path
 
 from codebridge import config as cfgmod
 

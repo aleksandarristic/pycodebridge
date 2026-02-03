@@ -1,4 +1,3 @@
-import json
 
 from codebridge.audit import Logger
 

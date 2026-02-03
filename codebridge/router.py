@@ -1,11 +1,10 @@
 """Codex command router and handlers."""
 
-import asyncio
 import os
 import subprocess
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, Optional
+from typing import Any, Dict, Optional
 
 from . import config as cfgmod
 from .audit import Entry, Logger as AuditLogger
@@ -30,13 +29,9 @@ from .router_helpers import (
     MAX_SESSIONS_PER_CHANNEL,
     PendingConflict,
     UsageStats,
-    existing_thread,
     normalize_session,
-    pending_key,
-    session_exists,
     usage_from_event,
 )
-from .status_parse import format_status_summary, parse_status_lines
 from .router_config import render_config_text
 from .router_status import format_current_selection_line, format_session_line
 
@@ -422,87 +417,13 @@ class Router:
                 current_model = self.session_model(sink.channel_id, current)
                 current_reasoning = self.session_reasoning_effort(sink.channel_id, current)
                 lines.append(format_current_selection_line(current, current_model, current_reasoning))
-                async with self.typing_context(sink):
-                    status_lines = await self._formatted_codex_status_lines(sink.channel_id, repo_path, current)
-                if status_lines:
-                    lines.append("Codex /status:")
-                    lines.extend(status_lines)
             await self.reply(sink, "\n".join(lines))
             return
         await self.reply(sink, f"Repo: {repo_name}\nPath: {repo_path}\nNo session attached.")
 
-    async def fetch_session_status_output(
-        self,
-        channel_id: str,
-        repo_path: str,
-        session: str,
-        prompt: str = "/status",
-    ) -> list[str] | None:
-        """Run a prompt against a session without queuing or mutating state."""
-        args = self._session_prompt_args(channel_id, repo_path, session, prompt)
-        if args is None:
-            return None
-        output: list[str] = []
-
-        async def capture_jsonl(line: str) -> None:
-            evt = parse_event(line)
-            if evt:
-                for text in display_texts(evt):
-                    output.append(text)
-                return
-            output.append(line)
-
-        async def capture_output(line: str) -> None:
-            output.append(line)
-
-        await self._run_prompt_immediate(repo_path, args, on_jsonl=capture_jsonl, on_output=capture_output)
-        return output
-
-    def _session_prompt_args(
-        self,
-        channel_id: str,
-        repo_path: str,
-        session: str,
-        prompt: str,
-    ) -> list[str] | None:
-        """Return args for running a prompt against an existing session."""
-        session_name = normalize_session(session)
-        state = self.state.load()
-        if not session_exists(state, channel_id, session_name):
-            return None
-        thread_id = existing_thread(state, channel_id, session_name)
-        model = self.session_model(channel_id, session_name)
-        reasoning = self.session_reasoning_effort(channel_id, session_name)
-        if thread_id:
-            return self.runner.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
-        return self.runner.build_resume_last_args(repo_path, prompt, model, reasoning)
-
-    async def _run_prompt_immediate(
-        self,
-        repo_path: str,
-        args: list[str],
-        on_jsonl: Callable[[str], Awaitable[None]] | None = None,
-        on_output: Callable[[str], Awaitable[None]] | None = None,
-    ) -> None:
-        """Run a Codex prompt immediately without queuing."""
-        opts = Options(repo_path=repo_path, args=args, env=self.cfg.codex.env, on_jsonl=on_jsonl, on_output=on_output)
-        proc = await self.runner.run(opts)
-        await proc.wait()
-
     async def send_help(self, sink: ResponseSink) -> None:
         """Send help text for supported commands."""
         await self.reply(sink, command_registry.render_help(self._command_specs))
-
-    async def _formatted_codex_status_lines(self, channel_id: str, repo_path: str, session: str) -> list[str]:
-        """Return formatted `/status` summary for a session."""
-        if not session:
-            return []
-        lines = await self.fetch_session_status_output(channel_id, repo_path, session)
-        if not lines:
-            return []
-        summary = parse_status_lines(lines)
-        formatted = format_status_summary(summary)
-        return formatted
 
     async def startup_summary(self) -> str:
         """Return a concise summary of the current bridge state."""

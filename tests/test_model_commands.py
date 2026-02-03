@@ -89,23 +89,6 @@ class _FakeRunner:
             await opts.on_output("Available models:")
             await opts.on_output("- `gpt-5.2-codex` (recommended)")
             await opts.on_output("- o3-mini")
-        if opts.on_output and any(a == "/status" for a in opts.args):
-            await opts.on_output("Model: gpt-5.1-codex-mini (reasoning medium)")
-            await opts.on_output("Directory: ~/Code/pycodebridge")
-            await opts.on_output("Context window: 75% left (74.5K used / 258K)")
-            await opts.on_output("5h limit: [█████░░░] 57% left (resets 16:04)")
-            await opts.on_output("Weekly limit: [█░░░] 27% left (resets 08:19 on 5 Feb)")
-        if opts.on_jsonl and any(a == "/status" for a in opts.args):
-            await opts.on_jsonl("╭────────────────────────────────────────────────────────────────────────────╮")
-            await opts.on_jsonl("│  >_ OpenAI Codex (v0.92.0)                                                 │")
-            await opts.on_jsonl("│                                                                            │")
-            await opts.on_jsonl("│  Model:            gpt-5.1-codex-mini (reasoning medium, summaries auto)   │")
-            await opts.on_jsonl("│  Directory:        ~/Code/pycodebridge                                     │")
-            await opts.on_jsonl("│                                                                            │")
-            await opts.on_jsonl("│  Context window:   75% left (74.5K used / 258K)                            │")
-            await opts.on_jsonl("│  5h limit:         [███████████░░░░░░░░░] 57% left (resets 16:04)          │")
-            await opts.on_jsonl("│  Weekly limit:     [█████░░░░░░░░░░░░░░░] 27% left (resets 08:19 on 5 Feb) │")
-            await opts.on_jsonl("╰────────────────────────────────────────────────────────────────────────────╯")
 
         done = asyncio.Event()
         # Block "start" calls so tests can queue commands behind an active job.
@@ -214,10 +197,6 @@ def test_start_resume_reports_model_and_model_change_is_queued(tmp_path):
         assert router.session_model("chan", "default") == "gpt-new"
         assert any("Model for session 'default' set to gpt-new" in s for s in sink.sent)
 
-        await router.handle_message(_discord_event("!c status", "codex-repo"), sink)
-        status_reply = sink.sent[-1]
-        assert "Codex /status" in status_reply
-        assert "Context window" in status_reply
         assert any("model gpt-new" in s.lower() for s in sink.sent)
 
         await router.handle_message(_discord_event("!c models", "codex-repo"), sink)
@@ -226,31 +205,5 @@ def test_start_resume_reports_model_and_model_change_is_queued(tmp_path):
                 break
             await asyncio.sleep(0.01)
         assert any("gpt-5.2-codex" in s for s in sink.sent)
-
-    asyncio.run(run())
-
-
-def test_status_command_runs_immediately_during_active_job(tmp_path):
-    router, runner = _build_router(tmp_path)
-    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    (repo / ".git").mkdir()
-
-    async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
-        for _ in range(200):
-            if await router.get_active("chan", "default") is not None:
-                break
-            await asyncio.sleep(0.01)
-        assert await router.get_active("chan", "default") is not None
-        lines = await router.fetch_session_status_output("chan", str(repo), "default")
-        assert lines is not None
-        assert any("Model:" in line for line in lines)
-        runner.finish_blocking()
-        for _ in range(200):
-            if await router.get_active("chan", "default") is None:
-                break
-            await asyncio.sleep(0.01)
 
     asyncio.run(run())

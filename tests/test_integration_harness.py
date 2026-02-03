@@ -1,12 +1,11 @@
 import asyncio
-import time
 
 from codebridge import config as cfgmod
 from codebridge.codex import Options
 from codebridge.router import Router
 from codebridge.session_coordinator import SessionCoordinator
 from codebridge.state import Store
-from codebridge.transport import Attachment, Capabilities, MessageEvent
+from codebridge.transport import Capabilities, MessageEvent
 
 
 class _FakeEntry:

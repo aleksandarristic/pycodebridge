@@ -1,21 +1,21 @@
 # Codex CLI Bridge (Python)
 
-Python service that connects transport channels (`codex-<repo>`) to Codex CLI sessions in the matching local repo under `code_root`. One channel = one Codex thread with queueing, multi-session support, and run control.
+Bridge transport channels (`codex-<repo>`) to Codex CLI sessions in local repos under `code_root`. One channel maps to one Codex session with queueing, multi-session support, and run control.
 
 ## Features
-- Maps `#codex-<repo>` to `<code_root>/<repo>` (must exist, be inside root, and contain `.git`).
-- Runs Codex in JSONL streaming mode; forwards output to transport adapters, strips control codes, and flags prompts needing user input.
-- Per-channel queue, multi-session support (max 3 per channel), and run control (stop/kill/quit).
-- Optional DM admin mode for owner-only repo management (Discord adapter).
-- Transport-agnostic router core using `MessageEvent` + `ResponseSink` for adapters (Discord now, Slack later).
+- Map `#codex-<repo>` to `<code_root>/<repo>` (must exist, be inside root, and contain `.git`).
+- Stream Codex JSONL output to transports; strip control codes; flag prompts needing user input.
+- Per-channel queue, multi-session support (max 3 per channel), run control (stop/kill/quit).
+- Optional DM admin mode for owner-only repo management (Discord).
+- Transport-agnostic router (`MessageEvent` + `ResponseSink`).
 
 ## Integrations
 - Discord (supported): `DISCORD.md`
-- Slack (scaffold only): `SLACK.md`
 - Telegram (supported via long polling): `TELEGRAM.md`
+- Slack (scaffold only): `SLACK.md`
 
 ## Transport capabilities
-Adapters expose capabilities for threads, replies, uploads, downloads, and typing. Router behavior is gated by these flags.
+Adapters declare capabilities for threads, replies, uploads, downloads, and typing. Router behavior is gated by these flags.
 - Discord: threads ✅, replies ❌, uploads ✅, downloads ✅, typing ✅
 - Telegram: threads ✅ (topics), replies ✅, uploads ✅, downloads ✅, typing ✅ (chat action)
 - Slack: scaffold only (capabilities disabled until implemented)
@@ -29,9 +29,8 @@ Prereqs:
 Quick start:
 1) Create `config.yaml` (start from `config.example.yaml`).
 2) Set `DISCORD_TOKEN` (or the env named by `discord.token_env`) in `.env` at the repo root.
-3) Optional: `pip install -e .` to add an editable install.
-4) Run: `./.venv/bin/python -m cmd.bridge -config config.yaml`
-   - Alternative: `./.venv/bin/python -m codebridge -config config.yaml`
+3) Optional: `pip install -e .` for an editable install.
+4) Run: `./.venv/bin/python -m cmd.bridge -config config.yaml` (or `./.venv/bin/python -m codebridge -config config.yaml`)
 
 ## Configuration reference
 Paths support `$VAR`/`%APPDATA%`/`~` expansion.
@@ -77,7 +76,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `redact_patterns` (default `[]`) — optional regex patterns to redact.
 
 ### `transport`
-- `adapter` (default `discord`) — transport adapter to use (`discord` supported today; `slack`/`telegram` scaffold only).
+- `adapter` (default `discord`) — transport adapter to use (`discord`/`telegram` supported; `slack` scaffold only).
 
 ### `repo_bootstrap`
 - `agents_template` (default empty) — optional AGENTS.md template for `!c createrepo`.
@@ -125,7 +124,7 @@ Passthrough:
 - Any other `!c` text is sent as a prompt to Codex.
 
 ## DM admin commands (optional)
-Enable with `discord.dm_admin_enabled: true`. Commands require the same `!c` prefix in DMs (Discord adapter only).
+Enable with `discord.dm_admin_enabled: true`. Commands require the same `!c` prefix in DMs (Discord only).
 
 - `!c help`
 - `!c repos`
