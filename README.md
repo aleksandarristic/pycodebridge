@@ -131,6 +131,7 @@ Repo helpers:
 - `!c showchanges`
 - `!c tests`
 - `!c git <status|log|branches|show|diff|pull|commit|push|merge> [...]`
+- `!c gh <args>` (example: `!c gh repo sync`)
 - `!c download <path>`
 
 Queue:

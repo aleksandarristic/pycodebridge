@@ -58,6 +58,7 @@ def dm_help_text() -> str:
         "sessions — list sessions across channels\n"
         "status — show queues and running jobs\n"
         "config — show effective config\n"
+        "gh <args> — run GitHub CLI in DM context\n"
         "createrepo <name> — create repo\n"
         "clonerepo <name> <url> — clone repo\n"
         "copyrepo <from> <to> — copy repo\n"
@@ -73,6 +74,7 @@ def dm_binding_help_text() -> str:
         "bind <repo> — bind this DM to a repo\n"
         "use <repo> — alias for bind\n"
         "repo <repo> <prompt> — run a one-off prompt against a repo\n"
+        "gh <args> — run GitHub CLI (bound repo cwd, or code_root if unbound)\n"
         "unbind — clear bound repo\n"
         "status — show current bound repo and session\n"
     )
@@ -476,6 +478,25 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
             return
         await send(dm_binding_help_text())
         return
+
+    if cmd == "gh":
+        if not router._transport_user_allowed(event):
+            await send_forbidden("You are not allowed to use this bot.")
+            return
+        if not rest.strip():
+            await send_forbidden("Usage: !c gh <args>")
+            return
+        bound_repo = router.get_dm_binding(event)
+        run_path = router.cfg.codex.code_root
+        if bound_repo:
+            try:
+                run_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, bound_repo)
+            except Exception as exc:
+                await send_forbidden(f"Repo error: {exc}")
+                return
+        await router.handle_gh(sink, run_path, rest)
+        return
+
     bound_repo = router.get_dm_binding(event)
     if not bound_repo:
         await send(dm_binding_help_text())

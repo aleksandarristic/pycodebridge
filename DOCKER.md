@@ -101,6 +101,11 @@ docker compose up -d --build
 Note: Codex subprocesses use an environment allowlist. `GH_TOKEN`/`GITHUB_TOKEN` are now forwarded, so setting one in `.env` lets `gh` commands run via Codex sessions use the same token.
 `GH_CONFIG_DIR` is also forwarded so Codex-run `gh` commands read the same persisted config path.
 
+Bridge-native command path:
+- Use `!c gh <args>` to run GitHub CLI directly via the bridge (without relying on Codex to summarize command output).
+- Example: `!c gh repo sync`
+- DM example (private repos): `!c gh repo list --visibility private --limit 20`
+
 ## Environment knobs
 
 - `IMAGE_NAME` (default `pycodebridge:local`)

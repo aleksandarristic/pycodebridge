@@ -172,6 +172,13 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             "Repo helpers",
             _cmd_git,
         ),
+        CommandSpec(
+            "gh",
+            "gh <args>",
+            "GitHub CLI helper passthrough",
+            "Repo helpers",
+            _cmd_gh,
+        ),
         CommandSpec("download", "download <path>", "download a file from repo", "Repo helpers", _cmd_download),
         CommandSpec("logs", "logs [session] [n]", "show recent audit entries", "Queue", _cmd_logs),
         CommandSpec("ps", "ps", "list queued/running jobs", "Queue", _cmd_ps),
@@ -540,6 +547,10 @@ async def _cmd_tests(router: Any, message: MessageEvent, sink: ResponseSink, rep
 
 async def _cmd_git(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     await router.handle_git(sink, repo_path, rest)
+
+
+async def _cmd_gh(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    await router.handle_gh(sink, repo_path, rest)
 
 
 async def _cmd_download(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

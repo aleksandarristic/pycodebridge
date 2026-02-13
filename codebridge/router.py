@@ -16,6 +16,7 @@ from .transport import Capabilities, MessageEvent, ResponseSink, null_typing
 from .util import path as pathutil
 from .handlers import core as core_handlers
 from .handlers import dm_admin as dm_admin_handlers
+from .handlers import gh_helpers as gh_handlers
 from .handlers import git_helpers as git_handlers
 from .handlers import repo_helpers as repo_handlers
 from . import command_registry
@@ -310,6 +311,10 @@ class Router:
     async def handle_git(self, sink: ResponseSink, repo_path: str, rest: str) -> None:
         """Run safe git helper commands."""
         await git_handlers.handle_git(self, sink, repo_path, rest)
+
+    async def handle_gh(self, sink: ResponseSink, repo_path: str, rest: str) -> None:
+        """Run gh helper commands."""
+        await gh_handlers.handle_gh(self, sink, repo_path, rest)
 
     async def handle_download(self, sink: ResponseSink, repo_path: str, rel_path: str) -> None:
         """Send a file from the repo to the channel."""

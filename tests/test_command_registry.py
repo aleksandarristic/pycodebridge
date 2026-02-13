@@ -19,3 +19,4 @@ def test_command_registry_help_text():
     assert "use/select <session> — set your sticky session" in text
     assert "Repo helpers:" in text
     assert "git <status|log|branches|show|diff|pull|commit|push|merge> — git helpers" in text
+    assert "gh <args> — GitHub CLI helper passthrough" in text

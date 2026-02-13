@@ -51,6 +51,7 @@ class _FakeRouter:
         self.pending_handled = False
         self.uploads_requested = False
         self.coordinator = _FakeCoordinator()
+        self.last_gh = None
 
     def _transport_prefix(self, event: MessageEvent) -> str:
         if event.platform == "telegram":
@@ -105,6 +106,10 @@ class _FakeRouter:
 
     def audit_start(self, channel_id: str, session: str, thread_id: str, meta):
         return None
+
+    async def handle_gh(self, sink, repo_path: str, rest: str) -> None:
+        self.last_gh = {"repo_path": repo_path, "rest": rest}
+        await sink.send(f"gh@{repo_path}: {rest}")
 
 
 class _FakeCoordinator:
@@ -283,3 +288,79 @@ def test_dm_pending_upload_response_short_circuits(tmp_path):
 
     assert router.pending_handled is True
     assert router.last_resume is None
+
+
+def test_dm_gh_unbound_uses_code_root(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.telegram.allowed_user_ids = ["user"]
+    cfg.telegram.prefix = "!c"
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+
+    store = Store(cfg.state.data_dir)
+    router = _FakeRouter(cfg, store)
+    sink = _FakeSink("dm-1")
+    event = MessageEvent(
+        platform="telegram",
+        content="!c gh repo list --visibility private --limit 5",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    async def run():
+        await dm_admin.handle_dm_message(router, event, sink)
+
+    asyncio.run(run())
+
+    assert router.last_gh is not None
+    assert router.last_gh["repo_path"] == str(tmp_path)
+    assert router.last_gh["rest"] == "repo list --visibility private --limit 5"
+
+
+def test_dm_gh_bound_uses_repo_path(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.telegram.allowed_user_ids = ["user"]
+    cfg.telegram.prefix = "!c"
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    store = Store(cfg.state.data_dir)
+    router = _FakeRouter(cfg, store)
+    sink = _FakeSink("dm-1")
+    bind_event = MessageEvent(
+        platform="telegram",
+        content="!c bind repo",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+    gh_event = MessageEvent(
+        platform="telegram",
+        content="!c gh auth status",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    async def run():
+        await dm_admin.handle_dm_message(router, bind_event, sink)
+        await dm_admin.handle_dm_message(router, gh_event, sink)
+
+    asyncio.run(run())
+
+    assert router.last_gh is not None
+    assert router.last_gh["repo_path"] == str(repo)
+    assert router.last_gh["rest"] == "auth status"
