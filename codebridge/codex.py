@@ -312,6 +312,8 @@ def _merge_env(base: Dict[str, str], extra: Dict[str, str]) -> Dict[str, str]:
         "HTTPS_PROXY",
         "NO_PROXY",
         "ALL_PROXY",
+        "GH_TOKEN",
+        "GITHUB_TOKEN",
     }
     for name in allow:
         if name in os.environ:

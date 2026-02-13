@@ -97,6 +97,8 @@ echo "GH_TOKEN=ghp_xxx" >> .env
 docker compose up -d --build
 ```
 
+Note: Codex subprocesses use an environment allowlist. `GH_TOKEN`/`GITHUB_TOKEN` are now forwarded, so setting one in `.env` lets `gh` commands run via Codex sessions use the same token.
+
 ## Environment knobs
 
 - `IMAGE_NAME` (default `pycodebridge:local`)
