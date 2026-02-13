@@ -12,3 +12,4 @@ services:
       - ${CODE_ROOT_HOST:?Set CODE_ROOT_HOST in .env or shell}:/workspace/code_root
       - ${STATE_DIR_HOST:-./.docker-state}:/workspace/state
       - ${CODEX_AUTH_HOST:-./.docker-codex-auth}:/home/bridge/.codex
+      - ${GH_CONFIG_HOST:-./.docker-gh-config}:/home/bridge/.config/gh

@@ -40,6 +40,8 @@ Quick start:
    - `CODE_ROOT_HOST=/absolute/path/to/repos`
    - `STATE_DIR_HOST=/absolute/path/to/pycodebridge-state`
    - `CODEX_AUTH_HOST=/absolute/path/to/codex-auth-dir` (optional; defaults to `./.docker-codex-auth`)
+   - `GH_CONFIG_HOST=/absolute/path/to/gh-config-dir` (optional; defaults to `./.docker-gh-config` in Compose)
+   - To reuse existing host Codex login in Compose, set `CODEX_AUTH_HOST=$HOME/.codex`
    - If `STATE_DIR_HOST` is omitted, default is `./.docker-state`
 3) Preflight only: `./run_docker.sh --check`
 4) Run container: `./run_docker.sh`

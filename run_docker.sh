@@ -8,6 +8,7 @@ CONFIG_IN_REPO="${CONFIG_IN_REPO:-config.docker.yaml}"
 ENV_IN_REPO="${ENV_IN_REPO:-.env}"
 CODE_ROOT_HOST="${CODE_ROOT_HOST:-}"
 STATE_DIR_HOST="${STATE_DIR_HOST:-$ROOT_DIR/.docker-state}"
+GH_CONFIG_HOST="${GH_CONFIG_HOST:-}"
 BUILD_IMAGE="${BUILD_IMAGE:-1}"
 MODE="run"
 
@@ -25,6 +26,7 @@ if [[ -f "$ROOT_DIR/$ENV_IN_REPO" ]]; then
   set +a
   CODE_ROOT_HOST="${CODE_ROOT_HOST:-}"
   STATE_DIR_HOST="${STATE_DIR_HOST:-$ROOT_DIR/.docker-state}"
+  GH_CONFIG_HOST="${GH_CONFIG_HOST:-}"
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -52,6 +54,16 @@ CODE_ROOT_HOST="$(cd "$CODE_ROOT_HOST" && pwd)"
 mkdir -p "$STATE_DIR_HOST"
 STATE_DIR_HOST="$(cd "$STATE_DIR_HOST" && pwd)"
 
+if [[ -z "$GH_CONFIG_HOST" ]]; then
+  if [[ -d "$HOME/.config/gh" ]]; then
+    GH_CONFIG_HOST="$HOME/.config/gh"
+  else
+    GH_CONFIG_HOST="$ROOT_DIR/.docker-gh-config"
+  fi
+fi
+mkdir -p "$GH_CONFIG_HOST"
+GH_CONFIG_HOST="$(cd "$GH_CONFIG_HOST" && pwd)"
+
 if [[ ! -f "$ROOT_DIR/$CONFIG_IN_REPO" ]]; then
   echo "Error: config file not found in repo: $CONFIG_IN_REPO" >&2
   echo "Tip: copy config.docker.example.yaml to config.docker.yaml and edit it." >&2
@@ -68,6 +80,7 @@ docker_args=(
   -v "$ROOT_DIR:/app"
   -v "$CODE_ROOT_HOST:/workspace/code_root"
   -v "$STATE_DIR_HOST:/workspace/state"
+  -v "$GH_CONFIG_HOST:/home/bridge/.config/gh"
 )
 
 if [[ -d "$HOME/.codex" ]]; then
@@ -86,6 +99,7 @@ if [[ "$MODE" == "check" ]]; then
   echo "OK: docker available"
   echo "OK: code root mount source: $CODE_ROOT_HOST"
   echo "OK: state mount source: $STATE_DIR_HOST"
+  echo "OK: GitHub CLI config mount source: $GH_CONFIG_HOST"
   echo "OK: config file in repo: $ROOT_DIR/$CONFIG_IN_REPO"
   if [[ -d "$HOME/.codex" ]]; then
     echo "OK: host Codex auth dir found: $HOME/.codex"

@@ -8,6 +8,13 @@ RUN apt-get update \
         bash \
         ca-certificates \
         curl \
+        bat \
+        fd-find \
+        gh \
+        jq \
+        less \
+        procps \
+        ripgrep \
         git \
         nodejs \
         npm \
