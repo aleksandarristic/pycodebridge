@@ -3,13 +3,16 @@ services:
     build: .
     image: pycodebridge:local
     container_name: pycodebridge
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      - HOME=/workspace/home
     command: ["-config", "/app/config.docker.yaml"]
     volumes:
       - ./:/app
       - ${CODE_ROOT_HOST:?Set CODE_ROOT_HOST in .env or shell}:/workspace/code_root
       - ${STATE_DIR_HOST:-./.docker-state}:/workspace/state
-      - ${CODEX_AUTH_HOST:-./.docker-codex-auth}:/home/bridge/.codex
-      - ${GH_CONFIG_HOST:-./.docker-gh-config}:/home/bridge/.config/gh
+      - ${CODEX_AUTH_HOST:-./.docker-codex-auth}:/workspace/home/.codex
+      - ${GH_CONFIG_HOST:-./.docker-gh-config}:/workspace/home/.config/gh

@@ -9,6 +9,9 @@ ENV_IN_REPO="${ENV_IN_REPO:-.env}"
 CODE_ROOT_HOST="${CODE_ROOT_HOST:-}"
 STATE_DIR_HOST="${STATE_DIR_HOST:-$ROOT_DIR/.docker-state}"
 GH_CONFIG_HOST="${GH_CONFIG_HOST:-}"
+CODEX_AUTH_HOST="${CODEX_AUTH_HOST:-}"
+HOST_UID="${HOST_UID:-$(id -u)}"
+HOST_GID="${HOST_GID:-$(id -g)}"
 BUILD_IMAGE="${BUILD_IMAGE:-1}"
 MODE="run"
 
@@ -27,6 +30,9 @@ if [[ -f "$ROOT_DIR/$ENV_IN_REPO" ]]; then
   CODE_ROOT_HOST="${CODE_ROOT_HOST:-}"
   STATE_DIR_HOST="${STATE_DIR_HOST:-$ROOT_DIR/.docker-state}"
   GH_CONFIG_HOST="${GH_CONFIG_HOST:-}"
+  CODEX_AUTH_HOST="${CODEX_AUTH_HOST:-}"
+  HOST_UID="${HOST_UID:-$(id -u)}"
+  HOST_GID="${HOST_GID:-$(id -g)}"
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -64,6 +70,16 @@ fi
 mkdir -p "$GH_CONFIG_HOST"
 GH_CONFIG_HOST="$(cd "$GH_CONFIG_HOST" && pwd)"
 
+if [[ -z "$CODEX_AUTH_HOST" ]]; then
+  if [[ -d "$HOME/.codex" ]]; then
+    CODEX_AUTH_HOST="$HOME/.codex"
+  else
+    CODEX_AUTH_HOST="$ROOT_DIR/.docker-codex-auth"
+  fi
+fi
+mkdir -p "$CODEX_AUTH_HOST"
+CODEX_AUTH_HOST="$(cd "$CODEX_AUTH_HOST" && pwd)"
+
 if [[ ! -f "$ROOT_DIR/$CONFIG_IN_REPO" ]]; then
   echo "Error: config file not found in repo: $CONFIG_IN_REPO" >&2
   echo "Tip: copy config.docker.example.yaml to config.docker.yaml and edit it." >&2
@@ -77,17 +93,14 @@ fi
 docker_args=(
   run --rm -it
   --name "$CONTAINER_NAME"
+  -u "$HOST_UID:$HOST_GID"
+  -e HOME=/workspace/home
   -v "$ROOT_DIR:/app"
   -v "$CODE_ROOT_HOST:/workspace/code_root"
   -v "$STATE_DIR_HOST:/workspace/state"
-  -v "$GH_CONFIG_HOST:/home/bridge/.config/gh"
+  -v "$CODEX_AUTH_HOST:/workspace/home/.codex"
+  -v "$GH_CONFIG_HOST:/workspace/home/.config/gh"
 )
-
-if [[ -d "$HOME/.codex" ]]; then
-  docker_args+=( -v "$HOME/.codex:/home/bridge/.codex" )
-else
-  echo "Warning: ~/.codex not found on host; Codex may require re-authentication in the container." >&2
-fi
 
 if [[ -f "$ROOT_DIR/$ENV_IN_REPO" ]]; then
   docker_args+=( --env-file "$ROOT_DIR/$ENV_IN_REPO" )
@@ -99,13 +112,10 @@ if [[ "$MODE" == "check" ]]; then
   echo "OK: docker available"
   echo "OK: code root mount source: $CODE_ROOT_HOST"
   echo "OK: state mount source: $STATE_DIR_HOST"
+  echo "OK: container runtime uid:gid = $HOST_UID:$HOST_GID"
+  echo "OK: Codex auth mount source: $CODEX_AUTH_HOST"
   echo "OK: GitHub CLI config mount source: $GH_CONFIG_HOST"
   echo "OK: config file in repo: $ROOT_DIR/$CONFIG_IN_REPO"
-  if [[ -d "$HOME/.codex" ]]; then
-    echo "OK: host Codex auth dir found: $HOME/.codex"
-  else
-    echo "WARN: host Codex auth dir missing: $HOME/.codex"
-  fi
   if [[ -f "$ROOT_DIR/$ENV_IN_REPO" ]]; then
     echo "OK: env file in repo: $ROOT_DIR/$ENV_IN_REPO"
   else

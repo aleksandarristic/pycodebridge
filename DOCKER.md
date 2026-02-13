@@ -26,6 +26,8 @@ CODE_ROOT_HOST=/absolute/path/to/your/repos
 STATE_DIR_HOST=/absolute/path/to/pycodebridge-state
 CODEX_AUTH_HOST=/absolute/path/to/codex-auth-dir
 GH_CONFIG_HOST=/absolute/path/to/gh-config-dir
+HOST_UID=1000
+HOST_GID=1000
 ```
 
 `CODE_ROOT_HOST` must contain git repos matched by channel names (`codex-<repo>`).
@@ -33,6 +35,7 @@ GH_CONFIG_HOST=/absolute/path/to/gh-config-dir
 If `STATE_DIR_HOST` is omitted, `run_docker.sh` defaults it to `./.docker-state`.
 If `CODEX_AUTH_HOST` is omitted in Compose, it defaults to `./.docker-codex-auth`.
 If `GH_CONFIG_HOST` is omitted in Compose, it defaults to `./.docker-gh-config`.
+If `HOST_UID/HOST_GID` are omitted, defaults are `1000/1000` for Compose and current shell user for `run_docker.sh`.
 To reuse your existing host Codex login with Compose, set `CODEX_AUTH_HOST=$HOME/.codex`.
 
 ## 3) Start the container
@@ -70,13 +73,13 @@ docker exec -it pycodebridge codex login status
 ```
 
 Auth persistence:
-- `run_docker.sh` uses host `~/.codex` mounted to `/home/bridge/.codex`
-- Compose uses `${CODEX_AUTH_HOST:-./.docker-codex-auth}` mounted to `/home/bridge/.codex`
+- Both run modes mount Codex auth to `$HOME/.codex` inside container (`HOME=/workspace/home`)
+- Compose source is `${CODEX_AUTH_HOST:-./.docker-codex-auth}`
 - If Compose auth was not persisted and `run_docker.sh` auth worked, set `CODEX_AUTH_HOST=$HOME/.codex` and restart Compose.
 
 ## GitHub CLI (`gh`) in Docker
 
-The image includes GitHub CLI. Auth config is persisted at `/home/bridge/.config/gh`:
+The image includes GitHub CLI. Auth config is persisted at `$HOME/.config/gh` inside container:
 - `run_docker.sh`: uses `GH_CONFIG_HOST` if set, else host `~/.config/gh` when available, else `./.docker-gh-config`
 - Compose: uses `${GH_CONFIG_HOST:-./.docker-gh-config}`
 
@@ -112,6 +115,7 @@ IMAGE_NAME=pycodebridge:dev BUILD_IMAGE=0 ./run_docker.sh
 
 - The Docker image installs `codex` via npm (`@openai/codex`).
 - The image preinstalls common CLI tools used by Codex/agents: `ripgrep` (`rg`), `fd-find` (`fdfind`), `bat` (`batcat`), `gh`, `jq`, `less`, `procps`, `git`, `curl`.
+- Compose runs as `HOST_UID:HOST_GID` and sets `HOME=/workspace/home` to avoid host bind-mount permission mismatches.
 - If `~/.codex` is not mounted or not authenticated, exec into the container and run Codex login flow there.
 - For local non-Docker runs, use `./run.sh`.
 
