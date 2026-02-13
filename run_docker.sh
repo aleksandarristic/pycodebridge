@@ -7,13 +7,24 @@ CONTAINER_NAME="${CONTAINER_NAME:-pycodebridge}"
 CONFIG_IN_REPO="${CONFIG_IN_REPO:-config.docker.yaml}"
 ENV_IN_REPO="${ENV_IN_REPO:-.env}"
 CODE_ROOT_HOST="${CODE_ROOT_HOST:-}"
-STATE_DIR_HOST="${STATE_DIR_HOST:-}"
+STATE_DIR_HOST="${STATE_DIR_HOST:-$ROOT_DIR/.docker-state}"
 BUILD_IMAGE="${BUILD_IMAGE:-1}"
 MODE="run"
 
 if [[ "${1:-}" == "--check" ]]; then
   MODE="check"
   shift
+fi
+
+# Allow CODE_ROOT_HOST / STATE_DIR_HOST to come from repo .env without
+# requiring export in the shell every run.
+if [[ -f "$ROOT_DIR/$ENV_IN_REPO" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ROOT_DIR/$ENV_IN_REPO"
+  set +a
+  CODE_ROOT_HOST="${CODE_ROOT_HOST:-}"
+  STATE_DIR_HOST="${STATE_DIR_HOST:-$ROOT_DIR/.docker-state}"
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -23,6 +34,8 @@ fi
 
 if [[ -z "$CODE_ROOT_HOST" ]]; then
   echo "Error: CODE_ROOT_HOST is required (host path for repos mapped to /workspace/code_root)." >&2
+  echo "Set it in shell or .env, for example:" >&2
+  echo "  CODE_ROOT_HOST=\$HOME/Code STATE_DIR_HOST=\$HOME/.pycodebridge-docker ./run_docker.sh" >&2
   exit 1
 fi
 if [[ -z "$STATE_DIR_HOST" ]]; then

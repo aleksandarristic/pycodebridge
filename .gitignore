@@ -10,6 +10,7 @@ logs/
 *.log
 .env
 config.yaml
+config.docker.yaml
 screenshots
 
 # ignore project management specific instructions

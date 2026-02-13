@@ -19,14 +19,16 @@ Important paths in `config.docker.yaml` are already container-friendly:
 
 ## 2) Prepare host paths
 
-Choose host directories for repos and state:
+Choose host directories for repos and state (set in shell or in repo `.env`):
 
 ```bash
-export CODE_ROOT_HOST=/absolute/path/to/your/repos
-export STATE_DIR_HOST=/absolute/path/to/pycodebridge-state
+CODE_ROOT_HOST=/absolute/path/to/your/repos
+STATE_DIR_HOST=/absolute/path/to/pycodebridge-state
 ```
 
 `CODE_ROOT_HOST` must contain git repos matched by channel names (`codex-<repo>`).
+
+If `STATE_DIR_HOST` is omitted, `run_docker.sh` defaults it to `./.docker-state`.
 
 ## 3) Start the container
 

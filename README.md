@@ -36,9 +36,10 @@ Quick start:
 
 ## Docker quick start
 1) Copy Docker config: `cp config.docker.example.yaml config.docker.yaml`
-2) Set mounts:
-   - `export CODE_ROOT_HOST=/absolute/path/to/repos`
-   - `export STATE_DIR_HOST=/absolute/path/to/pycodebridge-state`
+2) Set mounts (shell export or `.env` in repo root):
+   - `CODE_ROOT_HOST=/absolute/path/to/repos`
+   - `STATE_DIR_HOST=/absolute/path/to/pycodebridge-state`
+   - If `STATE_DIR_HOST` is omitted, default is `./.docker-state`
 3) Preflight only: `./run_docker.sh --check`
 4) Run container: `./run_docker.sh`
 5) Full Docker details: `DOCKER.md`
