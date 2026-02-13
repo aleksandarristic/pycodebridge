@@ -3,6 +3,8 @@
 import argparse
 import asyncio
 import os
+import signal
+from contextlib import suppress
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -16,6 +18,20 @@ from codebridge.telegram_bot import build_application, run_polling
 from codebridge.router import Router
 from codebridge.session_coordinator import SessionCoordinator
 from codebridge.state import Store
+
+
+def _install_signal_handlers(stop_event: asyncio.Event) -> None:
+    """Install SIGINT/SIGTERM handlers that trigger graceful shutdown."""
+    loop = asyncio.get_running_loop()
+    for name in ("SIGINT", "SIGTERM"):
+        sig = getattr(signal, name, None)
+        if sig is None:
+            continue
+        try:
+            loop.add_signal_handler(sig, stop_event.set)
+        except NotImplementedError:
+            # add_signal_handler is not available on all platforms/event loops.
+            continue
 
 
 def parse_args() -> argparse.Namespace:
@@ -55,6 +71,27 @@ async def main() -> None:
     if adapter == "discord":
         token = cfg.discord_token()
         client = build_client(router)
+        stop_event = asyncio.Event()
+        _install_signal_handlers(stop_event)
+
+        client_task = asyncio.create_task(client.start(token))
+        stop_task = asyncio.create_task(stop_event.wait())
+
+        done, _ = await asyncio.wait({client_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
+        if stop_task in done and not client_task.done():
+            logger.info("shutdown", extra={"reason": "signal"})
+            await client.close()
+            try:
+                await asyncio.wait_for(client_task, timeout=10)
+            except asyncio.TimeoutError:
+                client_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await client_task
+        else:
+            with suppress(asyncio.CancelledError):
+                await client_task
+        stop_task.cancel()
+        return
     elif adapter == "slack":
         raise ValueError("Slack adapter scaffolded but not yet wired; use transport.adapter: discord")
     elif adapter == "telegram":
@@ -64,15 +101,6 @@ async def main() -> None:
         return
     else:
         raise ValueError(f"Unsupported transport adapter: {adapter}")
-
-    try:
-        await client.start(token)
-    except asyncio.CancelledError:
-        logger.info("shutdown", extra={"reason": "cancelled"})
-        await client.close()
-    except KeyboardInterrupt:
-        logger.info("shutdown", extra={"reason": "keyboard_interrupt"})
-        await client.close()
 
 
 if __name__ == "__main__":
