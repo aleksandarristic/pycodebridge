@@ -24,6 +24,7 @@ class BridgeClient(discord.Client):
     async def on_ready(self) -> None:
         """Log when the Discord client is ready."""
         self.router.logger.info("discord.ready", extra={"user": str(self.user)})
+        await self._enforce_guild_lock()
         if self._startup_notified:
             return
         self._startup_notified = True
@@ -75,6 +76,39 @@ class BridgeClient(discord.Client):
         event = self.adapter.event_from_message(message)
         sink = self.adapter.sink_for_channel(message.channel)
         await self.router.handle_message(event, sink)
+
+    async def on_guild_join(self, guild: discord.Guild) -> None:
+        """Immediately leave guilds that do not match configured lock."""
+        cfg_guild_id = (self.router.cfg.discord.guild_id or "").strip()
+        if not cfg_guild_id:
+            return
+        if str(guild.id) == cfg_guild_id:
+            return
+        try:
+            await guild.leave()
+            self.router.logger.warning(
+                "discord.guild_left_unconfigured",
+                extra={"guild_id": str(guild.id), "configured_guild_id": cfg_guild_id},
+            )
+        except Exception:
+            self.router.logger.warning("discord.guild_leave_failed", extra={"guild_id": str(guild.id)})
+
+    async def _enforce_guild_lock(self, guilds: list[discord.Guild] | None = None) -> None:
+        cfg_guild_id = (self.router.cfg.discord.guild_id or "").strip()
+        if not cfg_guild_id:
+            self.router.logger.warning("discord.guild_lock_unset")
+            return
+        for guild in list(guilds or self.guilds):
+            if str(guild.id) == cfg_guild_id:
+                continue
+            try:
+                await guild.leave()
+                self.router.logger.warning(
+                    "discord.guild_left_unconfigured",
+                    extra={"guild_id": str(guild.id), "configured_guild_id": cfg_guild_id},
+                )
+            except Exception:
+                self.router.logger.warning("discord.guild_leave_failed", extra={"guild_id": str(guild.id)})
 
 
 def build_client(router: Router) -> BridgeClient:

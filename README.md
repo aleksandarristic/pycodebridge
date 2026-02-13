@@ -56,13 +56,16 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 
 ### `discord`
 - `token_env` (default `DISCORD_TOKEN`) — environment variable containing bot token.
-- `guild_id` (default empty) — restrict to a single server ID if set.
+- `guild_id` (required for Discord adapter) — restrict to a single server ID. Bot rejects other guilds and auto-leaves them on startup/join.
 - `allowed_user_ids` (default empty) — allowlist for channel commands; if non-empty, ignore others.
 - `prefix` (default `!c`) — command prefix.
 - `channel_name_regex` (default `^codex-([A-Za-z0-9._-]+)$`) — maps channel to repo name.
 - `allow_plain_prompts` (default `false`) — treat non-prefixed messages as prompts in matching channels.
 - `dm_admin_enabled` (default `false`) — enable DM admin commands.
 - `dm_admin_user_ids` (default empty) — allowlist for DM admin (falls back to `allowed_user_ids`).
+- `totp_enabled` (default `false`) — require TOTP for state-changing Discord commands.
+- `totp_secret_env` (default `DISCORD_TOTP_SECRET`) — env var containing Base32 TOTP secret.
+- `totp_window` (default `1`) — accepted clock skew window in 30s steps.
 - `max_discord_message_chars` (default `1800`) — outbound chunk size.
 
 ### `telegram`
@@ -103,6 +106,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 
 ## Commands
 Prefix default is `!c`. Channels should be named `codex-<repo>`.
+When `discord.totp_enabled: true`, state-changing commands require `--totp 123456`.
 
 General:
 - `!c help`, `!c status`, `!c config`, `!c stats [session]`, `!c peek [session]`

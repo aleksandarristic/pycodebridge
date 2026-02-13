@@ -48,6 +48,9 @@ class DiscordConfig:
     allow_plain_prompts: bool = False
     dm_admin_enabled: bool = False
     dm_admin_user_ids: List[str] = field(default_factory=list)
+    totp_enabled: bool = False
+    totp_secret_env: str = "DISCORD_TOTP_SECRET"
+    totp_window: int = 1
 
     _compiled_regex: Optional[re.Pattern] = field(default=None, init=False, repr=False)
 
@@ -191,6 +194,9 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.discord.allow_plain_prompts = bool(discord.get("allow_plain_prompts", cfg.discord.allow_plain_prompts))
     cfg.discord.dm_admin_enabled = bool(discord.get("dm_admin_enabled", cfg.discord.dm_admin_enabled))
     cfg.discord.dm_admin_user_ids = list(discord.get("dm_admin_user_ids", cfg.discord.dm_admin_user_ids) or [])
+    cfg.discord.totp_enabled = bool(discord.get("totp_enabled", cfg.discord.totp_enabled))
+    cfg.discord.totp_secret_env = discord.get("totp_secret_env", cfg.discord.totp_secret_env)
+    cfg.discord.totp_window = int(discord.get("totp_window", cfg.discord.totp_window))
 
     telegram = raw.get("telegram", {}) or {}
     cfg.telegram.token_env = telegram.get("token_env", cfg.telegram.token_env)
@@ -305,10 +311,21 @@ def _validate(cfg: Config) -> None:
 
     if cfg.transport.adapter.lower() not in {"discord", "slack", "telegram"}:
         raise ValueError("transport.adapter must be discord, slack, or telegram (additional adapters not yet supported)")
+    if cfg.transport.adapter.lower() == "discord" and not (cfg.discord.guild_id or "").strip():
+        raise ValueError("discord.guild_id is required when transport.adapter is discord")
 
     if len(cfg.discord.allowed_user_ids) == 0:
         if not cfg.discord.dm_admin_enabled or len(cfg.discord.dm_admin_user_ids) == 0:
             raise ValueError("discord.allowed_user_ids must list at least one user (or enable DM admin with dm_admin_user_ids)")
+    if cfg.discord.totp_window < 0:
+        raise ValueError("discord.totp_window must be >= 0")
+    if cfg.discord.totp_enabled:
+        env_name = (cfg.discord.totp_secret_env or "").strip()
+        if not env_name:
+            raise ValueError("discord.totp_secret_env is required when discord.totp_enabled is true")
+        secret = os.getenv(env_name, "").strip()
+        if not secret:
+            raise ValueError(f"discord TOTP secret env {env_name!r} is empty")
     if cfg.transport.adapter.lower() == "telegram" and len(cfg.telegram.allowed_user_ids) == 0:
         raise ValueError("telegram.allowed_user_ids must list at least one user")
 

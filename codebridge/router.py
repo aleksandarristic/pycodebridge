@@ -1,6 +1,7 @@
 """Codex command router and handlers."""
 
 import os
+import re
 import subprocess
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -25,6 +26,7 @@ from .reply_helpers import send_forbidden, send_reply
 from .util.ansi import strip_control_codes
 from .util.chunk import chunk_text
 from .util.prompt import needs_user_input
+from .totp import verify_totp
 from .router_helpers import (
     DEFAULT_SESSION,
     MAX_SESSIONS_PER_CHANNEL,
@@ -35,6 +37,22 @@ from .router_helpers import (
 )
 from .router_config import render_config_text
 from .router_status import format_current_selection_line, format_session_line
+
+_TOTP_ARG_RE = re.compile(r"(?:^|\s)--totp\s+(\d{6})(?=\s|$)")
+_READ_ONLY_COMMANDS = {
+    "help",
+    "status",
+    "stats",
+    "peek",
+    "config",
+    "models",
+    "showrepo",
+    "showchanges",
+    "tests",
+    "download",
+    "logs",
+    "ps",
+}
 
 
 def _git_commit_hash() -> str:
@@ -65,6 +83,7 @@ class Router:
         self.file_transfers = FileTransferService(cfg, logger)
         self._commit = _git_commit_hash()
         self._audit_helper = AuditHelper(audit, logger)
+        self._totp_last_step_by_user: Dict[str, int] = {}
 
     async def handle_message(self, event: MessageEvent, sink: ResponseSink) -> None:
         """Handle an incoming message event."""
@@ -132,6 +151,10 @@ class Router:
             prompt = content.strip()
             if not prompt:
                 return
+            if self._totp_enabled(event):
+                ok, prompt = await self.require_totp(event, sink, "resume", prompt)
+                if not ok:
+                    return
             try:
                 repo_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, repo_name)
             except Exception as exc:
@@ -151,6 +174,16 @@ class Router:
         fields = cmdline.split()
         cmd = fields[0].lower()
         rest = cmdline[len(fields[0]) :].strip()
+        effective_cmd = "/quit" if len(fields) >= 2 and fields[1] == "/quit" else cmd
+        if self._totp_enabled(event) and self._totp_required_for_command(effective_cmd):
+            ok, cmdline = await self.require_totp(event, sink, effective_cmd, cmdline)
+            if not ok:
+                return
+            fields = cmdline.split()
+            if not fields:
+                return
+            cmd = fields[0].lower()
+            rest = cmdline[len(fields[0]) :].strip()
         self.logger.info(
             "routing.command",
             extra={
@@ -639,6 +672,54 @@ class Router:
         if self.cfg.discord.dm_admin_user_ids:
             return user_id in self.cfg.discord.dm_admin_user_ids
         return user_id in self.cfg.discord.allowed_user_ids
+
+    def _totp_enabled(self, event: MessageEvent) -> bool:
+        return event.platform == "discord" and self.cfg.discord.totp_enabled
+
+    def _totp_required_for_command(self, cmd: str) -> bool:
+        return cmd not in _READ_ONLY_COMMANDS
+
+    def _extract_totp_arg(self, text: str) -> tuple[str, str]:
+        match = _TOTP_ARG_RE.search(text)
+        if not match:
+            return "", text.strip()
+        code = match.group(1)
+        cleaned = _TOTP_ARG_RE.sub(" ", text, count=1)
+        cleaned = " ".join(cleaned.strip().split())
+        return code, cleaned
+
+    async def require_totp(
+        self,
+        event: MessageEvent,
+        sink: ResponseSink,
+        command_name: str,
+        text: str,
+    ) -> tuple[bool, str]:
+        """Enforce TOTP verification and return sanitized command text."""
+        if not self._totp_enabled(event):
+            return True, text
+        code, cleaned = self._extract_totp_arg(text)
+        if not code:
+            await self.reply_forbidden(
+                sink,
+                f"TOTP required for '{command_name}'. Add `--totp 123456` to the command.",
+            )
+            return False, text
+        env_name = self.cfg.discord.totp_secret_env
+        secret = os.getenv(env_name, "").strip()
+        if not secret:
+            await self.reply_forbidden(sink, f"TOTP secret env {env_name!r} is not set.")
+            return False, text
+        matched_step = verify_totp(code, secret, window=self.cfg.discord.totp_window)
+        if matched_step is None:
+            await self.reply_forbidden(sink, "Invalid TOTP code.")
+            return False, text
+        last = self._totp_last_step_by_user.get(event.author_id, -1)
+        if matched_step <= last:
+            await self.reply_forbidden(sink, "TOTP code already used; wait for a new code and retry.")
+            return False, text
+        self._totp_last_step_by_user[event.author_id] = matched_step
+        return True, cleaned
 
     def dm_binding_key(self, event: MessageEvent) -> str:
         """Return a stable key for DM repo bindings."""

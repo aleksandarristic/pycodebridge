@@ -308,6 +308,10 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
             return
         session = router.current_session_for_user(event.author_id, event.channel_id)
         prefixed_sink = _PrefixedSink(sink, bound_repo)
+        if router._totp_enabled(event):
+            ok, content = await router.require_totp(event, sink, "resume", content)
+            if not ok:
+                return
         await router.handle_resume(event, prefixed_sink, bound_repo, repo_path, session, content)
         return
     cmdline = content[len(prefix) :].strip()
@@ -345,6 +349,15 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         if not is_admin:
             await send_forbidden("You are not allowed to use DM admin commands.")
             return
+        if cmd in {"createrepo", "clonerepo", "copyrepo", "deleterepo", "delete", "renamerepo", "rename"}:
+            ok, cmdline = await router.require_totp(event, sink, cmd, cmdline)
+            if not ok:
+                return
+            fields = cmdline.split()
+            if not fields:
+                return
+            cmd = fields[0].lower()
+            rest = cmdline[len(fields[0]) :].strip()
         router.logger.info(
             "dm.admin",
             extra={"platform": event.platform, "user_id": event.author_id, "cmd": cmd},
@@ -414,6 +427,15 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         if not router._transport_user_allowed(event):
             await send_forbidden("You are not allowed to use this bot.")
             return
+        if cmd in {"bind", "use", "repo", "unbind"}:
+            ok, cmdline = await router.require_totp(event, sink, cmd, cmdline)
+            if not ok:
+                return
+            fields = cmdline.split()
+            if not fields:
+                return
+            cmd = fields[0].lower()
+            rest = cmdline[len(fields[0]) :].strip()
         if cmd == "status":
             bound = router.get_dm_binding(event)
             session = router.current_session_for_user(event.author_id, event.channel_id)
@@ -483,6 +505,13 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         if not router._transport_user_allowed(event):
             await send_forbidden("You are not allowed to use this bot.")
             return
+        ok, cmdline = await router.require_totp(event, sink, cmd, cmdline)
+        if not ok:
+            return
+        fields = cmdline.split()
+        if not fields:
+            return
+        rest = cmdline[len(fields[0]) :].strip()
         if not rest.strip():
             await send_forbidden("Usage: !c gh <args>")
             return
@@ -508,6 +537,10 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         return
     session = router.current_session_for_user(event.author_id, event.channel_id)
     prefixed_sink = _PrefixedSink(sink, bound_repo)
+    if router._totp_enabled(event):
+        ok, cmdline = await router.require_totp(event, sink, "resume", cmdline)
+        if not ok:
+            return
     router.logger.info(
         "dm.prompt",
         extra={"platform": event.platform, "user_id": event.author_id, "repo": bound_repo, "session": session},

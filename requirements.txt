@@ -3,3 +3,4 @@ PyYAML==6.0.3
 python-dotenv==1.2.1
 filelock==3.20.3
 python-telegram-bot==22.6
+pyotp==2.9.0

@@ -48,17 +48,21 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
 
 ## Collect IDs for config
 - User IDs (for allowlist): with Developer Mode on, right-click a user -> Copy ID. Add these to `discord.allowed_user_ids` (empty means nobody can use the bot).
-- Guild (server) ID (optional): right-click the server name -> Copy Server ID. Set `discord.guild_id` to lock the bot to that server.
+- Guild (server) ID (required for strict lock): right-click the server name -> Copy Server ID. Set `discord.guild_id` to lock the bot to that server. With this set, the bot rejects messages from other guilds and auto-leaves them.
 
 ## Configure the bridge
 1) Copy `config.example.yaml` to `config.yaml`.
-2) Set `discord.allowed_user_ids` to your user ID(s); set `discord.guild_id` if you want server lock-in.
+2) Set `discord.allowed_user_ids` to your user ID(s) and set `discord.guild_id` to your server ID for strict guild lock.
 3) Set `codex.code_root` to the absolute path that contains your git repos. Each `codex-<repo>` channel must map to `<code_root>/<repo>` with a `.git` directory.
 4) Adjust `state.data_dir`/`state.log_dir` to writable locations (defaults under your home are fine).
 5) Set the bot token in `.env` (repo root):
    `DISCORD_TOKEN=YOUR_TOKEN`
    Keep this out of version control and env var managers that sync publicly.
 6) Optional: enable DM admin with `discord.dm_admin_enabled: true` and add `discord.dm_admin_user_ids` if you want a separate allowlist for DMs.
+7) Optional: enable TOTP for state-changing commands:
+   - `discord.totp_enabled: true`
+   - set `.env`: `DISCORD_TOTP_SECRET=BASE32_SECRET`
+   - include codes in protected commands: `--totp 123456`
 
 ## Run
 From the repo root:
