@@ -1,0 +1,14 @@
+services:
+  codebridge:
+    build: .
+    image: pycodebridge:local
+    container_name: pycodebridge
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: ["-config", "/app/config.docker.yaml"]
+    volumes:
+      - ./:/app
+      - ${CODE_ROOT_HOST:?Set CODE_ROOT_HOST in .env or shell}:/workspace/code_root
+      - ${STATE_DIR_HOST:-./.docker-state}:/workspace/state
+      - ${CODEX_AUTH_HOST:-./.docker-codex-auth}:/home/bridge/.codex

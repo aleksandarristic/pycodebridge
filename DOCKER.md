@@ -24,11 +24,13 @@ Choose host directories for repos and state (set in shell or in repo `.env`):
 ```bash
 CODE_ROOT_HOST=/absolute/path/to/your/repos
 STATE_DIR_HOST=/absolute/path/to/pycodebridge-state
+CODEX_AUTH_HOST=/absolute/path/to/codex-auth-dir
 ```
 
 `CODE_ROOT_HOST` must contain git repos matched by channel names (`codex-<repo>`).
 
 If `STATE_DIR_HOST` is omitted, `run_docker.sh` defaults it to `./.docker-state`.
+If `CODEX_AUTH_HOST` is omitted in Compose, it defaults to `./.docker-codex-auth`.
 
 ## 3) Start the container
 
@@ -50,6 +52,24 @@ Preflight checks only (no build/run):
 ./run_docker.sh --check
 ```
 
+## First-time Codex login in Docker
+
+If Codex returns `401 Missing bearer or basic authentication`, authenticate inside Docker once:
+
+```bash
+docker exec -it pycodebridge codex login --device-auth
+```
+
+Complete the URL/code flow in your browser, then verify:
+
+```bash
+docker exec -it pycodebridge codex login status
+```
+
+Auth persistence:
+- `run_docker.sh` uses host `~/.codex` mounted to `/home/bridge/.codex`
+- Compose uses `${CODEX_AUTH_HOST:-./.docker-codex-auth}` mounted to `/home/bridge/.codex`
+
 ## Environment knobs
 
 - `IMAGE_NAME` (default `pycodebridge:local`)
@@ -69,3 +89,20 @@ IMAGE_NAME=pycodebridge:dev BUILD_IMAGE=0 ./run_docker.sh
 - The Docker image installs `codex` via npm (`@openai/codex`).
 - If `~/.codex` is not mounted or not authenticated, exec into the container and run Codex login flow there.
 - For local non-Docker runs, use `./run.sh`.
+
+## Headless Compose
+
+`docker-compose.yml` is included for background operation:
+
+```bash
+docker compose up -d --build
+docker compose logs -f codebridge
+docker compose restart codebridge
+docker compose down
+```
+
+Run device auth inside the Compose service:
+
+```bash
+docker compose run --rm --entrypoint codex codebridge login --device-auth
+```

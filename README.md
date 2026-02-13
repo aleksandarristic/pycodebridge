@@ -39,10 +39,14 @@ Quick start:
 2) Set mounts (shell export or `.env` in repo root):
    - `CODE_ROOT_HOST=/absolute/path/to/repos`
    - `STATE_DIR_HOST=/absolute/path/to/pycodebridge-state`
+   - `CODEX_AUTH_HOST=/absolute/path/to/codex-auth-dir` (optional; defaults to `./.docker-codex-auth`)
    - If `STATE_DIR_HOST` is omitted, default is `./.docker-state`
 3) Preflight only: `./run_docker.sh --check`
 4) Run container: `./run_docker.sh`
-5) Full Docker details: `DOCKER.md`
+5) First-time Codex auth in Docker (if not already authenticated in mounted auth dir):
+   - `docker exec -it pycodebridge codex login --device-auth`
+6) Headless with Compose: `docker compose up -d --build`
+7) Full Docker details: `DOCKER.md`
 
 ## Configuration reference
 Paths support `$VAR`/`%APPDATA%`/`~` expansion.
