@@ -76,6 +76,7 @@ Auth persistence:
 - Both run modes mount Codex auth to `$HOME/.codex` inside container (`HOME=/workspace/home`)
 - Compose source is `${CODEX_AUTH_HOST:-./.docker-codex-auth}`
 - If Compose auth was not persisted and `run_docker.sh` auth worked, set `CODEX_AUTH_HOST=$HOME/.codex` and restart Compose.
+- Both run modes set `XDG_CONFIG_HOME=/workspace/home/.config` and `GH_CONFIG_DIR=/workspace/home/.config/gh`.
 
 ## GitHub CLI (`gh`) in Docker
 
@@ -98,6 +99,7 @@ docker compose up -d --build
 ```
 
 Note: Codex subprocesses use an environment allowlist. `GH_TOKEN`/`GITHUB_TOKEN` are now forwarded, so setting one in `.env` lets `gh` commands run via Codex sessions use the same token.
+`GH_CONFIG_DIR` is also forwarded so Codex-run `gh` commands read the same persisted config path.
 
 ## Environment knobs
 

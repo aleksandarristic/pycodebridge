@@ -9,6 +9,8 @@ services:
       - .env
     environment:
       - HOME=/workspace/home
+      - XDG_CONFIG_HOME=/workspace/home/.config
+      - GH_CONFIG_DIR=/workspace/home/.config/gh
     command: ["-config", "/app/config.docker.yaml"]
     volumes:
       - ./:/app

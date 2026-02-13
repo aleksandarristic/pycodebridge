@@ -95,6 +95,8 @@ docker_args=(
   --name "$CONTAINER_NAME"
   -u "$HOST_UID:$HOST_GID"
   -e HOME=/workspace/home
+  -e XDG_CONFIG_HOME=/workspace/home/.config
+  -e GH_CONFIG_DIR=/workspace/home/.config/gh
   -v "$ROOT_DIR:/app"
   -v "$CODE_ROOT_HOST:/workspace/code_root"
   -v "$STATE_DIR_HOST:/workspace/state"

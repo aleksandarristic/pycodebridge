@@ -308,6 +308,7 @@ def _merge_env(base: Dict[str, str], extra: Dict[str, str]) -> Dict[str, str]:
         "XDG_CACHE_HOME",
         "XDG_CONFIG_HOME",
         "XDG_DATA_HOME",
+        "GH_CONFIG_DIR",
         "HTTP_PROXY",
         "HTTPS_PROXY",
         "NO_PROXY",
