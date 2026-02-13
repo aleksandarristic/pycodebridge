@@ -30,7 +30,18 @@ Quick start:
 1) Create `config.yaml` (start from `config.example.yaml`).
 2) Set `DISCORD_TOKEN` (or the env named by `discord.token_env`) in `.env` at the repo root.
 3) Optional: `pip install -e .` for an editable install.
-4) Run: `./.venv/bin/python -m cmd.bridge -config config.yaml` (or `./.venv/bin/python -m codebridge -config config.yaml`)
+4) Run locally: `./run.sh`
+   - Direct Python entrypoint still works: `./.venv/bin/python -m cmd.bridge -config config.yaml` (or `./.venv/bin/python -m codebridge -config config.yaml`)
+   - Preflight only: `./run.sh --check`
+
+## Docker quick start
+1) Copy Docker config: `cp config.docker.example.yaml config.docker.yaml`
+2) Set mounts:
+   - `export CODE_ROOT_HOST=/absolute/path/to/repos`
+   - `export STATE_DIR_HOST=/absolute/path/to/pycodebridge-state`
+3) Preflight only: `./run_docker.sh --check`
+4) Run container: `./run_docker.sh`
+5) Full Docker details: `DOCKER.md`
 
 ## Configuration reference
 Paths support `$VAR`/`%APPDATA%`/`~` expansion.
@@ -147,5 +158,6 @@ Attachments in channels or bound DMs will prompt for a destination path before s
 
 ## Docs
 - Architecture diagram (Mermaid): `docs/architecture.mmd`
+- Docker run guide: `DOCKER.md`
 - Slack setup: `SLACK.md`
 - Telegram setup: `TELEGRAM.md`

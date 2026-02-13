@@ -1,0 +1,52 @@
+discord:
+  token_env: "DISCORD_TOKEN"
+  guild_id: ""
+  allowed_user_ids: ["1234567890"]
+  prefix: "!c"
+  channel_name_regex: "^codex-([A-Za-z0-9._-]+)$"
+  allow_plain_prompts: false
+  dm_admin_enabled: false
+  dm_admin_user_ids: []
+  max_discord_message_chars: 1800
+
+telegram:
+  token_env: "TELEGRAM_TOKEN"
+  allowed_user_ids: ["1234567890"]
+  prefix: "!c"
+  channel_name_regex: "^codex-([A-Za-z0-9._-]+)$"
+  allow_plain_prompts: false
+
+codex:
+  binary: "codex"
+  code_root: "/workspace/code_root"
+  sandbox: "workspace-write"
+  json: true
+  model: ""
+  model_reasoning_effort: ""
+  start_prompt: |
+    Hello. This is a Discord-bridged Codex session for repo: {{REPO_NAME}}.
+    Operate inside this repo directory. Stream outputs plainly.
+  env: {}
+
+state:
+  data_dir: "/workspace/state"
+  lock_timeout_seconds: 600
+  conflict_ttl_seconds: 60
+  log_dir: "/workspace/state/logs"
+
+runtime:
+  log_level: "info"
+
+audit:
+  redact: false
+  redact_patterns: []
+
+transport:
+  adapter: "discord"
+
+files:
+  max_upload_mb: 200
+
+repo_bootstrap:
+  agents_template: ""
+  spec_prompt: ""
