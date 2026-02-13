@@ -108,6 +108,41 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 Prefix default is `!c`. Channels should be named `codex-<repo>`.
 When `discord.totp_enabled: true`, state-changing commands require `--totp 123456`.
 
+TOTP not required (read-only in channel):
+- `!c help`
+- `!c status`
+- `!c stats [session]`
+- `!c peek [session]`
+- `!c config`
+- `!c models [session]`
+- `!c showrepo`
+- `!c showchanges`
+- `!c tests`
+- `!c download <path>`
+- `!c logs [session] [n]`
+- `!c ps`
+
+TOTP required (channel):
+- `!c start [session]`
+- `!c resume [session] <prompt>`
+- `!c choose [session] resume|replace|cancel`
+- `!c use <session>` (alias `select`)
+- `!c model [session] <id> [reasoning]`
+- `!c thread [session] <id>`
+- `!c spec [session]`
+- `!c createrepo`
+- `!c clonerepo <url>`
+- `!c copyrepo <newname>`
+- `!c stop [session]`
+- `!c kill [session]`
+- `!c /quit [session]`
+- `!c git <...>`
+- `!c gh <args>`
+- `!c cancel <job-id>`
+- `!c rerun`
+- Any other prompt-style `!c ...` command that is not in the read-only list
+- Plain prompts in mapped channels when `allow_plain_prompts: true`
+
 General:
 - `!c help`, `!c status`, `!c config`, `!c stats [session]`, `!c peek [session]`
 
@@ -160,6 +195,26 @@ Enable with `discord.dm_admin_enabled: true`. Commands require the same `!c` pre
 - `!c copyrepo <from> <to>`
 - `!c deleterepo <name>` (alias: `delete`)
 - `!c renamerepo <from> <to>` (alias: `rename`)
+
+When `discord.totp_enabled: true`, TOTP is required in DMs for:
+- `!c bind <repo>`
+- `!c use <repo>`
+- `!c repo <repo> <prompt>`
+- `!c unbind`
+- `!c gh <args>`
+- `!c createrepo <name>`
+- `!c clonerepo <name> <url>`
+- `!c copyrepo <from> <to>`
+- `!c deleterepo <name>` / `!c delete <name>`
+- `!c renamerepo <from> <to>` / `!c rename <from> <to>`
+- Non-prefixed DM prompts when a repo is bound
+
+TOTP is not required in DMs for:
+- `!c help`
+- `!c repos`
+- `!c sessions`
+- `!c status`
+- `!c config`
 
 When a repo is bound in DMs, any message without `!c` is treated as a prompt.
 Attachments in channels or bound DMs will prompt for a destination path before saving.

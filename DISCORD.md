@@ -63,6 +63,10 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
    - `discord.totp_enabled: true`
    - set `.env`: `DISCORD_TOTP_SECRET=BASE32_SECRET`
    - include codes in protected commands: `--totp 123456`
+   - Channel commands that do NOT require TOTP: `help`, `status`, `stats`, `peek`, `config`, `models`, `showrepo`, `showchanges`, `tests`, `download`, `logs`, `ps`
+   - Channel commands that DO require TOTP: `start`, `resume`, `choose`, `use/select`, `model`, `thread`, `spec`, `createrepo`, `clonerepo`, `copyrepo`, `stop`, `kill`, `/quit`, `git`, `gh`, `cancel`, `rerun`, and plain prompts
+   - DM commands that DO require TOTP: `bind`, `use`, `repo`, `unbind`, `gh`, `createrepo`, `clonerepo`, `copyrepo`, `deleterepo/delete`, `renamerepo/rename`, and bound non-prefixed prompts
+   - DM commands that do NOT require TOTP: `help`, `repos`, `sessions`, `status`, `config`
 
 ## Run
 From the repo root:
