@@ -54,6 +54,7 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
 1) Copy `config.example.yaml` to `config.yaml`.
 2) Set `discord.allowed_user_ids` to your user ID(s) and set `discord.guild_id` to your server ID for strict guild lock.
 3) Set `codex.code_root` to the absolute path that contains your git repos. Each `codex-<repo>` channel must map to `<code_root>/<repo>` with a `.git` directory.
+   - Optional: set `codex.ask_for_approval` to one of `untrusted|on-failure|on-request|never` for explicit Codex permission behavior.
 4) Adjust `state.data_dir`/`state.log_dir` to writable locations (defaults under your home are fine).
 5) Set the bot token in `.env` (repo root):
    `DISCORD_TOKEN=YOUR_TOKEN`
@@ -63,10 +64,12 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
    - `discord.totp_enabled: true`
    - set `.env`: `DISCORD_TOTP_SECRET=BASE32_SECRET`
    - include codes in protected commands: `--totp 123456`
+   - limiter defaults: `totp_max_failures: 5`, `totp_failure_window_seconds: 300`, `totp_cooldown_seconds: 300`
+   - lockout key is per user (`platform:user_id`); set `totp_max_failures: 0` to disable lockout
    - Channel commands that do NOT require TOTP: `help`, `status`, `stats`, `peek`, `models`, `showrepo`, `showchanges`, `ps`
-   - Channel commands that DO require TOTP: `start`, `resume`, `choose`, `use/select`, `model`, `thread`, `spec`, `createrepo`, `clonerepo`, `copyrepo`, `stop`, `kill`, `/quit`, `git`, `gh`, `cancel`, `rerun`, `config`, `tests`, `download`, `logs`, and plain prompts
+   - Channel commands that DO require TOTP: `start`, `resume`, `choose`, `use/select`, `model`, `thread`, `spec`, `createrepo`, `clonerepo`, `copyrepo`, `stop`, `kill`, `/quit`, `answer`, `approve`, `deny`, `git`, `gh`, `cancel`, `rerun`, `config`, `tests`, `download`, `logs`, and plain prompts
    - Upload flows that DO require TOTP: attachment submit and upload-path response
-   - DM commands that DO require TOTP: `bind`, `use`, `repo`, `unbind`, `gh`, `createrepo`, `clonerepo`, `copyrepo`, `deleterepo/delete`, `renamerepo/rename`, and bound non-prefixed prompts
+   - DM commands that DO require TOTP: `bind`, `use`, `repo`, `unbind`, `answer`, `approve`, `deny`, `gh`, `createrepo`, `clonerepo`, `copyrepo`, `deleterepo/delete`, `renamerepo/rename`, and bound non-prefixed prompts
    - DM upload flows that DO require TOTP: attachment submit and upload-path response
    - DM commands that do NOT require TOTP: `help`, `repos`, `sessions`, `status`, `config`
 
@@ -75,6 +78,13 @@ From the repo root:
 `./.venv/bin/python -m cmd.bridge -config config.yaml`
 
 In a `codex-<repo>` channel: send `!c config` to verify config, then `!c start`. If you get no response, re-check Message Content intent, token in `.env`, channel naming, and that the repo exists under `code_root`.
+
+## Approval relay
+- When Codex outputs `Codex asks: ...`, reply in plain text and the bridge relays it to the active session stdin.
+- You can always reply explicitly with:
+  - `!c answer <text>` (or `!c answer <session> -- <text>`)
+  - `!c approve` (sends `yes`)
+  - `!c deny` (sends `no`)
 
 ## File uploads/downloads
 - Attach a file in a `codex-<repo>` channel and the bot will ask where to save it.

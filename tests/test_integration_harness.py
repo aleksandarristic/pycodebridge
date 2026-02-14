@@ -10,6 +10,7 @@ from codebridge.codex import Options
 from codebridge.router import Router
 from codebridge.session_coordinator import SessionCoordinator
 from codebridge.state import Store
+from codebridge.totp import TotpAttemptLimiter
 from codebridge.transport import Attachment, Capabilities, MessageEvent
 
 
@@ -34,13 +35,19 @@ class _FakeAudit:
 
 
 class _FakeLogger:
+    def __init__(self) -> None:
+        self.entries = []
+
     def info(self, name: str, extra=None):
+        self.entries.append(("info", name, extra or {}))
         return None
 
     def warning(self, name: str, extra=None):
+        self.entries.append(("warning", name, extra or {}))
         return None
 
     def error(self, name: str, extra=None):
+        self.entries.append(("error", name, extra or {}))
         return None
 
 
@@ -157,7 +164,8 @@ def _build_router(tmp_path, *, totp_enabled: bool = False):
     store = Store(cfg.state.data_dir)
     coordinator = SessionCoordinator(store, cfg)
     runner = _FakeRunner()
-    router = Router(cfg, store, _FakeAudit(), runner, coordinator, _FakeLogger())
+    logger = _FakeLogger()
+    router = Router(cfg, store, _FakeAudit(), runner, coordinator, logger)
     return router, runner
 
 
@@ -248,6 +256,91 @@ def test_integration_resume_and_download(tmp_path):
     asyncio.run(run())
     assert any("resume" in args for args in runner.calls)
     assert sink.files == [(str(target), "note.txt", None, None)]
+
+
+def test_integration_answer_command_relays_to_active_session(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        for _ in range(50):
+            proc = await router.get_active("chan", "default")
+            if proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        await router.handle_message(_discord_event("!c answer yes", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert runner.last_proc is not None
+    assert runner.last_proc.writes[-1] == "yes\n"
+    assert any("Sent response to session 'default'." in msg for msg, _, _ in sink.sent)
+
+
+def test_integration_auto_relays_plain_reply_when_codex_waits_for_input(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        for _ in range(50):
+            proc = await router.get_active("chan", "default")
+            if proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        await router.on_jsonl(
+            sink,
+            "chan",
+            "default",
+            None,
+            '{"type":"item.completed","item":{"type":"agent_message","text":"Proceed?"}}',
+            True,
+        )
+        await router.handle_message(_discord_event("yes", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert runner.last_proc is not None
+    assert runner.last_proc.writes[-1] == "yes\n"
+    assert len(runner.calls) == 1
+
+
+def test_integration_wait_command_reports_pending_input(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        for _ in range(50):
+            proc = await router.get_active("chan", "default")
+            if proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        await router.handle_message(_discord_event("!c wait", "codex-repo"), sink)
+        await router.on_jsonl(
+            sink,
+            "chan",
+            "default",
+            None,
+            '{"type":"item.completed","item":{"type":"agent_message","text":"Proceed?"}}',
+            True,
+        )
+        await router.handle_message(_discord_event("!c wait", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert any("No sessions are waiting for input." in msg for msg, _, _ in sink.sent)
+    assert any("Waiting for input: default" in msg for msg, _, _ in sink.sent)
 
 
 def test_integration_telegram_threaded_reply(tmp_path):
@@ -356,3 +449,39 @@ def test_totp_required_on_telegram_platform(tmp_path, monkeypatch):
 
     asyncio.run(run())
     assert any("TOTP required for 'start'" in msg for msg, _, _ in sink.sent)
+
+
+def test_totp_rate_limit_lock_and_cooldown(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, runner = _build_router(tmp_path, totp_enabled=True)
+    now = [1000.0]
+    router._totp_limiter = TotpAttemptLimiter(
+        max_failures=2,
+        window_seconds=120,
+        cooldown_seconds=60,
+        now_fn=lambda: now[0],
+    )
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start --totp 000000", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start --totp 000000", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c start --totp {_totp_code(secret)}", "codex-repo"), sink)
+        now[0] += 61
+        await router.handle_message(_discord_event(f"!c start --totp {_totp_code(secret)}", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert any("Invalid TOTP code." in msg for msg, _, _ in sink.sent)
+    assert any("Too many invalid TOTP attempts." in msg for msg, _, _ in sink.sent)
+    assert any(args and args[0] == "start" for args in runner.calls)
+    event_names = [name for _, name, _ in router.logger.entries]
+    assert "security.totp_invalid" in event_names
+    assert "security.totp_locked" in event_names
+    assert "security.totp_unlock" in event_names
+    assert "security.totp_success" in event_names

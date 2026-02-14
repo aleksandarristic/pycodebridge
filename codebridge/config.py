@@ -51,6 +51,9 @@ class DiscordConfig:
     totp_enabled: bool = False
     totp_secret_env: str = "DISCORD_TOTP_SECRET"
     totp_window: int = 1
+    totp_max_failures: int = 5
+    totp_failure_window_seconds: int = 300
+    totp_cooldown_seconds: int = 300
 
     _compiled_regex: Optional[re.Pattern] = field(default=None, init=False, repr=False)
 
@@ -73,6 +76,7 @@ class CodexConfig:
     binary: str = "codex"
     code_root: str = ""
     sandbox: str = DEFAULT_SANDBOX
+    ask_for_approval: str = ""
     json: bool = True
     start_prompt: str = DEFAULT_START_PROMPT
     model: str = ""
@@ -197,6 +201,11 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.discord.totp_enabled = bool(discord.get("totp_enabled", cfg.discord.totp_enabled))
     cfg.discord.totp_secret_env = discord.get("totp_secret_env", cfg.discord.totp_secret_env)
     cfg.discord.totp_window = int(discord.get("totp_window", cfg.discord.totp_window))
+    cfg.discord.totp_max_failures = int(discord.get("totp_max_failures", cfg.discord.totp_max_failures))
+    cfg.discord.totp_failure_window_seconds = int(
+        discord.get("totp_failure_window_seconds", cfg.discord.totp_failure_window_seconds)
+    )
+    cfg.discord.totp_cooldown_seconds = int(discord.get("totp_cooldown_seconds", cfg.discord.totp_cooldown_seconds))
 
     telegram = raw.get("telegram", {}) or {}
     cfg.telegram.token_env = telegram.get("token_env", cfg.telegram.token_env)
@@ -209,6 +218,7 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.codex.binary = codex.get("binary", cfg.codex.binary)
     cfg.codex.code_root = codex.get("code_root", cfg.codex.code_root)
     cfg.codex.sandbox = codex.get("sandbox", cfg.codex.sandbox)
+    cfg.codex.ask_for_approval = codex.get("ask_for_approval", cfg.codex.ask_for_approval)
     cfg.codex.json = bool(codex.get("json", cfg.codex.json))
     cfg.codex.start_prompt = codex.get("start_prompt", cfg.codex.start_prompt)
     cfg.codex.model = codex.get("model", cfg.codex.model)
@@ -262,6 +272,8 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.codex.binary = "codex"
     if not cfg.codex.sandbox:
         cfg.codex.sandbox = DEFAULT_SANDBOX
+    if cfg.codex.ask_for_approval is None:
+        cfg.codex.ask_for_approval = ""
     if not cfg.codex.start_prompt:
         cfg.codex.start_prompt = DEFAULT_START_PROMPT
     if cfg.codex.env is None:
@@ -302,6 +314,10 @@ def _validate(cfg: Config) -> None:
         raise ValueError("state.data_dir is required")
     if not cfg.state.log_dir:
         raise ValueError("state.log_dir is required")
+    approval = (cfg.codex.ask_for_approval or "").strip().lower()
+    if approval and approval not in {"untrusted", "on-failure", "on-request", "never"}:
+        raise ValueError("codex.ask_for_approval must be untrusted|on-failure|on-request|never")
+    cfg.codex.ask_for_approval = approval
     if cfg.discord.max_discord_message_chars <= 0:
         raise ValueError("discord.max_discord_message_chars must be > 0")
 
@@ -319,6 +335,12 @@ def _validate(cfg: Config) -> None:
             raise ValueError("discord.allowed_user_ids must list at least one user (or enable DM admin with dm_admin_user_ids)")
     if cfg.discord.totp_window < 0:
         raise ValueError("discord.totp_window must be >= 0")
+    if cfg.discord.totp_max_failures < 0:
+        raise ValueError("discord.totp_max_failures must be >= 0")
+    if cfg.discord.totp_failure_window_seconds <= 0:
+        raise ValueError("discord.totp_failure_window_seconds must be > 0")
+    if cfg.discord.totp_cooldown_seconds < 0:
+        raise ValueError("discord.totp_cooldown_seconds must be >= 0")
     if cfg.discord.totp_enabled:
         env_name = (cfg.discord.totp_secret_env or "").strip()
         if not env_name:

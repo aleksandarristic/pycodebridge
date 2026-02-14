@@ -66,6 +66,9 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `totp_enabled` (default `false`) — require TOTP for protected commands on all platforms.
 - `totp_secret_env` (default `DISCORD_TOTP_SECRET`) — env var containing Base32 TOTP secret.
 - `totp_window` (default `1`) — accepted clock skew window in 30s steps.
+- `totp_max_failures` (default `5`) — invalid/replayed TOTP attempts allowed before lockout (`0` disables lockout).
+- `totp_failure_window_seconds` (default `300`) — rolling window used when counting failed attempts.
+- `totp_cooldown_seconds` (default `300`) — lockout duration after too many failures (`0` disables lockout).
 - `max_discord_message_chars` (default `1800`) — outbound chunk size.
 
 ### `telegram`
@@ -79,6 +82,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `binary` (default `codex`) — path/name of Codex CLI.
 - `code_root` (required) — directory containing git repos.
 - `sandbox` (default `workspace-write`) — Codex sandbox mode.
+- `ask_for_approval` (default empty) — optional Codex approval policy (`untrusted|on-failure|on-request|never`).
 - `json` (default `true`) — JSONL streaming output (required).
 - `start_prompt` (default template) — prompt used for new sessions.
 - `model` (default empty) — default model; override per session with `!c model`.
@@ -107,6 +111,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 ## Commands
 Prefix default is `!c`. Channels should be named `codex-<repo>`.
 When `discord.totp_enabled: true`, protected commands on all platforms require `--totp 123456`.
+Failed/replayed TOTP attempts are rate-limited per user (`platform:user_id`) using the limiter settings above.
 
 TOTP not required (read-only in channel):
 - `!c help`
@@ -132,6 +137,10 @@ TOTP required (channel):
 - `!c stop [session]`
 - `!c kill [session]`
 - `!c /quit [session]`
+- `!c answer [session] -- <text>` or `!c answer <text>`
+- `!c approve [session]` (sends `yes`)
+- `!c deny [session]` (sends `no`)
+- `!c wait` (show sessions currently awaiting input)
 - `!c git <...>`
 - `!c gh <args>`
 - `!c cancel <job-id>`
@@ -165,6 +174,10 @@ Run control:
 - `!c stop [session]` (ESC then SIGINT)
 - `!c kill [session]`
 - `!c /quit [session]`
+- `!c answer [session] -- <text>` or `!c answer <text>`
+- `!c approve [session]`
+- `!c deny [session]`
+- `!c wait`
 
 Repo helpers:
 - `!c showrepo`
@@ -182,6 +195,7 @@ Queue:
 
 Passthrough:
 - Any other `!c` text is sent as a prompt to Codex.
+- When Codex emits a question/approval prompt (`Codex asks: ...`), a plain reply in the same channel/DM is relayed to the active session input automatically (or use `!c answer ...` explicitly).
 
 ## DM admin commands (optional)
 Enable with `discord.dm_admin_enabled: true`. Commands require the same `!c` prefix in DMs (Discord only).
@@ -203,6 +217,9 @@ When `discord.totp_enabled: true`, TOTP is required in DMs for:
 - `!c repo <repo> <prompt>`
 - `!c unbind`
 - `!c gh <args>`
+- `!c answer [session] -- <text>` / `!c answer <text>`
+- `!c approve [session]`
+- `!c deny [session]`
 - `!c createrepo <name>`
 - `!c clonerepo <name> <url>`
 - `!c copyrepo <from> <to>`
@@ -218,13 +235,14 @@ TOTP is not required in DMs for:
 - `!c status`
 - `!c config`
 
-When a repo is bound in DMs, any message without `!c` is treated as a prompt.
+When a repo is bound in DMs, a message without `!c` is treated as a prompt unless Codex is currently awaiting input (then it is relayed to the active session stdin).
 Attachments in channels or bound DMs will prompt for a destination path before saving.
 
 ## Troubleshooting
 - No response: confirm Message Content intent is enabled and saved, and your user ID is allowlisted.
 - Repo error: ensure channel name matches `codex-<repo>` and `<code_root>/<repo>/.git` exists.
 - DM admin: enable `discord.dm_admin_enabled` and ensure `dm_admin_user_ids` or `allowed_user_ids` includes you.
+- Security logs (`state.log_dir/bridge.log`): look for `security.totp_invalid`, `security.totp_replay`, `security.totp_locked`, `security.totp_unlock`, `security.totp_success`.
 
 ## Docs
 - Architecture diagram (Mermaid): `docs/architecture.mmd`

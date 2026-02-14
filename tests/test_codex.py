@@ -1,4 +1,4 @@
-from codebridge.codex import display_texts, parse_event
+from codebridge.codex import Runner, display_texts, parse_event
 
 
 def test_parse_event_agent_message():
@@ -14,3 +14,11 @@ def test_parse_event_error_message():
     evt = parse_event(line)
     texts = display_texts(evt)
     assert "bad" in texts
+
+
+def test_runner_build_args_include_approval_policy():
+    runner = Runner("codex", "workspace-write", {}, "on-request")
+    args = runner.build_start_args("/tmp/repo", "hello", "", "")
+    assert "-a" in args
+    idx = args.index("-a")
+    assert args[idx + 1] == "on-request"

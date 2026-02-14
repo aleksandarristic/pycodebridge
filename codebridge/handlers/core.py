@@ -296,3 +296,41 @@ async def handle_quit(router: "Router", sink: ResponseSink, session: str) -> Non
         await router.reply(sink, f"Sent /quit to session '{session or DEFAULT_SESSION}'.")
         return
     await router.reply_forbidden(sink, "No running Codex process.")
+
+
+async def handle_answer(router: "Router", event: MessageEvent, sink: ResponseSink, session: str, text: str) -> None:
+    """Write a user response to the stdin of an active Codex session."""
+    try:
+        session = normalize_session(session or DEFAULT_SESSION)
+    except ValueError as exc:
+        await router.reply_forbidden(sink, str(exc))
+        return
+    payload = (text or "").strip()
+    if not payload:
+        await router.reply_forbidden(sink, "Answer text required.")
+        return
+    proc = await router.get_active(sink.channel_id, session)
+    if not proc:
+        await router.reply_forbidden(
+            sink,
+            f"No active Codex process for session '{session}'. Start/resume a session first.",
+        )
+        return
+    try:
+        await proc.write(payload + "\n")
+    except Exception as exc:
+        await router.reply_forbidden(sink, f"send input failed: {exc}")
+        return
+    router.clear_awaiting_input(sink.channel_id, session)
+    await router.reply(sink, f"Sent response to session '{session}'.")
+    router.logger.info(
+        "relay.answer",
+        extra={
+            "platform": event.platform,
+            "channel_id": event.channel_id,
+            "repo_channel": event.channel_name,
+            "session": session,
+            "user_id": event.author_id,
+            "chars": len(payload),
+        },
+    )

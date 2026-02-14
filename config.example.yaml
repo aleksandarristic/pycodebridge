@@ -10,6 +10,9 @@ discord:
   totp_enabled: false
   totp_secret_env: "DISCORD_TOTP_SECRET"
   totp_window: 1
+  totp_max_failures: 5
+  totp_failure_window_seconds: 300
+  totp_cooldown_seconds: 300
   max_discord_message_chars: 1800
 
 telegram:
@@ -23,6 +26,7 @@ codex:
   binary: "codex"
   code_root: "/home/you/Code"
   sandbox: "workspace-write"
+  ask_for_approval: "on-request"  # untrusted|on-failure|on-request|never
   json: true
   model: ""
   model_reasoning_effort: ""

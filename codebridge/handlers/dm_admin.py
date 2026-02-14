@@ -300,6 +300,20 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
     if await router.handle_pending_upload_response(event, sink, router.get_dm_binding(event) or "", pending_content):
         return
     if not content.startswith(prefix):
+        relay_session, ambiguous = await router.pending_input_session(event)
+        if ambiguous:
+            await sink.send(forbidden_message("Multiple sessions are waiting for input. Use `!c answer <session> -- <text>`."))
+            return
+        if relay_session and not event.attachments:
+            relay_text = content.strip()
+            if not relay_text:
+                return
+            if router._totp_enabled(event):
+                ok, relay_text = await router.require_totp(event, sink, "answer", relay_text)
+                if not ok:
+                    return
+            await router.handle_answer(event, sink, relay_session, relay_text)
+            return
         if not router._transport_user_allowed(event):
             await sink.send(forbidden_message("You are not allowed to use this bot."))
             return
@@ -537,6 +551,46 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
                 await send_forbidden(f"Repo error: {exc}")
                 return
         await router.handle_gh(sink, run_path, rest)
+        return
+
+    if cmd in {"answer", "approve", "deny"}:
+        if not router._transport_user_allowed(event):
+            await send_forbidden("You are not allowed to use this bot.")
+            return
+        if router._totp_enabled(event):
+            ok, cmdline = await router.require_totp(event, sink, cmd, cmdline)
+            if not ok:
+                return
+            fields = cmdline.split()
+            if not fields:
+                return
+            rest = cmdline[len(fields[0]) :].strip()
+        session = router.current_session_for_user(event.author_id, event.channel_id)
+        text = ""
+        if cmd == "answer":
+            value = rest.strip()
+            if not value:
+                await send_forbidden("Usage: !c answer [session] -- <text>  or  !c answer <text>")
+                return
+            if "--" in value:
+                left, right = value.split("--", 1)
+                if left.strip():
+                    session = left.strip()
+                text = right.strip()
+            else:
+                text = value
+            if not text:
+                await send_forbidden("Answer text required.")
+                return
+        elif cmd == "approve":
+            if rest.strip():
+                session = rest.strip()
+            text = "yes"
+        else:
+            if rest.strip():
+                session = rest.strip()
+            text = "no"
+        await router.handle_answer(event, sink, session, text)
         return
 
     bound_repo = router.get_dm_binding(event)

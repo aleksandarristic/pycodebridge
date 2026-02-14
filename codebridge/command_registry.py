@@ -162,6 +162,16 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec("stop", "stop [session]", "send ESC then SIGINT", "Run control", _cmd_stop),
         CommandSpec("kill", "kill [session]", "force kill running process", "Run control", _cmd_kill),
         CommandSpec("/quit", "/quit [session]", "send /quit to Codex", "Run control", _cmd_quit),
+        CommandSpec(
+            "answer",
+            "answer [session] -- <text> | answer <text>",
+            "send input to active Codex session",
+            "Run control",
+            _cmd_answer,
+        ),
+        CommandSpec("approve", "approve [session]", "send 'yes' to active session", "Run control", _cmd_approve),
+        CommandSpec("deny", "deny [session]", "send 'no' to active session", "Run control", _cmd_deny),
+        CommandSpec("wait", "wait", "show sessions awaiting input", "Run control", _cmd_wait),
         CommandSpec("showrepo", "showrepo", "list repo tree", "Repo helpers", _cmd_showrepo),
         CommandSpec("showchanges", "showchanges", "git status + diffstat", "Repo helpers", _cmd_showchanges),
         CommandSpec("tests", "tests", "run pytest -q", "Repo helpers", _cmd_tests),
@@ -531,6 +541,61 @@ async def _cmd_quit(router: Any, message: MessageEvent, sink: ResponseSink, repo
         if not session:
             return
     await router.handle_quit(sink, session)
+
+
+async def _parse_answer_args(router: Any, message: MessageEvent, sink: ResponseSink, rest: str) -> tuple[str, str] | None:
+    rest = (rest or "").strip()
+    if not rest:
+        await router.reply_forbidden(sink, "Usage: !c answer [session] -- <text>  or  !c answer <text>")
+        return None
+    session = router.current_session_for_user(message.author_id, message.channel_id)
+    text = rest
+    if "--" in rest:
+        left, right = rest.split("--", 1)
+        text = right.strip()
+        left = left.strip()
+        if left:
+            session = await _normalize_session_or_reply(router, sink, left)
+            if not session:
+                return None
+    if not text.strip():
+        await router.reply_forbidden(sink, "Answer text required.")
+        return None
+    return session, text.strip()
+
+
+async def _cmd_answer(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    parsed = await _parse_answer_args(router, message, sink, rest)
+    if not parsed:
+        return
+    session, text = parsed
+    await router.handle_answer(message, sink, session, text)
+
+
+async def _cmd_approve(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    session = rest.strip()
+    if session:
+        session = await _normalize_session_or_reply(router, sink, session)
+        if not session:
+            return
+    else:
+        session = router.current_session_for_user(message.author_id, message.channel_id)
+    await router.handle_answer(message, sink, session, "yes")
+
+
+async def _cmd_deny(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    session = rest.strip()
+    if session:
+        session = await _normalize_session_or_reply(router, sink, session)
+        if not session:
+            return
+    else:
+        session = router.current_session_for_user(message.author_id, message.channel_id)
+    await router.handle_answer(message, sink, session, "no")
+
+
+async def _cmd_wait(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    await router.handle_wait(message, sink)
 
 
 async def _cmd_showrepo(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

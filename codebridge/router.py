@@ -3,9 +3,10 @@
 import os
 import re
 import subprocess
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Set
 
 from . import config as cfgmod
 from .audit import Entry, Logger as AuditLogger
@@ -26,7 +27,7 @@ from .reply_helpers import send_forbidden, send_reply
 from .util.ansi import strip_control_codes
 from .util.chunk import chunk_text
 from .util.prompt import needs_user_input
-from .totp import verify_totp
+from .totp import TotpAttemptLimiter, verify_totp
 from .router_helpers import (
     DEFAULT_SESSION,
     MAX_SESSIONS_PER_CHANNEL,
@@ -39,6 +40,7 @@ from .router_config import render_config_text
 from .router_status import format_current_selection_line, format_session_line
 
 _TOTP_ARG_RE = re.compile(r"(?:^|\s)--totp\s+(\d{6})(?=\s|$)")
+_AWAITING_INPUT_TTL_SECONDS = 900
 _READ_ONLY_COMMANDS = {
     "help",
     "status",
@@ -79,7 +81,14 @@ class Router:
         self.file_transfers = FileTransferService(cfg, logger)
         self._commit = _git_commit_hash()
         self._audit_helper = AuditHelper(audit, logger)
+        self._awaiting_input: Dict[str, Dict[str, float]] = {}
         self._totp_last_step_by_user: Dict[str, int] = {}
+        self._totp_locked_users: Set[str] = set()
+        self._totp_limiter = TotpAttemptLimiter(
+            max_failures=cfg.discord.totp_max_failures,
+            window_seconds=cfg.discord.totp_failure_window_seconds,
+            cooldown_seconds=cfg.discord.totp_cooldown_seconds,
+        )
 
     async def handle_message(self, event: MessageEvent, sink: ResponseSink) -> None:
         """Handle an incoming message event."""
@@ -142,6 +151,23 @@ class Router:
         if await self.handle_pending_upload_response(event, sink, repo_name, pending_content):
             return
         if not content.startswith(prefix):
+            relay_session, ambiguous = await self.pending_input_session(event)
+            if ambiguous:
+                await self.reply_forbidden(
+                    sink,
+                    "Multiple sessions are waiting for input. Use `!c answer <session> -- <text>`.",
+                )
+                return
+            if relay_session:
+                relay_text = content.strip()
+                if not relay_text:
+                    return
+                if self._totp_enabled(event):
+                    ok, relay_text = await self.require_totp(event, sink, "answer", relay_text)
+                    if not ok:
+                        return
+                await self.handle_answer(event, sink, relay_session, relay_text)
+                return
             if not self._transport_allow_plain_prompts(event):
                 return
             self.logger.info(
@@ -338,6 +364,25 @@ class Router:
     async def handle_quit(self, sink: ResponseSink, session: str) -> None:
         """Send /quit to the Codex process."""
         await core_handlers.handle_quit(self, sink, session)
+
+    async def handle_answer(self, event: MessageEvent, sink: ResponseSink, session: str, text: str) -> None:
+        """Send an approval/input response to an active Codex session."""
+        await core_handlers.handle_answer(self, event, sink, session, text)
+
+    async def handle_wait(self, event: MessageEvent, sink: ResponseSink) -> None:
+        """Show sessions currently awaiting user input from Codex prompts."""
+        pending = self._prune_awaiting_input(event.channel_id)
+        if not pending:
+            await self.reply(sink, "No sessions are waiting for input.")
+            return
+        active: list[str] = []
+        for session in sorted(pending.keys()):
+            if await self.get_active(event.channel_id, session):
+                active.append(session)
+        if not active:
+            await self.reply(sink, "No active sessions are waiting for input.")
+            return
+        await self.reply(sink, "Waiting for input: " + ", ".join(active))
 
     async def handle_showrepo(self, sink: ResponseSink, repo_path: str) -> None:
         """Show a pruned repo tree for orientation."""
@@ -639,6 +684,7 @@ class Router:
         for msg in display_texts(evt):
             text = strip_control_codes(msg)
             if needs_user_input(text):
+                self._mark_awaiting_input(channel_id, session)
                 text = f"Codex asks: {text}"
             if relay_output:
                 for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
@@ -665,6 +711,7 @@ class Router:
     async def on_exit(self, channel_id: str, session: str, repo_name: str, err: Optional[BaseException], rc: int) -> None:
         """Handle Codex process exit events."""
         await self.clear_active(channel_id, session)
+        self.clear_awaiting_input(channel_id, session)
         if err:
             self.logger.error("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "error": str(err)})
             return
@@ -677,6 +724,51 @@ class Router:
     async def reply_forbidden(self, sink: ResponseSink, detail: str) -> None:
         """Send a standardized forbidden/invalid response."""
         await send_forbidden(sink, detail, self.cfg.discord.max_discord_message_chars)
+
+    def _mark_awaiting_input(self, channel_id: str, session: str) -> None:
+        session = session or DEFAULT_SESSION
+        expires_at = time.time() + _AWAITING_INPUT_TTL_SECONDS
+        self._awaiting_input.setdefault(channel_id, {})[session] = expires_at
+
+    def clear_awaiting_input(self, channel_id: str, session: str) -> None:
+        session = session or DEFAULT_SESSION
+        sessions = self._awaiting_input.get(channel_id)
+        if not sessions:
+            return
+        sessions.pop(session, None)
+        if not sessions:
+            self._awaiting_input.pop(channel_id, None)
+
+    def _prune_awaiting_input(self, channel_id: str) -> dict[str, float]:
+        sessions = self._awaiting_input.get(channel_id, {})
+        if not sessions:
+            return {}
+        now = time.time()
+        stale = [name for name, expires_at in sessions.items() if expires_at <= now]
+        for name in stale:
+            sessions.pop(name, None)
+        if not sessions:
+            self._awaiting_input.pop(channel_id, None)
+            return {}
+        return dict(sessions)
+
+    async def pending_input_session(self, event: MessageEvent) -> tuple[str, bool]:
+        """Resolve a session awaiting user input; returns (session, ambiguous)."""
+        pending = self._prune_awaiting_input(event.channel_id)
+        if not pending:
+            return "", False
+        preferred = self.current_session_for_user(event.author_id, event.channel_id) or DEFAULT_SESSION
+        if preferred in pending and await self.get_active(event.channel_id, preferred):
+            return preferred, False
+        candidates: list[str] = []
+        for session_name in sorted(pending.keys()):
+            if await self.get_active(event.channel_id, session_name):
+                candidates.append(session_name)
+        if len(candidates) == 1:
+            return candidates[0], False
+        if len(candidates) > 1:
+            return "", True
+        return "", False
 
     def _dm_admin_allowed(self, user_id: str) -> bool:
         if self.cfg.discord.dm_admin_user_ids:
@@ -698,6 +790,36 @@ class Router:
         cleaned = " ".join(cleaned.strip().split())
         return code, cleaned
 
+    def _totp_user_key(self, event: MessageEvent) -> str:
+        return f"{event.platform}:{event.author_id}"
+
+    async def _reply_totp_locked(self, sink: ResponseSink, retry_after_seconds: int) -> None:
+        await self.reply_forbidden(
+            sink,
+            f"Too many invalid TOTP attempts. Retry in {max(1, int(retry_after_seconds))}s.",
+        )
+
+    def _log_totp_event(
+        self,
+        level: str,
+        event_name: str,
+        event: MessageEvent,
+        command_name: str,
+        **extra: Any,
+    ) -> None:
+        payload = {
+            "platform": event.platform,
+            "channel_id": event.channel_id,
+            "is_dm": event.is_dm,
+            "user_id": event.author_id,
+            "command": command_name,
+        }
+        payload.update(extra)
+        if level == "warning":
+            self.logger.warning(event_name, extra=payload)
+            return
+        self.logger.info(event_name, extra=payload)
+
     async def require_totp(
         self,
         event: MessageEvent,
@@ -708,6 +830,23 @@ class Router:
         """Enforce TOTP verification and return sanitized command text."""
         if not self._totp_enabled(event):
             return True, text
+        user_key = self._totp_user_key(event)
+        allowed, retry_after = self._totp_limiter.check_allowed(user_key)
+        if allowed and user_key in self._totp_locked_users:
+            self._totp_locked_users.discard(user_key)
+            self._log_totp_event("info", "security.totp_unlock", event, command_name)
+        if not allowed:
+            self._totp_locked_users.add(user_key)
+            self._log_totp_event(
+                "warning",
+                "security.totp_locked",
+                event,
+                command_name,
+                retry_after_seconds=retry_after,
+                reason="cooldown_active",
+            )
+            await self._reply_totp_locked(sink, retry_after)
+            return False, text
         code, cleaned = self._extract_totp_arg(text)
         if not code:
             await self.reply_forbidden(
@@ -722,13 +861,43 @@ class Router:
             return False, text
         matched_step = verify_totp(code, secret, window=self.cfg.discord.totp_window)
         if matched_step is None:
-            await self.reply_forbidden(sink, "Invalid TOTP code.")
+            lock_seconds = self._totp_limiter.record_failure(user_key)
+            if lock_seconds > 0:
+                self._totp_locked_users.add(user_key)
+                self._log_totp_event(
+                    "warning",
+                    "security.totp_locked",
+                    event,
+                    command_name,
+                    retry_after_seconds=lock_seconds,
+                    reason="invalid_code_threshold",
+                )
+                await self._reply_totp_locked(sink, lock_seconds)
+            else:
+                self._log_totp_event("warning", "security.totp_invalid", event, command_name)
+                await self.reply_forbidden(sink, "Invalid TOTP code.")
             return False, text
-        last = self._totp_last_step_by_user.get(event.author_id, -1)
+        last = self._totp_last_step_by_user.get(user_key, -1)
         if matched_step <= last:
-            await self.reply_forbidden(sink, "TOTP code already used; wait for a new code and retry.")
+            lock_seconds = self._totp_limiter.record_failure(user_key)
+            if lock_seconds > 0:
+                self._totp_locked_users.add(user_key)
+                self._log_totp_event(
+                    "warning",
+                    "security.totp_locked",
+                    event,
+                    command_name,
+                    retry_after_seconds=lock_seconds,
+                    reason="replay_threshold",
+                )
+                await self._reply_totp_locked(sink, lock_seconds)
+            else:
+                self._log_totp_event("warning", "security.totp_replay", event, command_name)
+                await self.reply_forbidden(sink, "TOTP code already used; wait for a new code and retry.")
             return False, text
-        self._totp_last_step_by_user[event.author_id] = matched_step
+        self._totp_limiter.record_success(user_key)
+        self._totp_last_step_by_user[user_key] = matched_step
+        self._log_totp_event("info", "security.totp_success", event, command_name)
         return True, cleaned
 
     def dm_binding_key(self, event: MessageEvent) -> str:

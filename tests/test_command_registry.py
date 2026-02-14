@@ -20,3 +20,5 @@ def test_command_registry_help_text():
     assert "Repo helpers:" in text
     assert "git <status|log|branches|show|diff|pull|commit|push|merge> — git helpers" in text
     assert "gh <args> — GitHub CLI helper passthrough" in text
+    assert "answer [session] -- <text> | answer <text> — send input to active Codex session" in text
+    assert "wait — show sessions awaiting input" in text

@@ -175,14 +175,27 @@ class Process:
 
 class Runner:
     """Build and execute Codex CLI commands."""
-    def __init__(self, binary: str, sandbox: str, base_env: Optional[Dict[str, str]] = None) -> None:
+    def __init__(
+        self,
+        binary: str,
+        sandbox: str,
+        base_env: Optional[Dict[str, str]] = None,
+        ask_for_approval: str = "",
+    ) -> None:
         self.binary = binary or "codex"
         self.sandbox = sandbox or "workspace-write"
         self.base_env = base_env or {}
+        self.ask_for_approval = (ask_for_approval or "").strip()
+
+    def _base_exec_args(self, repo_path: str) -> list[str]:
+        args = ["exec", "--json", "--cd", repo_path, "--sandbox", self.sandbox]
+        if self.ask_for_approval:
+            args += ["-a", self.ask_for_approval]
+        return args
 
     def build_start_args(self, repo_path: str, prompt: str, model: str, reasoning_effort: str) -> list[str]:
         """Build args for starting a new Codex session."""
-        args = ["exec", "--json", "--cd", repo_path, "--sandbox", self.sandbox]
+        args = self._base_exec_args(repo_path)
         if model.strip():
             args += ["--model", model]
         args += _reasoning_args(reasoning_effort)
@@ -191,7 +204,7 @@ class Runner:
 
     def build_resume_args(self, repo_path: str, thread_id: str, prompt: str, model: str, reasoning_effort: str) -> list[str]:
         """Build args for resuming a session by thread id."""
-        args = ["exec", "--json", "--cd", repo_path, "--sandbox", self.sandbox, "resume", thread_id]
+        args = self._base_exec_args(repo_path) + ["resume", thread_id]
         if model.strip():
             args += ["--model", model]
         args += _reasoning_args(reasoning_effort)
@@ -200,7 +213,7 @@ class Runner:
 
     def build_resume_last_args(self, repo_path: str, prompt: str, model: str, reasoning_effort: str) -> list[str]:
         """Build args for resuming the last session in a repo."""
-        args = ["exec", "--json", "--cd", repo_path, "--sandbox", self.sandbox, "resume", "--last"]
+        args = self._base_exec_args(repo_path) + ["resume", "--last"]
         if model.strip():
             args += ["--model", model]
         args += _reasoning_args(reasoning_effort)
