@@ -95,11 +95,27 @@ class _FakeRouter:
     async def handle_upload_request(self, event: MessageEvent, sink, repo_name: str, repo_path: str) -> None:
         self.uploads_requested = True
 
-    async def handle_pending_upload_response(self, event: MessageEvent, sink, repo_name: str) -> bool:
-        if event.content == "uploads/":
+    async def handle_pending_upload_response(
+        self,
+        event: MessageEvent,
+        sink,
+        repo_name: str,
+        content_override: str | None = None,
+    ) -> bool:
+        _ = (sink, repo_name)
+        content = event.content if content_override is None else content_override
+        if content == "uploads/":
             self.pending_handled = True
             return True
         return False
+
+    def _totp_enabled(self, event: MessageEvent) -> bool:
+        _ = event
+        return False
+
+    async def require_totp(self, event: MessageEvent, sink, command_name: str, text: str):
+        _ = (event, sink, command_name)
+        return True, text
 
     def append_audit_output(self, entry, msg: str) -> None:
         return None

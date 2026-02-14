@@ -44,13 +44,9 @@ _READ_ONLY_COMMANDS = {
     "status",
     "stats",
     "peek",
-    "config",
     "models",
     "showrepo",
     "showchanges",
-    "tests",
-    "download",
-    "logs",
     "ps",
 }
 
@@ -127,6 +123,10 @@ class Router:
         prefix = self._transport_prefix(event)
         content = (event.content or "").strip()
         if event.attachments:
+            if self._totp_enabled(event):
+                ok, _ = await self.require_totp(event, sink, "upload", content)
+                if not ok:
+                    return
             try:
                 repo_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, repo_name)
             except Exception as exc:
@@ -134,7 +134,12 @@ class Router:
                 return
             await self.handle_upload_request(event, sink, repo_name, repo_path)
             return
-        if await self.handle_pending_upload_response(event, sink, repo_name):
+        pending_content = content
+        if self.file_transfers.has_pending_upload(event) and self._totp_enabled(event):
+            ok, pending_content = await self.require_totp(event, sink, "upload", content)
+            if not ok:
+                return
+        if await self.handle_pending_upload_response(event, sink, repo_name, pending_content):
             return
         if not content.startswith(prefix):
             if not self._transport_allow_plain_prompts(event):
@@ -168,7 +173,12 @@ class Router:
         if not cmdline:
             return
 
-        if await self.handle_pending_upload_response(event, sink, repo_name):
+        pending_cmdline = cmdline
+        if self.file_transfers.has_pending_upload(event) and self._totp_enabled(event):
+            ok, pending_cmdline = await self.require_totp(event, sink, "upload", cmdline)
+            if not ok:
+                return
+        if await self.handle_pending_upload_response(event, sink, repo_name, pending_cmdline):
             return
 
         fields = cmdline.split()
@@ -674,7 +684,7 @@ class Router:
         return user_id in self.cfg.discord.allowed_user_ids
 
     def _totp_enabled(self, event: MessageEvent) -> bool:
-        return event.platform == "discord" and self.cfg.discord.totp_enabled
+        return self.cfg.discord.totp_enabled
 
     def _totp_required_for_command(self, cmd: str) -> bool:
         return cmd not in _READ_ONLY_COMMANDS
@@ -763,7 +773,13 @@ class Router:
         """Prompt for a destination path for uploaded files."""
         await self.file_transfers.handle_upload_request(event, sink, repo_name, repo_path, self.reply_forbidden, self.reply)
 
-    async def handle_pending_upload_response(self, event: MessageEvent, sink: ResponseSink, repo_name: str) -> bool:
+    async def handle_pending_upload_response(
+        self,
+        event: MessageEvent,
+        sink: ResponseSink,
+        repo_name: str,
+        content_override: str | None = None,
+    ) -> bool:
         """Handle a pending upload path response."""
         return await self.file_transfers.handle_pending_upload_response(
             event,
@@ -772,6 +788,7 @@ class Router:
             self._transport_prefix(event),
             self.reply_forbidden,
             self.reply,
+            content_override,
         )
 
     @asynccontextmanager

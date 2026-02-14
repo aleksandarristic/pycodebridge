@@ -288,7 +288,16 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
     """Handle an incoming DM admin message."""
     content = (event.content or "").strip()
     prefix = router._transport_prefix(event)
-    if await router.handle_pending_upload_response(event, sink, router.get_dm_binding(event) or ""):
+    pending_upload = False
+    file_transfers = getattr(router, "file_transfers", None)
+    if file_transfers is not None and hasattr(file_transfers, "has_pending_upload"):
+        pending_upload = file_transfers.has_pending_upload(event)
+    pending_content = content
+    if pending_upload and router._totp_enabled(event):
+        ok, pending_content = await router.require_totp(event, sink, "upload", content)
+        if not ok:
+            return
+    if await router.handle_pending_upload_response(event, sink, router.get_dm_binding(event) or "", pending_content):
         return
     if not content.startswith(prefix):
         if not router._transport_user_allowed(event):
@@ -304,6 +313,10 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
             await sink.send(forbidden_message(f"Repo error: {exc}"))
             return
         if event.attachments:
+            if router._totp_enabled(event):
+                ok, _ = await router.require_totp(event, sink, "upload", content)
+                if not ok:
+                    return
             await router.handle_upload_request(event, sink, bound_repo, repo_path)
             return
         session = router.current_session_for_user(event.author_id, event.channel_id)

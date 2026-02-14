@@ -85,15 +85,17 @@ class FileTransferService:
         prefix: str,
         reply_forbidden: Callable[[ResponseSink, str], Awaitable[None]],
         reply: Callable[[ResponseSink, str], Awaitable[None]],
+        content_override: str | None = None,
     ) -> bool:
-        if not event.content:
+        content = (event.content if content_override is None else content_override) or ""
+        if not content:
             return False
         upload = self._get_pending_upload(event)
         if not upload:
             return False
-        if event.content.strip().startswith(prefix):
+        if content.strip().startswith(prefix):
             return False
-        rel_path = event.content.strip()
+        rel_path = content.strip()
         try:
             target_path = pathutil.resolve_repo_file_path(upload.repo_path, rel_path)
         except Exception as exc:
@@ -128,6 +130,10 @@ class FileTransferService:
 
     def _upload_key(self, event: MessageEvent) -> str:
         return f"{event.platform}:{event.channel_id}:{event.author_id}"
+
+    def has_pending_upload(self, event: MessageEvent) -> bool:
+        """Return whether an unexpired upload prompt is waiting for a path reply."""
+        return self._get_pending_upload(event) is not None
 
     def _set_pending_upload(self, event: MessageEvent, upload: PendingUpload) -> None:
         self._pending_uploads[self._upload_key(event)] = upload

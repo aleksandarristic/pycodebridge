@@ -10,7 +10,7 @@ from codebridge.codex import Options
 from codebridge.router import Router
 from codebridge.session_coordinator import SessionCoordinator
 from codebridge.state import Store
-from codebridge.transport import Capabilities, MessageEvent
+from codebridge.transport import Attachment, Capabilities, MessageEvent
 
 
 class _FakeEntry:
@@ -174,6 +174,18 @@ def _discord_event(content: str, channel_name: str, channel_id: str = "chan") ->
     )
 
 
+def _telegram_channel_event(content: str, channel_name: str, channel_id: str = "chat") -> MessageEvent:
+    return MessageEvent(
+        platform="telegram",
+        content=content,
+        channel_id=channel_id,
+        channel_name=channel_name,
+        author_id="user",
+        author_is_bot=False,
+        is_dm=False,
+    )
+
+
 def test_integration_start_stop(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -284,3 +296,63 @@ def test_totp_required_for_state_changing_and_gh(tmp_path, monkeypatch):
     assert any("TOTP required for 'start'" in msg for msg, _, _ in sink.sent)
     assert any("TOTP required for 'gh'" in msg for msg, _, _ in sink.sent)
     assert any(args and args[0] == "start" for args in runner.calls)
+
+
+def test_totp_required_for_config_tests_download_logs_and_upload(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    (repo / "note.txt").write_text("hi")
+
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def save_noop(path: str) -> None:
+        _ = path
+
+    upload_event = MessageEvent(
+        platform="discord",
+        content="",
+        channel_id="chan",
+        channel_name="codex-repo",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=False,
+        guild_id="guild",
+        attachments=[Attachment(filename="note.txt", size=2, content_type="text/plain", save=save_noop)],
+    )
+
+    async def run():
+        await router.handle_message(_discord_event("!c config", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c tests", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c download note.txt", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c logs", "codex-repo"), sink)
+        await router.handle_message(upload_event, sink)
+
+    asyncio.run(run())
+    assert any("TOTP required for 'config'" in msg for msg, _, _ in sink.sent)
+    assert any("TOTP required for 'tests'" in msg for msg, _, _ in sink.sent)
+    assert any("TOTP required for 'download'" in msg for msg, _, _ in sink.sent)
+    assert any("TOTP required for 'logs'" in msg for msg, _, _ in sink.sent)
+    assert any("TOTP required for 'upload'" in msg for msg, _, _ in sink.sent)
+
+
+def test_totp_required_on_telegram_platform(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_telegram_channel_event("!c start", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert any("TOTP required for 'start'" in msg for msg, _, _ in sink.sent)

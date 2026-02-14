@@ -63,7 +63,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `allow_plain_prompts` (default `false`) — treat non-prefixed messages as prompts in matching channels.
 - `dm_admin_enabled` (default `false`) — enable DM admin commands.
 - `dm_admin_user_ids` (default empty) — allowlist for DM admin (falls back to `allowed_user_ids`).
-- `totp_enabled` (default `false`) — require TOTP for state-changing Discord commands.
+- `totp_enabled` (default `false`) — require TOTP for protected commands on all platforms.
 - `totp_secret_env` (default `DISCORD_TOTP_SECRET`) — env var containing Base32 TOTP secret.
 - `totp_window` (default `1`) — accepted clock skew window in 30s steps.
 - `max_discord_message_chars` (default `1800`) — outbound chunk size.
@@ -106,20 +106,16 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 
 ## Commands
 Prefix default is `!c`. Channels should be named `codex-<repo>`.
-When `discord.totp_enabled: true`, state-changing commands require `--totp 123456`.
+When `discord.totp_enabled: true`, protected commands on all platforms require `--totp 123456`.
 
 TOTP not required (read-only in channel):
 - `!c help`
 - `!c status`
 - `!c stats [session]`
 - `!c peek [session]`
-- `!c config`
 - `!c models [session]`
 - `!c showrepo`
 - `!c showchanges`
-- `!c tests`
-- `!c download <path>`
-- `!c logs [session] [n]`
 - `!c ps`
 
 TOTP required (channel):
@@ -140,8 +136,13 @@ TOTP required (channel):
 - `!c gh <args>`
 - `!c cancel <job-id>`
 - `!c rerun`
+- `!c config`
+- `!c tests`
+- `!c download <path>`
+- `!c logs [session] [n]`
 - Any other prompt-style `!c ...` command that is not in the read-only list
 - Plain prompts in mapped channels when `allow_plain_prompts: true`
+- Upload flows (attachment submit and upload-path response)
 
 General:
 - `!c help`, `!c status`, `!c config`, `!c stats [session]`, `!c peek [session]`
@@ -208,6 +209,7 @@ When `discord.totp_enabled: true`, TOTP is required in DMs for:
 - `!c deleterepo <name>` / `!c delete <name>`
 - `!c renamerepo <from> <to>` / `!c rename <from> <to>`
 - Non-prefixed DM prompts when a repo is bound
+- Upload flows in bound DMs (attachment submit and upload-path response)
 
 TOTP is not required in DMs for:
 - `!c help`

@@ -59,13 +59,15 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
    `DISCORD_TOKEN=YOUR_TOKEN`
    Keep this out of version control and env var managers that sync publicly.
 6) Optional: enable DM admin with `discord.dm_admin_enabled: true` and add `discord.dm_admin_user_ids` if you want a separate allowlist for DMs.
-7) Optional: enable TOTP for state-changing commands:
+7) Optional: enable TOTP for protected commands (all transports):
    - `discord.totp_enabled: true`
    - set `.env`: `DISCORD_TOTP_SECRET=BASE32_SECRET`
    - include codes in protected commands: `--totp 123456`
-   - Channel commands that do NOT require TOTP: `help`, `status`, `stats`, `peek`, `config`, `models`, `showrepo`, `showchanges`, `tests`, `download`, `logs`, `ps`
-   - Channel commands that DO require TOTP: `start`, `resume`, `choose`, `use/select`, `model`, `thread`, `spec`, `createrepo`, `clonerepo`, `copyrepo`, `stop`, `kill`, `/quit`, `git`, `gh`, `cancel`, `rerun`, and plain prompts
+   - Channel commands that do NOT require TOTP: `help`, `status`, `stats`, `peek`, `models`, `showrepo`, `showchanges`, `ps`
+   - Channel commands that DO require TOTP: `start`, `resume`, `choose`, `use/select`, `model`, `thread`, `spec`, `createrepo`, `clonerepo`, `copyrepo`, `stop`, `kill`, `/quit`, `git`, `gh`, `cancel`, `rerun`, `config`, `tests`, `download`, `logs`, and plain prompts
+   - Upload flows that DO require TOTP: attachment submit and upload-path response
    - DM commands that DO require TOTP: `bind`, `use`, `repo`, `unbind`, `gh`, `createrepo`, `clonerepo`, `copyrepo`, `deleterepo/delete`, `renamerepo/rename`, and bound non-prefixed prompts
+   - DM upload flows that DO require TOTP: attachment submit and upload-path response
    - DM commands that do NOT require TOTP: `help`, `repos`, `sessions`, `status`, `config`
 
 ## Run
