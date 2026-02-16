@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 from . import config as cfgmod
 from .router_helpers import PendingConflict, set_sticky
 from .state import Store, utc_now_iso
+from .util import path as pathutil
 
 
 class SessionService:
@@ -95,6 +96,10 @@ class SessionService:
     ) -> None:
         """Update persistent state for a session."""
         session = session or "default"
+        try:
+            repo_name = pathutil.normalize_repo_name(repo_name)
+        except ValueError:
+            repo_name = (repo_name or "").strip().lower()
 
         def mutator(fs):
             ch = fs.channels.get(channel_id)

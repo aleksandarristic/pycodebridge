@@ -44,6 +44,7 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
 
 ## Channels and access
 - Create text channels named `codex-<repo>` (e.g., `codex-myservice`), matching repos under your configured `code_root`.
+  Repo identifiers are normalized to lowercase, so prefer lowercase repo directory names.
 - Ensure the bot's role can View Channels and Send Messages in those channels.
 
 ## Collect IDs for config
@@ -53,7 +54,7 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
 ## Configure the bridge
 1) Copy `config.example.yaml` to `config.yaml`.
 2) Set `discord.allowed_user_ids` to your user ID(s) and set `discord.guild_id` to your server ID for strict guild lock.
-3) Set `codex.code_root` to the absolute path that contains your git repos. Each `codex-<repo>` channel must map to `<code_root>/<repo>` with a `.git` directory.
+3) Set `codex.code_root` to the absolute path that contains your git repos. Each `codex-<repo>` channel maps by lowercase repo id to `<code_root>/<repo>` with a `.git` directory.
    - Optional: set `codex.ask_for_approval` to one of `untrusted|on-failure|on-request|never` for explicit Codex permission behavior.
 4) Adjust `state.data_dir`/`state.log_dir` to writable locations (defaults under your home are fine).
 5) Set the bot token in `.env` (repo root):

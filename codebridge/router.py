@@ -128,7 +128,11 @@ class Router:
         if not match:
             return
 
-        repo_name = match.group(1)
+        try:
+            repo_name = pathutil.normalize_repo_name(match.group(1))
+        except ValueError as exc:
+            await self.reply_forbidden(sink, f"Repo error: {exc}")
+            return
         prefix = self._transport_prefix(event)
         content = (event.content or "").strip()
         if event.attachments:
@@ -907,10 +911,17 @@ class Router:
     def get_dm_binding(self, event: MessageEvent) -> str:
         """Return the bound repo name for a DM, if any."""
         state = self.state.load()
-        return state.dm_bindings.get(self.dm_binding_key(event), "")
+        raw = (state.dm_bindings.get(self.dm_binding_key(event), "") or "").strip()
+        if not raw:
+            return ""
+        try:
+            return pathutil.normalize_repo_name(raw)
+        except ValueError:
+            return raw.lower()
 
     def set_dm_binding(self, event: MessageEvent, repo_name: str) -> None:
         """Set the bound repo name for a DM."""
+        repo_name = pathutil.normalize_repo_name(repo_name)
         key = self.dm_binding_key(event)
         self.state.update(lambda fs: fs.dm_bindings.__setitem__(key, repo_name))
 
@@ -1009,16 +1020,26 @@ class Router:
 
     async def repo_busy(self, repo_name: str) -> bool:
         """Return True if a repo has active or queued jobs."""
+        repo_key = self._repo_key(repo_name)
         state = self.state.load()
         for channel_id, ch in state.channels.items():
             for sess in ch.sessions.values():
-                if sess.repo_name == repo_name:
+                if self._repo_key(sess.repo_name) == repo_key:
                     if await self.has_active(channel_id):
                         return True
                     statuses = await self.coordinator.snapshot(channel_id)
                     if statuses:
                         return True
         return False
+
+    def _repo_key(self, repo_name: str) -> str:
+        raw = (repo_name or "").strip()
+        if not raw:
+            return ""
+        try:
+            return pathutil.normalize_repo_name(raw)
+        except ValueError:
+            return raw.lower()
 
     def audit_start(self, channel_id: str, session: str, thread_id: str, meta: Any) -> Optional[Entry]:
         """Start an audit entry with error handling."""

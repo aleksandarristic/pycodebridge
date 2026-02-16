@@ -143,6 +143,7 @@ async def dm_create_repo(
     entry: Optional[Entry],
 ) -> Optional[Exception]:
     """Create a new repo via DM admin command."""
+    repo_name = pathutil.normalize_repo_name(repo_name)
     try:
         repo_path = pathutil.resolve_repo_path_for_create(router.cfg.codex.code_root, repo_name)
     except Exception as exc:
@@ -177,6 +178,7 @@ async def dm_clone_repo(
     entry: Optional[Entry],
 ) -> Optional[Exception]:
     """Clone a repo via DM admin command."""
+    repo_name = pathutil.normalize_repo_name(repo_name)
     try:
         repo_path = pathutil.resolve_repo_path_for_create(router.cfg.codex.code_root, repo_name)
     except Exception as exc:
@@ -205,6 +207,8 @@ async def dm_copy_repo(
     entry: Optional[Entry],
 ) -> Optional[Exception]:
     """Copy a repo via DM admin command."""
+    from_name = pathutil.normalize_repo_name(from_name)
+    to_name = pathutil.normalize_repo_name(to_name)
     try:
         src_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, from_name)
         dst_path = pathutil.resolve_repo_path_for_create(router.cfg.codex.code_root, to_name)
@@ -233,6 +237,7 @@ async def dm_delete_repo(
     entry: Optional[Entry],
 ) -> Optional[Exception]:
     """Delete a repo via DM admin command."""
+    repo_name = pathutil.normalize_repo_name(repo_name)
     try:
         repo_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, repo_name)
     except Exception as exc:
@@ -264,6 +269,8 @@ async def dm_rename_repo(
     entry: Optional[Entry],
 ) -> Optional[Exception]:
     """Rename a repo via DM admin command."""
+    from_name = pathutil.normalize_repo_name(from_name)
+    to_name = pathutil.normalize_repo_name(to_name)
     try:
         src_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, from_name)
         dst_path = pathutil.resolve_repo_path_for_create(router.cfg.codex.code_root, to_name)
@@ -483,6 +490,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
                 await send_forbidden("Usage: !c bind <repo>")
                 return
             try:
+                repo_name = pathutil.normalize_repo_name(repo_name)
                 _ = pathutil.resolve_repo_path(router.cfg.codex.code_root, repo_name)
             except Exception as exc:
                 await send_forbidden(f"Repo error: {exc}")
@@ -513,6 +521,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
                 await send_forbidden("Prompt required.")
                 return
             try:
+                repo_name = pathutil.normalize_repo_name(repo_name)
                 repo_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, repo_name)
             except Exception as exc:
                 await send_forbidden(f"Repo error: {exc}")

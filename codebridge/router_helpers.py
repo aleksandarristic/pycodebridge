@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Optional, Tuple
 
 from .codex import Event
+from .util import path as pathutil
 
 FORBIDDEN_PREFIX = "I'm sorry, Dave. I'm afraid I can't do that."
 DEFAULT_SESSION = "default"
@@ -146,10 +147,11 @@ def set_sticky(fs, channel_id: str, user_id: str, session: str) -> None:
 
 def prune_state_for_repo(fs, repo_name: str, repo_path: str) -> None:
     """Remove state entries referencing a repo."""
+    repo_key = _repo_key(repo_name)
     for channel_id, ch in list(fs.channels.items()):
         changed = False
         for sess_name, sess in list(ch.sessions.items()):
-            if sess.repo_name == repo_name or sess.repo_path == repo_path:
+            if _repo_key(sess.repo_name) == repo_key or sess.repo_path == repo_path:
                 del ch.sessions[sess_name]
                 changed = True
         if changed:
@@ -164,15 +166,26 @@ def prune_state_for_repo(fs, repo_name: str, repo_path: str) -> None:
 
 def rename_state_repo(fs, from_name: str, from_path: str, to_name: str, to_path: str) -> None:
     """Update state entries after a repo rename."""
+    from_key = _repo_key(from_name)
     for channel_id, ch in fs.channels.items():
         changed = False
         for sess_name, sess in ch.sessions.items():
-            if sess.repo_name == from_name or sess.repo_path == from_path:
+            if _repo_key(sess.repo_name) == from_key or sess.repo_path == from_path:
                 sess.repo_name = to_name
                 sess.repo_path = to_path
                 changed = True
         if changed:
             fs.channels[channel_id] = ch
+
+
+def _repo_key(repo_name: str) -> str:
+    raw = (repo_name or "").strip()
+    if not raw:
+        return ""
+    try:
+        return pathutil.normalize_repo_name(raw)
+    except ValueError:
+        return raw.lower()
 
 
 def build_tree(repo_path: str, max_depth: int = 3) -> str:

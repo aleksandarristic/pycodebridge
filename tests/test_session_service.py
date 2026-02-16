@@ -41,3 +41,13 @@ def test_session_service_active_tracking(tmp_path):
         assert await service.has_active("chan") is False
 
     asyncio.run(run())
+
+
+def test_session_service_update_state_normalizes_repo_name(tmp_path):
+    store = Store(str(tmp_path))
+    cfg = config.Config()
+    service = SessionService(store, cfg)
+
+    service.update_state("chan", "default", "ProbablyFine", "/tmp/ProbablyFine", "thread", "", "")
+    state = store.load()
+    assert state.channels["chan"].sessions["default"].repo_name == "probablyfine"

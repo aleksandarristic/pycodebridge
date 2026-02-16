@@ -2,6 +2,7 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import os
 import struct
 import time
 
@@ -215,6 +216,31 @@ def test_integration_start_stop(tmp_path):
     assert runner.last_proc is not None
     assert runner.last_proc.stopped is True
     assert runner.last_proc.interrupted is True
+
+
+def test_integration_start_with_case_variant_repo_dir(tmp_path):
+    repo = tmp_path / "ProbablyFine"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-probablyfine"), sink)
+        for _ in range(200):
+            state = router.state.load()
+            ch = state.channels.get("chan")
+            if ch and "default" in ch.sessions:
+                break
+            await asyncio.sleep(0.01)
+
+    asyncio.run(run())
+    state = router.state.load()
+    sess = state.channels["chan"].sessions["default"]
+    assert sess.repo_name == "probablyfine"
+    assert os.path.basename(sess.repo_path).lower() == "probablyfine"
+    assert os.path.samefile(sess.repo_path, str(repo))
 
 
 def test_integration_kill(tmp_path):
@@ -485,3 +511,19 @@ def test_totp_rate_limit_lock_and_cooldown(tmp_path, monkeypatch):
     assert "security.totp_locked" in event_names
     assert "security.totp_unlock" in event_names
     assert "security.totp_success" in event_names
+
+
+def test_router_dm_binding_is_normalized(tmp_path):
+    router, _ = _build_router(tmp_path)
+    event = MessageEvent(
+        platform="discord",
+        content="",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    router.set_dm_binding(event, "ProbablyFine")
+    assert router.get_dm_binding(event) == "probablyfine"

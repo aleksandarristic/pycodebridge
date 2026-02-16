@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict
 
 from filelock import FileLock
+from .util import path as pathutil
 
 CURRENT_VERSION = 1
 
@@ -90,8 +91,13 @@ def _from_dict(data: Dict[str, Any]) -> FileState:
     """Deserialize a FileState from a raw dictionary."""
     version = int(data.get("version", CURRENT_VERSION))
     channels_raw = data.get("channels", {}) or {}
-    dm_bindings = data.get("dm_bindings", {}) or {}
+    dm_bindings_raw = data.get("dm_bindings", {}) or {}
     channels: Dict[str, ChannelState] = {}
+    dm_bindings: Dict[str, str] = {}
+    for key, value in dm_bindings_raw.items():
+        repo = _normalize_repo_name(value)
+        if repo:
+            dm_bindings[str(key)] = repo
 
     for channel_id, ch in channels_raw.items():
         sessions_raw = (ch or {}).get("sessions", {}) or {}
@@ -99,7 +105,7 @@ def _from_dict(data: Dict[str, Any]) -> FileState:
         sessions: Dict[str, SessionState] = {}
         for name, s in sessions_raw.items():
             sessions[name] = SessionState(
-                repo_name=s.get("repo_name", ""),
+                repo_name=_normalize_repo_name(s.get("repo_name", "")),
                 repo_path=s.get("repo_path", ""),
                 thread_id=s.get("thread_id", ""),
                 model=s.get("model", ""),
@@ -128,7 +134,7 @@ def _migrate_legacy(fs: FileState, raw: Dict[str, Any]) -> None:
         if not legacy_repo and not legacy_thread:
             continue
         fs.channels[channel_id].sessions["default"] = SessionState(
-            repo_name=ch.get("repo_name", ""),
+            repo_name=_normalize_repo_name(ch.get("repo_name", "")),
             repo_path=ch.get("repo_path", ""),
             thread_id=ch.get("thread_id", ""),
             created_at=ch.get("created_at", ""),
@@ -163,3 +169,13 @@ def _to_dict(state: FileState) -> Dict[str, Any]:
 def utc_now_iso() -> str:
     """Return current UTC time in ISO8601 format."""
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _normalize_repo_name(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    try:
+        return pathutil.normalize_repo_name(raw)
+    except ValueError:
+        return raw.lower()

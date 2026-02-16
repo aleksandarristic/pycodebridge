@@ -52,3 +52,31 @@ def test_state_migrate_legacy(tmp_path):
     store = Store(str(tmp_path))
     state = store.load()
     assert "default" in state.channels["chan"].sessions
+
+
+def test_state_load_normalizes_repo_names(tmp_path):
+    path = tmp_path / "state.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "channels": {
+                    "chan": {
+                        "sessions": {
+                            "default": {
+                                "repo_name": "ProbablyFine",
+                                "repo_path": "/tmp/ProbablyFine",
+                                "thread_id": "thread",
+                            }
+                        }
+                    }
+                },
+                "dm_bindings": {"discord:dm-1": "ProbablyFine"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    store = Store(str(tmp_path))
+    state = store.load()
+    assert state.channels["chan"].sessions["default"].repo_name == "probablyfine"
+    assert state.dm_bindings["discord:dm-1"] == "probablyfine"

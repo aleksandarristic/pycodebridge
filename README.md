@@ -4,6 +4,7 @@ Bridge transport channels (`codex-<repo>`) to Codex CLI sessions in local repos 
 
 ## Features
 - Map `#codex-<repo>` to `<code_root>/<repo>` (must exist, be inside root, and contain `.git`).
+  Repo identifiers are canonicalized to lowercase.
 - Stream Codex JSONL output to transports; strip control codes; flag prompts needing user input.
 - Per-channel queue, multi-session support (max 3 per channel), run control (stop/kill/quit).
 - Optional DM admin mode for owner-only repo management (Discord).
@@ -199,6 +200,7 @@ Passthrough:
 
 ## DM admin commands (optional)
 Enable with `discord.dm_admin_enabled: true`. Commands require the same `!c` prefix in DMs (Discord only).
+Repo names passed to DM commands are normalized to lowercase (for example, `ProbablyFine` becomes `probablyfine`).
 
 - `!c help`
 - `!c repos`
@@ -240,7 +242,7 @@ Attachments in channels or bound DMs will prompt for a destination path before s
 
 ## Troubleshooting
 - No response: confirm Message Content intent is enabled and saved, and your user ID is allowlisted.
-- Repo error: ensure channel name matches `codex-<repo>` and `<code_root>/<repo>/.git` exists.
+- Repo error: ensure channel name matches `codex-<repo>` and `<code_root>/<repo>/.git` exists. Repo names are normalized to lowercase.
 - DM admin: enable `discord.dm_admin_enabled` and ensure `dm_admin_user_ids` or `allowed_user_ids` includes you.
 - Security logs (`state.log_dir/bridge.log`): look for `security.totp_invalid`, `security.totp_replay`, `security.totp_locked`, `security.totp_unlock`, `security.totp_success`.
 

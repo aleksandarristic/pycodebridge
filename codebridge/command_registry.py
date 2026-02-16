@@ -504,11 +504,13 @@ async def _cmd_clonerepo(router: Any, message: MessageEvent, sink: ResponseSink,
 
 
 async def _cmd_copyrepo(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
-    new_name = rest.strip()
+    raw_new_name = rest.strip()
+    new_name = raw_new_name
     if not new_name:
         await router.reply_forbidden(sink, "Usage: !c copyrepo <new-repo-name>")
         return
     try:
+        new_name = pathutil.normalize_repo_name(raw_new_name)
         target_path = pathutil.resolve_repo_path_for_create(router.cfg.codex.code_root, new_name)
     except Exception as exc:
         await router.reply_forbidden(sink, f"Repo error: {exc}")

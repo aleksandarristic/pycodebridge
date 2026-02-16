@@ -242,6 +242,52 @@ def test_dm_binding_non_prefixed_prompt(tmp_path):
     assert router.last_resume["prompt"] == "fix tests"
 
 
+def test_dm_binding_normalizes_repo_name(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.telegram.allowed_user_ids = ["user"]
+    cfg.telegram.prefix = "!c"
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+
+    repo = tmp_path / "probablyfine"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    store = Store(cfg.state.data_dir)
+    router = _FakeRouter(cfg, store)
+    sink = _FakeSink("dm-1")
+    bind_event = MessageEvent(
+        platform="telegram",
+        content="!c bind ProbablyFine",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+    prompt_event = MessageEvent(
+        platform="telegram",
+        content="fix tests",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    async def run():
+        await dm_admin.handle_dm_message(router, bind_event, sink)
+        await dm_admin.handle_dm_message(router, prompt_event, sink)
+
+    asyncio.run(run())
+
+    assert sink.sent[0].startswith("Bound repo: probablyfine")
+    assert router.last_resume is not None
+    assert router.last_resume["repo_name"] == "probablyfine"
+    assert router.last_resume["repo_path"] == str(repo)
+
+
 def test_dm_unbound_guidance(tmp_path):
     cfg = cfgmod.Config()
     cfg.telegram.allowed_user_ids = ["user"]
