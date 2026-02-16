@@ -280,7 +280,7 @@ def test_integration_resume_and_download(tmp_path):
         await router.handle_message(_discord_event("!c download note.txt", "codex-repo"), sink)
 
     asyncio.run(run())
-    assert any("resume" in args for args in runner.calls)
+    assert any(args and args[0] == "start" for args in runner.calls)
     assert sink.files == [(str(target), "note.txt", None, None)]
 
 
@@ -434,7 +434,7 @@ def test_totp_unlock_allows_plain_resume_for_ttl(tmp_path, monkeypatch):
 
     asyncio.run(run())
     assert any("TOTP unlock active for 2h" in msg for msg, _, _ in sink.sent)
-    assert any(args and args[0] == "resume" for args in runner.calls)
+    assert any(args and args[0] == "start" for args in runner.calls)
 
 
 def test_totp_unlock_still_requires_totp_for_high_risk(tmp_path, monkeypatch):

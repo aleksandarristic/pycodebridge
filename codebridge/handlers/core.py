@@ -89,8 +89,11 @@ async def handle_resume(
     reasoning = router.session_reasoning_effort(channel_id, session)
     if thread_id:
         args = router.runner.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
-    else:
+    elif session_exists(state, channel_id, session):
         args = router.runner.build_resume_last_args(repo_path, prompt, model, reasoning)
+    else:
+        # No existing session in this channel: start a fresh run with the prompt.
+        args = router.runner.build_start_args(repo_path, prompt, model, reasoning)
 
     async def job() -> None:
         await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args)

@@ -670,6 +670,17 @@ class Router:
             "channel": channel_id,
         }
         entry = self._audit_helper.start(channel_id, session or DEFAULT_SESSION, "pending", meta)
+        stderr_tail: list[str] = []
+
+        async def _on_stderr(line: str) -> None:
+            self._audit_helper.append_stderr(entry, line)
+            text = strip_control_codes((line or "").strip())
+            if not text:
+                return
+            stderr_tail.append(text)
+            if len(stderr_tail) > 5:
+                del stderr_tail[: len(stderr_tail) - 5]
+
         async with self.typing_context(sink):
             try:
                 proc = await self.runner.run(
@@ -682,19 +693,25 @@ class Router:
                             channel_id, session, repo_name, repo_path, model, reasoning_effort, entry, tid
                         ),
                         on_output=on_output,
-                        on_stderr=lambda line: self._audit_helper.append_stderr(entry, line),
+                        on_stderr=_on_stderr,
                         on_exit=lambda err, rc: self.on_exit(channel_id, session, repo_name, err, rc),
                     )
                 )
             except Exception as exc:
                 self._audit_helper.close(entry)
-                raise exc
+                await self.reply_forbidden(sink, f"Codex failed to start: {exc}")
+                return
 
             await self.set_active(channel_id, session, proc)
             try:
                 rc = await proc.wait()
                 if rc != 0:
                     self.logger.warning("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "code": rc})
+                    detail = f"Codex exited with code {rc}."
+                    if stderr_tail:
+                        detail += f" Last stderr: {stderr_tail[-1]}"
+                    detail += " Use `!c logs` for details."
+                    await self.reply_forbidden(sink, detail)
             finally:
                 await self.clear_active(channel_id, session)
                 self._audit_helper.close(entry)
