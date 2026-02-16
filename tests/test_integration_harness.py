@@ -609,3 +609,34 @@ def test_router_dm_binding_is_normalized(tmp_path):
 
     router.set_dm_binding(event, "ProbablyFine")
     assert router.get_dm_binding(event) == "probablyfine"
+
+
+def test_router_compat_retry_args_drops_resume_and_optional_flags(tmp_path):
+    router, _ = _build_router(tmp_path)
+    args = [
+        "exec",
+        "--json",
+        "--cd",
+        "/workspace/code_root/ProbablyFine",
+        "--sandbox",
+        "workspace-write",
+        "-a",
+        "on-request",
+        "--model",
+        "bad-model",
+        "-c",
+        'model_reasoning_effort="medium"',
+        "resume",
+        "--last",
+        "hi there",
+    ]
+    out = router._compat_retry_args(args)
+    assert out == [
+        "exec",
+        "--json",
+        "--cd",
+        "/workspace/code_root/ProbablyFine",
+        "--sandbox",
+        "workspace-write",
+        "hi there",
+    ]

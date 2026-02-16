@@ -660,10 +660,11 @@ class Router:
     ) -> None:
         """Run Codex with streaming callbacks and audit logging."""
         channel_id = event.channel_id
+        original_args = list(args)
         meta = {
             "repo_name": repo_name,
             "repo_path": repo_path,
-            "args": args,
+            "args": original_args,
             "model": model,
             "reasoning_effort": reasoning_effort,
             "timestamp": utc_now_iso(),
@@ -682,39 +683,62 @@ class Router:
                 del stderr_tail[: len(stderr_tail) - 5]
 
         async with self.typing_context(sink):
-            try:
-                proc = await self.runner.run(
-                    Options(
-                        repo_path=repo_path,
-                        args=args,
-                        env=self.cfg.codex.env,
-                        on_jsonl=lambda line: self.on_jsonl(sink, channel_id, session, entry, line, relay_output),
-                        on_thread=lambda tid: self.on_thread(
-                            channel_id, session, repo_name, repo_path, model, reasoning_effort, entry, tid
-                        ),
-                        on_output=on_output,
-                        on_stderr=_on_stderr,
-                        on_exit=lambda err, rc: self.on_exit(channel_id, session, repo_name, err, rc),
+            args_to_run = list(original_args)
+            attempted_compat_retry = False
+            while True:
+                stderr_tail.clear()
+                try:
+                    proc = await self.runner.run(
+                        Options(
+                            repo_path=repo_path,
+                            args=args_to_run,
+                            env=self.cfg.codex.env,
+                            on_jsonl=lambda line: self.on_jsonl(sink, channel_id, session, entry, line, relay_output),
+                            on_thread=lambda tid: self.on_thread(
+                                channel_id, session, repo_name, repo_path, model, reasoning_effort, entry, tid
+                            ),
+                            on_output=on_output,
+                            on_stderr=_on_stderr,
+                            on_exit=lambda err, rc: self.on_exit(channel_id, session, repo_name, err, rc),
+                        )
                     )
-                )
-            except Exception as exc:
-                self._audit_helper.close(entry)
-                await self.reply_forbidden(sink, f"Codex failed to start: {exc}")
-                return
+                except Exception as exc:
+                    self._audit_helper.close(entry)
+                    await self.reply_forbidden(sink, f"Codex failed to start: {exc}")
+                    return
 
-            await self.set_active(channel_id, session, proc)
-            try:
-                rc = await proc.wait()
-                if rc != 0:
-                    self.logger.warning("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "code": rc})
-                    detail = f"Codex exited with code {rc}."
-                    if stderr_tail:
-                        detail += f" Last stderr: {stderr_tail[-1]}"
-                    detail += " Use `!c logs` for details."
-                    await self.reply_forbidden(sink, detail)
-            finally:
-                await self.clear_active(channel_id, session)
-                self._audit_helper.close(entry)
+                await self.set_active(channel_id, session, proc)
+                try:
+                    rc = await proc.wait()
+                finally:
+                    await self.clear_active(channel_id, session)
+
+                if rc == 0:
+                    break
+
+                self.logger.warning("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "code": rc})
+                if not attempted_compat_retry and self._looks_like_cli_usage_error(rc, stderr_tail):
+                    retry_args = self._compat_retry_args(args_to_run)
+                    if retry_args != args_to_run:
+                        attempted_compat_retry = True
+                        args_to_run = retry_args
+                        self.logger.warning(
+                            "codex.retry.compat",
+                            extra={"channel_id": channel_id, "repo": repo_name, "session": session},
+                        )
+                        await self.reply(
+                            sink,
+                            "Codex command failed with current flags; retrying with compatibility args.",
+                        )
+                        continue
+
+                detail = f"Codex exited with code {rc}."
+                if stderr_tail:
+                    detail += f" Last stderr: {stderr_tail[-1]}"
+                detail += " Use `!c logs` for details."
+                await self.reply_forbidden(sink, detail)
+                break
+            self._audit_helper.close(entry)
 
     async def on_jsonl(
         self,
@@ -1192,6 +1216,27 @@ class Router:
             return pathutil.normalize_repo_name(raw)
         except ValueError:
             return raw.lower()
+
+    def _looks_like_cli_usage_error(self, return_code: int, stderr_tail: list[str]) -> bool:
+        if return_code != 2:
+            return False
+        text = "\n".join(stderr_tail).lower()
+        return "--help" in text or "usage:" in text or "unexpected argument" in text
+
+    def _compat_retry_args(self, args: list[str]) -> list[str]:
+        retry: list[str] = []
+        i = 0
+        while i < len(args):
+            token = args[i]
+            if token == "resume":
+                i += 2
+                continue
+            if token in {"-a", "--model", "-c"}:
+                i += 2
+                continue
+            retry.append(token)
+            i += 1
+        return retry
 
     def audit_start(self, channel_id: str, session: str, thread_id: str, meta: Any) -> Optional[Entry]:
         """Start an audit entry with error handling."""
