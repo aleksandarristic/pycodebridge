@@ -43,9 +43,10 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
 - Verify Message Content intent is enabled and saved in the Developer Portal.
 
 ## Channels and access
-- Create text channels named `codex-<repo>` (e.g., `codex-myservice`), matching repos under your configured `code_root`.
+- Create private text channels named `codex-<repo>` (e.g., `codex-myservice`), matching repos under your configured `code_root`.
   Repo identifiers are normalized to lowercase, so prefer lowercase repo directory names.
 - Ensure the bot's role can View Channels and Send Messages in those channels.
+- The bot ignores messages in non-private Discord channels.
 
 ## Collect IDs for config
 - User IDs (for allowlist): with Developer Mode on, right-click a user -> Copy ID. Add these to `discord.allowed_user_ids` (empty means nobody can use the bot).

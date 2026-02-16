@@ -117,6 +117,12 @@ class Router:
         if event.is_dm:
             await dm_admin_handlers.handle_dm_message(self, event, sink)
             return
+        if event.platform == "discord" and not self._discord_repo_channel_is_private(event):
+            self.logger.info(
+                "routing.skip_non_private_channel",
+                extra={"channel_id": event.channel_id, "guild_id": event.guild_id, "user_id": event.author_id},
+            )
+            return
         if event.platform == "discord" and not event.guild_id:
             await self.reply_forbidden(sink, "This bot only works in guild channels.")
             return
@@ -1146,6 +1152,49 @@ class Router:
         if self.cfg.discord.allowed_user_ids and event.author_id not in self.cfg.discord.allowed_user_ids:
             return False
         return True
+
+    def _discord_repo_channel_is_private(self, event: MessageEvent) -> bool:
+        """Return True when a Discord room is private from @everyone."""
+        if event.platform != "discord" or event.is_dm:
+            return True
+        message = event.raw_event
+        channel = getattr(message, "channel", None) if message is not None else None
+        if channel is None:
+            self.logger.warning(
+                "routing.discord_privacy_unknown",
+                extra={"channel_id": event.channel_id, "reason": "missing_channel"},
+            )
+            return False
+
+        channel_type = getattr(channel, "type", None)
+        if getattr(channel_type, "name", "") == "private_thread" or str(channel_type) == "private_thread":
+            return True
+
+        guild = getattr(channel, "guild", None)
+        default_role = getattr(guild, "default_role", None) if guild is not None else None
+        permissions_for = getattr(channel, "permissions_for", None)
+        if default_role is None or not callable(permissions_for):
+            self.logger.warning(
+                "routing.discord_privacy_unknown",
+                extra={"channel_id": event.channel_id, "reason": "missing_permissions"},
+            )
+            return False
+        try:
+            perms = permissions_for(default_role)
+        except Exception as exc:
+            self.logger.warning(
+                "routing.discord_privacy_unknown",
+                extra={"channel_id": event.channel_id, "reason": "permissions_error", "error": str(exc)},
+            )
+            return False
+        view_channel = getattr(perms, "view_channel", None)
+        if isinstance(view_channel, bool):
+            return not view_channel
+        self.logger.warning(
+            "routing.discord_privacy_unknown",
+            extra={"channel_id": event.channel_id, "reason": "missing_view_channel"},
+        )
+        return False
 
     def _transport_prefix(self, event: MessageEvent) -> str:
         if event.platform == "telegram":

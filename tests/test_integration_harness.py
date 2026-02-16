@@ -138,6 +138,32 @@ class _FakeAsyncContext:
         return False
 
 
+class _FakeDiscordPermissions:
+    def __init__(self, *, view_channel: bool) -> None:
+        self.view_channel = view_channel
+
+
+class _FakeDiscordGuild:
+    def __init__(self) -> None:
+        self.default_role = object()
+
+
+class _FakeDiscordChannel:
+    def __init__(self, *, is_private: bool) -> None:
+        self.guild = _FakeDiscordGuild()
+        self.type = "text"
+        self._is_private = is_private
+
+    def permissions_for(self, role) -> _FakeDiscordPermissions:
+        _ = role
+        return _FakeDiscordPermissions(view_channel=not self._is_private)
+
+
+class _FakeDiscordMessage:
+    def __init__(self, *, is_private: bool) -> None:
+        self.channel = _FakeDiscordChannel(is_private=is_private)
+
+
 def _hotp(secret_b32: str, counter: int) -> str:
     secret = base64.b32decode(secret_b32, casefold=True)
     msg = struct.pack(">Q", counter)
@@ -171,7 +197,7 @@ def _build_router(tmp_path, *, totp_enabled: bool = False):
     return router, runner
 
 
-def _discord_event(content: str, channel_name: str, channel_id: str = "chan") -> MessageEvent:
+def _discord_event(content: str, channel_name: str, channel_id: str = "chan", *, is_private: bool = True) -> MessageEvent:
     return MessageEvent(
         platform="discord",
         content=content,
@@ -181,6 +207,7 @@ def _discord_event(content: str, channel_name: str, channel_id: str = "chan") ->
         author_is_bot=False,
         is_dm=False,
         guild_id="guild",
+        raw_event=_FakeDiscordMessage(is_private=is_private),
     )
 
 
@@ -217,6 +244,23 @@ def test_integration_start_stop(tmp_path):
     assert runner.last_proc is not None
     assert runner.last_proc.stopped is True
     assert runner.last_proc.interrupted is True
+
+
+def test_integration_ignores_public_discord_repo_channel(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo", is_private=False), sink)
+
+    asyncio.run(run())
+    assert runner.calls == []
+    assert sink.sent == []
+    assert router.state.load().channels == {}
 
 
 def test_integration_start_with_case_variant_repo_dir(tmp_path):
@@ -525,6 +569,7 @@ def test_totp_required_for_config_tests_download_logs_and_upload(tmp_path, monke
         is_dm=False,
         guild_id="guild",
         attachments=[Attachment(filename="note.txt", size=2, content_type="text/plain", save=save_noop)],
+        raw_event=_FakeDiscordMessage(is_private=True),
     )
 
     async def run():

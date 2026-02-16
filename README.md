@@ -61,6 +61,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `allowed_user_ids` (default empty) — allowlist for channel commands; if non-empty, ignore others.
 - `prefix` (default `!c`) — command prefix.
 - `channel_name_regex` (default `^codex-([A-Za-z0-9._-]+)$`) — maps channel to repo name.
+- Discord repo channels must be private (`@everyone` cannot view); messages in non-private Discord channels are ignored.
 - `allow_plain_prompts` (default `false`) — treat non-prefixed messages as prompts in matching channels.
 - `dm_admin_enabled` (default `false`) — enable DM admin commands.
 - `dm_admin_user_ids` (default empty) — allowlist for DM admin (falls back to `allowed_user_ids`).

@@ -1,4 +1,5 @@
 import asyncio
+from types import SimpleNamespace
 
 from codebridge import config as cfgmod
 from codebridge.codex import Options
@@ -154,6 +155,11 @@ def _build_router(tmp_path):
 
 
 def _discord_event(content: str, channel_name: str) -> MessageEvent:
+    channel = SimpleNamespace(
+        guild=SimpleNamespace(default_role=object()),
+        type="text",
+        permissions_for=lambda _role: SimpleNamespace(view_channel=False),
+    )
     return MessageEvent(
         platform="discord",
         content=content,
@@ -163,6 +169,7 @@ def _discord_event(content: str, channel_name: str) -> MessageEvent:
         author_is_bot=False,
         is_dm=False,
         guild_id="guild",
+        raw_event=SimpleNamespace(channel=channel),
     )
 
 
