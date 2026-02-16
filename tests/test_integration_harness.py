@@ -426,7 +426,6 @@ def test_totp_unlock_allows_plain_resume_for_ttl(tmp_path, monkeypatch):
     monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
 
     router, runner = _build_router(tmp_path, totp_enabled=True)
-    router.cfg.discord.allow_plain_prompts = True
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():

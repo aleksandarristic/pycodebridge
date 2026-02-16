@@ -69,6 +69,7 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
      - `!c unlock --totp 123456 [ttl]` where ttl is `30m`, `1h`, `2h` (default `1h`)
      - `!c unlock status` to check remaining time
      - `!c lock` to clear unlock
+     - while unlocked, plain chat prompts are accepted even when `allow_plain_prompts` is `false`
    - limiter defaults: `totp_max_failures: 5`, `totp_failure_window_seconds: 300`, `totp_cooldown_seconds: 300`
    - lockout key is per user (`platform:user_id`); set `totp_max_failures: 0` to disable lockout
    - Channel commands that do NOT require TOTP: `help`, `status`, `stats`, `peek`, `models`, `showrepo`, `showchanges`, `ps`, `unlock status`, `lock`, and read-only git helpers (`git status|log|branches|show|diff`)

@@ -176,7 +176,10 @@ class Router:
                         return
                 await self.handle_answer(event, sink, relay_session, relay_text)
                 return
-            if not self._transport_allow_plain_prompts(event):
+            allow_plain = self._transport_allow_plain_prompts(event)
+            if self._totp_enabled(event) and self._totp_is_unlocked(event):
+                allow_plain = True
+            if not allow_plain:
                 return
             self.logger.info(
                 "routing.prompt",

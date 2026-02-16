@@ -113,6 +113,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 Prefix default is `!c`. Channels should be named `codex-<repo>`.
 When `discord.totp_enabled: true`, use `!c unlock --totp 123456 [ttl]` to unlock non-high-risk commands in the current chat for a TTL (`30m`, `1h`, `2h`; default `1h`).
 Use `!c unlock status` to check remaining time and `!c lock` to clear the unlock window.
+While unlocked, plain chat prompts are accepted even if `allow_plain_prompts` is `false`.
 Failed/replayed TOTP attempts are rate-limited per user (`platform:user_id`) using the limiter settings above.
 
 TOTP not required (read-only in channel):
