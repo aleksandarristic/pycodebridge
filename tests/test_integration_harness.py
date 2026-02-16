@@ -5,6 +5,7 @@ import hmac
 import os
 import struct
 import time
+import json
 
 from codebridge import config as cfgmod
 from codebridge.codex import Options
@@ -640,3 +641,25 @@ def test_router_compat_retry_args_drops_resume_and_optional_flags(tmp_path):
         "workspace-write",
         "hi there",
     ]
+
+
+def test_router_writes_codex_error_log(tmp_path):
+    router, _ = _build_router(tmp_path)
+    router._append_codex_error_log(
+        channel_id="chan",
+        session="default",
+        repo_name="repo",
+        repo_path="/tmp/repo",
+        args=["exec", "hello"],
+        return_code=2,
+        stderr_lines=["usage: codex ...", "For more information, try '--help'."],
+        note="non-zero exit",
+    )
+    path = tmp_path / "logs" / "codex_errors.log"
+    assert path.exists()
+    line = path.read_text(encoding="utf-8").strip().splitlines()[-1]
+    payload = json.loads(line)
+    assert payload["channel_id"] == "chan"
+    assert payload["return_code"] == 2
+    assert payload["args"] == ["exec", "hello"]
+    assert payload["stderr_tail"][-1] == "For more information, try '--help'."

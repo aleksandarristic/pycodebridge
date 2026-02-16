@@ -102,3 +102,7 @@ In a `codex-<repo>` channel: send `!c config` to verify config, then `!c start`.
 - Replies: not used; messages are sent directly to the channel/thread.
 - Uploads/downloads: supported.
 - Typing indicator: supported.
+
+## Debug logs
+- Runtime log: `state.log_dir/bridge.log`
+- Codex execution error log (JSONL): `state.log_dir/codex_errors.log`

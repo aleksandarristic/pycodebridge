@@ -7,6 +7,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
+import json
 
 from . import config as cfgmod
 from .audit import Entry, Logger as AuditLogger
@@ -93,6 +94,7 @@ class Router:
             window_seconds=cfg.discord.totp_failure_window_seconds,
             cooldown_seconds=cfg.discord.totp_cooldown_seconds,
         )
+        self._codex_error_log_path = os.path.join(self.cfg.state.log_dir, "codex_errors.log") if self.cfg.state.log_dir else ""
 
     async def handle_message(self, event: MessageEvent, sink: ResponseSink) -> None:
         """Handle an incoming message event."""
@@ -703,6 +705,16 @@ class Router:
                         )
                     )
                 except Exception as exc:
+                    self._append_codex_error_log(
+                        channel_id=channel_id,
+                        session=session,
+                        repo_name=repo_name,
+                        repo_path=repo_path,
+                        args=args_to_run,
+                        return_code=None,
+                        stderr_lines=stderr_tail,
+                        note=f"failed to start: {exc}",
+                    )
                     self._audit_helper.close(entry)
                     await self.reply_forbidden(sink, f"Codex failed to start: {exc}")
                     return
@@ -717,6 +729,16 @@ class Router:
                     break
 
                 self.logger.warning("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "code": rc})
+                self._append_codex_error_log(
+                    channel_id=channel_id,
+                    session=session,
+                    repo_name=repo_name,
+                    repo_path=repo_path,
+                    args=args_to_run,
+                    return_code=rc,
+                    stderr_lines=stderr_tail,
+                    note="non-zero exit",
+                )
                 if not attempted_compat_retry and self._looks_like_cli_usage_error(rc, stderr_tail):
                     retry_args = self._compat_retry_args(args_to_run)
                     if retry_args != args_to_run:
@@ -725,6 +747,16 @@ class Router:
                         self.logger.warning(
                             "codex.retry.compat",
                             extra={"channel_id": channel_id, "repo": repo_name, "session": session},
+                        )
+                        self._append_codex_error_log(
+                            channel_id=channel_id,
+                            session=session,
+                            repo_name=repo_name,
+                            repo_path=repo_path,
+                            args=retry_args,
+                            return_code=None,
+                            stderr_lines=stderr_tail,
+                            note="compat retry with simplified args",
                         )
                         await self.reply(
                             sink,
@@ -1237,6 +1269,37 @@ class Router:
             retry.append(token)
             i += 1
         return retry
+
+    def _append_codex_error_log(
+        self,
+        channel_id: str,
+        session: str,
+        repo_name: str,
+        repo_path: str,
+        args: list[str],
+        return_code: Optional[int],
+        stderr_lines: list[str],
+        note: str,
+    ) -> None:
+        if not self._codex_error_log_path:
+            return
+        try:
+            os.makedirs(os.path.dirname(self._codex_error_log_path), exist_ok=True)
+            payload = {
+                "timestamp": utc_now_iso(),
+                "channel_id": channel_id,
+                "session": session or DEFAULT_SESSION,
+                "repo_name": repo_name,
+                "repo_path": repo_path,
+                "return_code": return_code,
+                "note": note,
+                "args": args,
+                "stderr_tail": list(stderr_lines[-20:]),
+            }
+            with open(self._codex_error_log_path, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(payload, ensure_ascii=True) + "\n")
+        except Exception as exc:
+            self.logger.warning("codex.error_log_write_failed", extra={"error": str(exc)})
 
     def audit_start(self, channel_id: str, session: str, thread_id: str, meta: Any) -> Optional[Entry]:
         """Start an audit entry with error handling."""
