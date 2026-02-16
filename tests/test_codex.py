@@ -22,3 +22,4 @@ def test_runner_build_args_include_approval_policy():
     assert "-a" in args
     idx = args.index("-a")
     assert args[idx + 1] == "on-request"
+    assert args[idx + 2] == "exec"

@@ -188,9 +188,10 @@ class Runner:
         self.ask_for_approval = (ask_for_approval or "").strip()
 
     def _base_exec_args(self, repo_path: str) -> list[str]:
-        args = ["exec", "--json", "--cd", repo_path, "--sandbox", self.sandbox]
+        args: list[str] = []
         if self.ask_for_approval:
             args += ["-a", self.ask_for_approval]
+        args += ["exec", "--json", "--cd", repo_path, "--sandbox", self.sandbox]
         return args
 
     def build_start_args(self, repo_path: str, prompt: str, model: str, reasoning_effort: str) -> list[str]:
