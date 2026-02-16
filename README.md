@@ -111,7 +111,8 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 
 ## Commands
 Prefix default is `!c`. Channels should be named `codex-<repo>`.
-When `discord.totp_enabled: true`, protected commands on all platforms require `--totp 123456`.
+When `discord.totp_enabled: true`, use `!c unlock --totp 123456 [ttl]` to unlock non-high-risk commands in the current chat for a TTL (`30m`, `1h`, `2h`; default `1h`).
+Use `!c unlock status` to check remaining time and `!c lock` to clear the unlock window.
 Failed/replayed TOTP attempts are rate-limited per user (`platform:user_id`) using the limiter settings above.
 
 TOTP not required (read-only in channel):
@@ -123,8 +124,20 @@ TOTP not required (read-only in channel):
 - `!c showrepo`
 - `!c showchanges`
 - `!c ps`
+- `!c unlock status`
+- `!c lock`
+- `!c git status|log|branches|show|diff`
 
-TOTP required (channel):
+TOTP always required (high-risk in channel):
+- `!c unlock [ttl]`
+- `!c createrepo`
+- `!c clonerepo <url>`
+- `!c copyrepo <newname>`
+- `!c git` write commands (`pull`, `commit`, `push`, `merge`, etc.)
+- `!c gh <args>`
+- Upload flows (attachment submit and upload-path response)
+
+TOTP required unless the chat is unlocked:
 - `!c start [session]`
 - `!c resume [session] <prompt>`
 - `!c choose [session] resume|replace|cancel`
@@ -132,9 +145,6 @@ TOTP required (channel):
 - `!c model [session] <id> [reasoning]`
 - `!c thread [session] <id>`
 - `!c spec [session]`
-- `!c createrepo`
-- `!c clonerepo <url>`
-- `!c copyrepo <newname>`
 - `!c stop [session]`
 - `!c kill [session]`
 - `!c /quit [session]`
@@ -142,8 +152,6 @@ TOTP required (channel):
 - `!c approve [session]` (sends `yes`)
 - `!c deny [session]` (sends `no`)
 - `!c wait` (show sessions currently awaiting input)
-- `!c git <...>`
-- `!c gh <args>`
 - `!c cancel <job-id>`
 - `!c rerun`
 - `!c config`
@@ -152,10 +160,10 @@ TOTP required (channel):
 - `!c logs [session] [n]`
 - Any other prompt-style `!c ...` command that is not in the read-only list
 - Plain prompts in mapped channels when `allow_plain_prompts: true`
-- Upload flows (attachment submit and upload-path response)
 
 General:
 - `!c help`, `!c status`, `!c config`, `!c stats [session]`, `!c peek [session]`
+- `!c unlock [status|ttl]`, `!c lock`
 
 Sessions:
 - `!c start [session]`
@@ -212,23 +220,28 @@ Repo names passed to DM commands are normalized to lowercase (for example, `Prob
 - `!c copyrepo <from> <to>`
 - `!c deleterepo <name>` (alias: `delete`)
 - `!c renamerepo <from> <to>` (alias: `rename`)
+- `!c unlock [status|ttl]`
+- `!c lock`
 
-When `discord.totp_enabled: true`, TOTP is required in DMs for:
-- `!c bind <repo>`
-- `!c use <repo>`
-- `!c repo <repo> <prompt>`
-- `!c unbind`
-- `!c gh <args>`
-- `!c answer [session] -- <text>` / `!c answer <text>`
-- `!c approve [session]`
-- `!c deny [session]`
+When `discord.totp_enabled: true`, TOTP is always required in DMs for:
+- `!c unlock [ttl]`
 - `!c createrepo <name>`
 - `!c clonerepo <name> <url>`
 - `!c copyrepo <from> <to>`
 - `!c deleterepo <name>` / `!c delete <name>`
 - `!c renamerepo <from> <to>` / `!c rename <from> <to>`
+- `!c gh <args>`
+- DM upload flows (attachment submit and upload-path response)
+
+TOTP is required in DMs unless the DM is unlocked for:
+- `!c bind <repo>`
+- `!c use <repo>`
+- `!c repo <repo> <prompt>`
+- `!c unbind`
+- `!c answer [session] -- <text>` / `!c answer <text>`
+- `!c approve [session]`
+- `!c deny [session]`
 - Non-prefixed DM prompts when a repo is bound
-- Upload flows in bound DMs (attachment submit and upload-path response)
 
 TOTP is not required in DMs for:
 - `!c help`
@@ -236,6 +249,8 @@ TOTP is not required in DMs for:
 - `!c sessions`
 - `!c status`
 - `!c config`
+- `!c unlock status`
+- `!c lock`
 
 When a repo is bound in DMs, a message without `!c` is treated as a prompt unless Codex is currently awaiting input (then it is relayed to the active session stdin).
 Attachments in channels or bound DMs will prompt for a destination path before saving.

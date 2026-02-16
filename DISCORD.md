@@ -65,14 +65,19 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
    - `discord.totp_enabled: true`
    - set `.env`: `DISCORD_TOTP_SECRET=BASE32_SECRET`
    - include codes in protected commands: `--totp 123456`
+   - unlock non-high-risk commands in a chat for a TTL:
+     - `!c unlock --totp 123456 [ttl]` where ttl is `30m`, `1h`, `2h` (default `1h`)
+     - `!c unlock status` to check remaining time
+     - `!c lock` to clear unlock
    - limiter defaults: `totp_max_failures: 5`, `totp_failure_window_seconds: 300`, `totp_cooldown_seconds: 300`
    - lockout key is per user (`platform:user_id`); set `totp_max_failures: 0` to disable lockout
-   - Channel commands that do NOT require TOTP: `help`, `status`, `stats`, `peek`, `models`, `showrepo`, `showchanges`, `ps`
-   - Channel commands that DO require TOTP: `start`, `resume`, `choose`, `use/select`, `model`, `thread`, `spec`, `createrepo`, `clonerepo`, `copyrepo`, `stop`, `kill`, `/quit`, `answer`, `approve`, `deny`, `git`, `gh`, `cancel`, `rerun`, `config`, `tests`, `download`, `logs`, and plain prompts
-   - Upload flows that DO require TOTP: attachment submit and upload-path response
-   - DM commands that DO require TOTP: `bind`, `use`, `repo`, `unbind`, `answer`, `approve`, `deny`, `gh`, `createrepo`, `clonerepo`, `copyrepo`, `deleterepo/delete`, `renamerepo/rename`, and bound non-prefixed prompts
-   - DM upload flows that DO require TOTP: attachment submit and upload-path response
-   - DM commands that do NOT require TOTP: `help`, `repos`, `sessions`, `status`, `config`
+   - Channel commands that do NOT require TOTP: `help`, `status`, `stats`, `peek`, `models`, `showrepo`, `showchanges`, `ps`, `unlock status`, `lock`, and read-only git helpers (`git status|log|branches|show|diff`)
+   - Channel commands that always require TOTP: `unlock [ttl]`, `createrepo`, `clonerepo`, `copyrepo`, `gh`, and write git helpers (`git pull|commit|push|merge|...`)
+   - Channel commands that require TOTP unless the channel is unlocked: `start`, `resume`, `choose`, `use/select`, `model`, `thread`, `spec`, `stop`, `kill`, `/quit`, `answer`, `approve`, `deny`, `cancel`, `rerun`, `config`, `tests`, `download`, `logs`, and plain prompts
+   - Upload flows always require TOTP: attachment submit and upload-path response
+   - DM commands that always require TOTP: `unlock [ttl]`, `gh`, `createrepo`, `clonerepo`, `copyrepo`, `deleterepo/delete`, `renamerepo/rename`, and DM upload flows
+   - DM commands that require TOTP unless the DM is unlocked: `bind`, `use`, `repo`, `unbind`, `answer`, `approve`, `deny`, and bound non-prefixed prompts
+   - DM commands that do NOT require TOTP: `help`, `repos`, `sessions`, `status`, `config`, `unlock status`, `lock`
 
 ## Run
 From the repo root:

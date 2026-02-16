@@ -64,6 +64,8 @@ def dm_help_text() -> str:
         "copyrepo <from> <to> — copy repo\n"
         "deleterepo <name> — delete repo\n"
         "renamerepo <from> <to> — rename repo\n"
+        "unlock [status|ttl] — unlock this DM for non-high-risk commands\n"
+        "lock — clear unlock for this DM\n"
     )
 
 
@@ -75,6 +77,8 @@ def dm_binding_help_text() -> str:
         "use <repo> — alias for bind\n"
         "repo <repo> <prompt> — run a one-off prompt against a repo\n"
         "gh <args> — run GitHub CLI (bound repo cwd, or code_root if unbound)\n"
+        "unlock [status|ttl] — unlock this DM for non-high-risk commands\n"
+        "lock — clear unlock for this DM\n"
         "unbind — clear bound repo\n"
         "status — show current bound repo and session\n"
     )
@@ -315,7 +319,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
             relay_text = content.strip()
             if not relay_text:
                 return
-            if router._totp_enabled(event):
+            if router._totp_enabled(event) and not router._totp_is_unlocked(event):
                 ok, relay_text = await router.require_totp(event, sink, "answer", relay_text)
                 if not ok:
                     return
@@ -342,7 +346,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
             return
         session = router.current_session_for_user(event.author_id, event.channel_id)
         prefixed_sink = _PrefixedSink(sink, bound_repo)
-        if router._totp_enabled(event):
+        if router._totp_enabled(event) and not router._totp_is_unlocked(event):
             ok, content = await router.require_totp(event, sink, "resume", content)
             if not ok:
                 return
@@ -364,7 +368,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         await dm_reply(router, sink, entry, forbidden_message(detail))
 
     is_admin = event.platform == "discord" and router.cfg.discord.dm_admin_enabled and router._dm_admin_allowed(event.author_id)
-    binding_commands = {"bind", "use", "repo", "unbind", "status"}
+    binding_commands = {"bind", "use", "repo", "unbind", "status", "unlock", "lock"}
     admin_commands = {
         "help",
         "repos",
@@ -461,7 +465,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         if not router._transport_user_allowed(event):
             await send_forbidden("You are not allowed to use this bot.")
             return
-        if cmd in {"bind", "use", "repo", "unbind"}:
+        if router._totp_enabled(event) and router._totp_required_for_command(event, cmd, rest):
             ok, cmdline = await router.require_totp(event, sink, cmd, cmdline)
             if not ok:
                 return
@@ -470,6 +474,12 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
                 return
             cmd = fields[0].lower()
             rest = cmdline[len(fields[0]) :].strip()
+        if cmd == "unlock":
+            await router.handle_unlock(event, sink, rest)
+            return
+        if cmd == "lock":
+            await router.handle_lock(event, sink)
+            return
         if cmd == "status":
             bound = router.get_dm_binding(event)
             session = router.current_session_for_user(event.author_id, event.channel_id)
@@ -566,7 +576,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         if not router._transport_user_allowed(event):
             await send_forbidden("You are not allowed to use this bot.")
             return
-        if router._totp_enabled(event):
+        if router._totp_enabled(event) and not router._totp_is_unlocked(event):
             ok, cmdline = await router.require_totp(event, sink, cmd, cmdline)
             if not ok:
                 return
@@ -613,7 +623,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         return
     session = router.current_session_for_user(event.author_id, event.channel_id)
     prefixed_sink = _PrefixedSink(sink, bound_repo)
-    if router._totp_enabled(event):
+    if router._totp_enabled(event) and not router._totp_is_unlocked(event):
         ok, cmdline = await router.require_totp(event, sink, "resume", cmdline)
         if not ok:
             return

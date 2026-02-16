@@ -114,6 +114,14 @@ class _FakeRouter:
         _ = event
         return False
 
+    def _totp_is_unlocked(self, event: MessageEvent) -> bool:
+        _ = event
+        return False
+
+    def _totp_required_for_command(self, event: MessageEvent, cmd: str, rest: str) -> bool:
+        _ = (event, cmd, rest)
+        return False
+
     async def require_totp(self, event: MessageEvent, sink, command_name: str, text: str):
         _ = (event, sink, command_name)
         return True, text

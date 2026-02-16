@@ -16,6 +16,8 @@ def test_command_registry_help_text():
     assert "Commands:" in text
     assert "General:" in text
     assert "help — show this help" in text
+    assert "unlock [status|ttl] — unlock this chat for non-high-risk commands" in text
+    assert "lock — clear unlock for this chat" in text
     assert "use/select <session> — set your sticky session" in text
     assert "Repo helpers:" in text
     assert "git <status|log|branches|show|diff|pull|commit|push|merge> — git helpers" in text

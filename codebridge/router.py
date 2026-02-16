@@ -41,6 +41,8 @@ from .router_status import format_current_selection_line, format_session_line
 
 _TOTP_ARG_RE = re.compile(r"(?:^|\s)--totp\s+(\d{6})(?=\s|$)")
 _AWAITING_INPUT_TTL_SECONDS = 900
+_DEFAULT_UNLOCK_SECONDS = 3600
+_UNLOCK_TTL_RE = re.compile(r"^(\d+)\s*([mhd])$", re.IGNORECASE)
 _READ_ONLY_COMMANDS = {
     "help",
     "status",
@@ -51,6 +53,7 @@ _READ_ONLY_COMMANDS = {
     "showchanges",
     "ps",
 }
+_GIT_READ_ONLY_SUBCOMMANDS = {"status", "log", "branches", "show", "diff"}
 
 
 def _git_commit_hash() -> str:
@@ -84,6 +87,7 @@ class Router:
         self._awaiting_input: Dict[str, Dict[str, float]] = {}
         self._totp_last_step_by_user: Dict[str, int] = {}
         self._totp_locked_users: Set[str] = set()
+        self._totp_unlock_until: Dict[str, float] = {}
         self._totp_limiter = TotpAttemptLimiter(
             max_failures=cfg.discord.totp_max_failures,
             window_seconds=cfg.discord.totp_failure_window_seconds,
@@ -166,7 +170,7 @@ class Router:
                 relay_text = content.strip()
                 if not relay_text:
                     return
-                if self._totp_enabled(event):
+                if self._totp_enabled(event) and not self._totp_is_unlocked(event):
                     ok, relay_text = await self.require_totp(event, sink, "answer", relay_text)
                     if not ok:
                         return
@@ -186,7 +190,7 @@ class Router:
             prompt = content.strip()
             if not prompt:
                 return
-            if self._totp_enabled(event):
+            if self._totp_enabled(event) and not self._totp_is_unlocked(event):
                 ok, prompt = await self.require_totp(event, sink, "resume", prompt)
                 if not ok:
                     return
@@ -215,7 +219,7 @@ class Router:
         cmd = fields[0].lower()
         rest = cmdline[len(fields[0]) :].strip()
         effective_cmd = "/quit" if len(fields) >= 2 and fields[1] == "/quit" else cmd
-        if self._totp_enabled(event) and self._totp_required_for_command(effective_cmd):
+        if self._totp_enabled(event) and self._totp_required_for_command(event, effective_cmd, rest):
             ok, cmdline = await self.require_totp(event, sink, effective_cmd, cmdline)
             if not ok:
                 return
@@ -224,6 +228,7 @@ class Router:
                 return
             cmd = fields[0].lower()
             rest = cmdline[len(fields[0]) :].strip()
+            effective_cmd = "/quit" if len(fields) >= 2 and fields[1] == "/quit" else cmd
         self.logger.info(
             "routing.command",
             extra={
@@ -456,6 +461,33 @@ class Router:
             await self.reply_forbidden(sink, "No prior job to rerun.")
             return
         await self.reply(sink, f"Requeued job {job_id}.")
+
+    async def handle_unlock(self, event: MessageEvent, sink: ResponseSink, rest: str) -> None:
+        """Unlock non-high-risk commands for this user+chat for a TTL."""
+        token = (rest or "").strip().lower()
+        if token in {"status", "state"}:
+            remaining = self._totp_unlock_remaining(event)
+            if remaining <= 0:
+                await self.reply(sink, "TOTP unlock is inactive.")
+                return
+            await self.reply(sink, f"TOTP unlock is active for {self._format_duration(remaining)}.")
+            return
+        try:
+            ttl_seconds = self._parse_unlock_ttl_seconds(rest)
+        except ValueError as exc:
+            await self.reply_forbidden(sink, str(exc))
+            return
+        self._set_totp_unlock(event, ttl_seconds)
+        await self.reply(
+            sink,
+            f"TOTP unlock active for {self._format_duration(ttl_seconds)} in this chat. "
+            "High-risk commands still require --totp.",
+        )
+
+    async def handle_lock(self, event: MessageEvent, sink: ResponseSink) -> None:
+        """Clear any active unlock for this user+chat."""
+        self._clear_totp_unlock(event)
+        await self.reply(sink, "TOTP unlock cleared for this chat.")
 
     async def handle_select_session(self, event: MessageEvent, sink: ResponseSink, session: str) -> None:
         """Set the sticky session selection for a user."""
@@ -782,8 +814,108 @@ class Router:
     def _totp_enabled(self, event: MessageEvent) -> bool:
         return self.cfg.discord.totp_enabled
 
-    def _totp_required_for_command(self, cmd: str) -> bool:
-        return cmd not in _READ_ONLY_COMMANDS
+    def _totp_required_for_command(self, event: MessageEvent, cmd: str, rest: str) -> bool:
+        token = (cmd or "").strip().lower()
+        if token in {"lock"}:
+            return False
+        if token in {"unlock"} and (rest or "").strip().lower() in {"status", "state"}:
+            return False
+        if token == "git" and self._git_subcommand(rest) in _GIT_READ_ONLY_SUBCOMMANDS:
+            return False
+        if self._totp_command_is_high_risk(token, rest):
+            return True
+        if token in _READ_ONLY_COMMANDS:
+            return False
+        if self._totp_is_unlocked(event):
+            return False
+        return True
+
+    def _totp_command_is_high_risk(self, cmd: str, rest: str) -> bool:
+        if cmd in {"createrepo", "clonerepo", "copyrepo", "deleterepo", "delete", "renamerepo", "rename", "gh"}:
+            return True
+        if cmd == "git":
+            subcmd = self._git_subcommand(rest)
+            if not subcmd:
+                return True
+            return subcmd not in _GIT_READ_ONLY_SUBCOMMANDS
+        if cmd == "unlock":
+            return True
+        return False
+
+    def _git_subcommand(self, rest: str) -> str:
+        parts = (rest or "").split()
+        if not parts:
+            return ""
+        return parts[0].strip().lower()
+
+    def _totp_unlock_scope_key(self, event: MessageEvent) -> str:
+        return f"{event.platform}:{event.channel_id}:{event.author_id}"
+
+    def _totp_unlock_remaining(self, event: MessageEvent) -> int:
+        key = self._totp_unlock_scope_key(event)
+        until = self._totp_unlock_until.get(key, 0.0)
+        now = time.time()
+        if until <= now:
+            self._totp_unlock_until.pop(key, None)
+            return 0
+        return max(0, int(until - now))
+
+    def _totp_is_unlocked(self, event: MessageEvent) -> bool:
+        return self._totp_unlock_remaining(event) > 0
+
+    def _set_totp_unlock(self, event: MessageEvent, ttl_seconds: int) -> None:
+        key = self._totp_unlock_scope_key(event)
+        self._totp_unlock_until[key] = time.time() + max(1, ttl_seconds)
+        self.logger.info(
+            "security.totp_unlock_window_set",
+            extra={
+                "platform": event.platform,
+                "channel_id": event.channel_id,
+                "is_dm": event.is_dm,
+                "user_id": event.author_id,
+                "ttl_seconds": ttl_seconds,
+            },
+        )
+
+    def _clear_totp_unlock(self, event: MessageEvent) -> None:
+        key = self._totp_unlock_scope_key(event)
+        self._totp_unlock_until.pop(key, None)
+        self.logger.info(
+            "security.totp_unlock_window_cleared",
+            extra={
+                "platform": event.platform,
+                "channel_id": event.channel_id,
+                "is_dm": event.is_dm,
+                "user_id": event.author_id,
+            },
+        )
+
+    def _parse_unlock_ttl_seconds(self, text: str) -> int:
+        raw = (text or "").strip()
+        if not raw:
+            return _DEFAULT_UNLOCK_SECONDS
+        match = _UNLOCK_TTL_RE.match(raw)
+        if not match:
+            raise ValueError("Usage: !c unlock --totp 123456 [ttl], where ttl is like 30m, 1h, or 2h.")
+        value = int(match.group(1))
+        if value <= 0:
+            raise ValueError("Unlock ttl must be greater than 0.")
+        unit = match.group(2).lower()
+        mult = {"m": 60, "h": 3600, "d": 86400}[unit]
+        return value * mult
+
+    def _format_duration(self, seconds: int) -> str:
+        total = max(0, int(seconds))
+        if total < 60:
+            return f"{total}s"
+        minutes, secs = divmod(total, 60)
+        if minutes < 60:
+            return f"{minutes}m" if secs == 0 else f"{minutes}m{secs}s"
+        hours, mins = divmod(minutes, 60)
+        if hours < 24:
+            return f"{hours}h" if mins == 0 else f"{hours}h{mins}m"
+        days, hrs = divmod(hours, 24)
+        return f"{days}d" if hrs == 0 else f"{days}d{hrs}h"
 
     def _extract_totp_arg(self, text: str) -> tuple[str, str]:
         match = _TOTP_ARG_RE.search(text)
