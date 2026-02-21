@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Optional
 
 from .. import command_registry, help_renderer
 from ..audit import Entry
+from ..reply_helpers import send_reply
 from ..router_helpers import (
     DEFAULT_SESSION,
     HELPER_TIMEOUT,
@@ -108,7 +109,7 @@ def dm_binding_help_text() -> str:
 async def dm_reply(router: "Router", sink: ResponseSink, entry: Optional[Entry], msg: str) -> None:
     """Send a DM reply and record it to audit logs."""
     router.append_audit_output(entry, msg)
-    await sink.send(msg)
+    await send_reply(sink, msg, router.cfg.discord.max_discord_message_chars)
 
 
 def dm_audit_start(router: "Router", event: MessageEvent, cmd: str, rest: str) -> Optional[Entry]:

@@ -714,6 +714,24 @@ def test_integration_dm_shortcuts_and_help_details(tmp_path):
     assert sum("TOTP default unlock: inactive." in t for t in texts) >= 2
 
 
+def test_integration_dm_help_is_chunked_for_discord_limit(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    router.cfg.discord.max_discord_message_chars = 250
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_dm_event("!help"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert len(texts) > 1
+    assert any("Commands:" in t for t in texts)
+
+
 def test_integration_telegram_threaded_reply(tmp_path):
     router, _ = _build_router(tmp_path)
     sink = _FakeSink(Capabilities(threads=True, replies=True, uploads=True, downloads=True, typing=True))
