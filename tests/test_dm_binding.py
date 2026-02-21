@@ -123,6 +123,25 @@ class _FakeRouter:
     def _normalize_unlock_totp_syntax(self, cmdline: str) -> str:
         return cmdline
 
+    def _shortcut_cmdline(self, content: str) -> str:
+        raw = (content or "").strip()
+        lower = raw.lower()
+        if lower == "!gh" or lower.startswith("!gh "):
+            return ("gh " + raw[3:].strip()).strip()
+        if lower == "!help" or lower.startswith("!help "):
+            return ("help " + raw[5:].strip()).strip()
+        if lower == "!unlock" or lower.startswith("!unlock "):
+            return ("unlock " + raw[7:].strip()).strip()
+        if lower == "!ul" or lower.startswith("!ul "):
+            return ("unlock " + raw[3:].strip()).strip()
+        if lower == "!lock" or lower.startswith("!lock "):
+            return ("lock " + raw[5:].strip()).strip()
+        if lower == "!st":
+            return "status"
+        if lower == "!u":
+            return "updates"
+        return ""
+
     def _totp_required_for_command(self, event: MessageEvent, cmd: str, rest: str) -> bool:
         _ = (event, cmd, rest)
         return False

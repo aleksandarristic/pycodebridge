@@ -6,6 +6,7 @@ import os
 import time
 from typing import TYPE_CHECKING, Optional
 
+from .. import command_registry, help_renderer
 from ..audit import Entry
 from ..router_helpers import (
     DEFAULT_SESSION,
@@ -37,6 +38,8 @@ _DM_COMMAND_ALIASES = {
     "ren": "renamerepo",
     "rename": "renamerepo",
 }
+
+_DM_SHORTCUT_COMMANDS = {"gh", "help", "lock", "status", "unlock", "updates"}
 
 
 class _PrefixedSink:
@@ -315,10 +318,12 @@ async def dm_rename_repo(
 async def handle_dm_message(router: "Router", event: MessageEvent, sink: ResponseSink) -> None:
     """Handle an incoming DM admin message."""
     content = (event.content or "").strip()
-    lower_content = content.lower()
-    if lower_content == "!gh" or lower_content.startswith("!gh "):
-        content = f"{router._transport_prefix(event)} gh {content[3:].strip()}".strip()
     prefix = router._transport_prefix(event)
+    shortcut_cmdline = router._shortcut_cmdline(content)
+    if shortcut_cmdline:
+        shortcut_head = shortcut_cmdline.split(maxsplit=1)[0].lower()
+        if shortcut_head in _DM_SHORTCUT_COMMANDS:
+            content = f"{prefix} {shortcut_cmdline}".strip()
     pending_upload = False
     file_transfers = getattr(router, "file_transfers", None)
     if file_transfers is not None and hasattr(file_transfers, "has_pending_upload"):
@@ -391,7 +396,6 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
     is_admin = event.platform == "discord" and router.cfg.discord.dm_admin_enabled and router._dm_admin_allowed(event.author_id)
     binding_commands = {"bind", "use", "repo", "unbind", "status", "unlock", "lock", "updates"}
     admin_commands = {
-        "help",
         "repos",
         "sessions",
         "config",
@@ -402,6 +406,21 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         "deleterepo",
         "renamerepo",
     }
+
+    if cmd == "help":
+        if not (router._transport_user_allowed(event) or is_admin):
+            await send_forbidden("You are not allowed to use this bot.")
+            return
+        token = rest.strip().lower()
+        if not token:
+            await send(command_registry.render_help(router._command_specs, prefix=prefix))
+            return
+        spec = router._command_registry.get(token)
+        if not spec:
+            await send_forbidden(help_renderer.help_not_found(token, router._command_registry, prefix))
+            return
+        await send(help_renderer.render_help_command(spec, prefix=prefix))
+        return
 
     if cmd in admin_commands:
         if not is_admin:
@@ -420,9 +439,6 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
             "dm.admin",
             extra={"platform": event.platform, "user_id": event.author_id, "cmd": cmd},
         )
-        if cmd == "help":
-            await send(dm_help_text())
-            return
         if cmd == "repos":
             msg = await dm_list_repos(router)
             await send(msg)

@@ -212,6 +212,18 @@ def _discord_event(content: str, channel_name: str, channel_id: str = "chan", *,
     )
 
 
+def _discord_dm_event(content: str, channel_id: str = "dm-1") -> MessageEvent:
+    return MessageEvent(
+        platform="discord",
+        content=content,
+        channel_id=channel_id,
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+
 def _telegram_channel_event(content: str, channel_name: str, channel_id: str = "chat") -> MessageEvent:
     return MessageEvent(
         platform="telegram",
@@ -665,6 +677,39 @@ def test_integration_help_command_details(tmp_path):
     texts = [msg for msg, _, _ in sink.sent]
     assert any("Help: `git`" in t for t in texts)
     assert any("!c git status" in t for t in texts)
+
+
+def test_integration_dm_shortcuts_and_help_details(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def _fake_handle_updates(self, sink_obj, repo_path: str) -> None:
+        _ = repo_path
+        await self.reply(sink_obj, "updates-ok")
+
+    router.handle_updates = MethodType(_fake_handle_updates, router)
+
+    async def run():
+        await router.handle_message(_discord_dm_event("!help"), sink)
+        await router.handle_message(_discord_dm_event("!help git"), sink)
+        await router.handle_message(_discord_dm_event("!st"), sink)
+        await router.handle_message(_discord_dm_event("!u"), sink)
+        await router.handle_message(_discord_dm_event("!unlock status"), sink)
+        await router.handle_message(_discord_dm_event("!ul status"), sink)
+        await router.handle_message(_discord_dm_event("!lock status"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Commands:" in t for t in texts)
+    assert any("Help: `git`" in t for t in texts)
+    assert any("!help" in t for t in texts)
+    assert any("Bound repo: none" in t for t in texts)
+    assert any("updates-ok" in t for t in texts)
+    assert sum("TOTP default unlock: inactive." in t for t in texts) >= 2
 
 
 def test_integration_telegram_threaded_reply(tmp_path):
