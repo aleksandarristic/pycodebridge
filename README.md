@@ -51,6 +51,10 @@ Quick start:
    - `docker exec -it pycodebridge codex login --device-auth`
 6) Headless with Compose: `docker compose up -d --build`
 7) Full Docker details: `DOCKER.md`
+8) One-shot update + redeploy:
+   - Preflight only: `./update.sh --check`
+   - Update current branch and redeploy: `./update.sh`
+   - Update a specific branch and redeploy: `./update.sh main`
 
 ## Configuration reference
 Paths support `$VAR`/`%APPDATA%`/`~` expansion.
