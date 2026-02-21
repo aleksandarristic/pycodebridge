@@ -610,6 +610,7 @@ def test_integration_misc_shortcuts_dispatch(tmp_path):
     router.handle_updates = MethodType(_fake_handle_updates, router)
 
     async def run():
+        await router.handle_message(_discord_event("!help", "codex-repo"), sink)
         await router.handle_message(_discord_event("!st", "codex-repo"), sink)
         await router.handle_message(_discord_event("!u", "codex-repo"), sink)
         await router.handle_message(_discord_event("!w", "codex-repo"), sink)
@@ -632,6 +633,7 @@ def test_integration_misc_shortcuts_dispatch(tmp_path):
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
+    assert any("Commands:" in t for t in texts)
     assert any("Repo: repo" in t for t in texts)
     assert any("Related: !c start" in t for t in texts)
     assert any("updates-ok" in t for t in texts)
@@ -646,6 +648,23 @@ def test_integration_misc_shortcuts_dispatch(tmp_path):
     assert "no\n" in runner.last_proc.writes
     assert "keep going\n" in runner.last_proc.writes
     assert runner.last_proc.interrupted is True
+
+
+def test_integration_help_command_details(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c help git", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Help: `git`" in t for t in texts)
+    assert any("!c git status" in t for t in texts)
 
 
 def test_integration_telegram_threaded_reply(tmp_path):

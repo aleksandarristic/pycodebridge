@@ -34,6 +34,7 @@ from .util.chunk import chunk_text
 from .util.prompt import needs_user_input
 from .totp import TotpAttemptLimiter, verify_totp
 from . import git_bootstrap
+from . import help_renderer
 from .router_helpers import (
     DEFAULT_SESSION,
     MAX_SESSIONS_PER_CHANNEL,
@@ -370,6 +371,8 @@ class Router:
             return ("git " + _tail("!git")).strip()
         if lower == "!gh" or lower.startswith("!gh "):
             return ("gh " + _tail("!gh")).strip()
+        if lower == "!help" or lower.startswith("!help "):
+            return ("help " + _tail("!help")).strip()
         if lower == "!unlock" or lower.startswith("!unlock "):
             return ("unlock " + _tail("!unlock")).strip()
         if lower == "!ul" or lower.startswith("!ul "):
@@ -871,9 +874,18 @@ class Router:
             return message
         return f"{message}\nRelated: {', '.join(unique)}"
 
-    async def send_help(self, event: MessageEvent, sink: ResponseSink) -> None:
+    async def send_help(self, event: MessageEvent, sink: ResponseSink, query: str = "") -> None:
         """Send help text for supported commands."""
-        await self.reply(sink, command_registry.render_help(self._command_specs, prefix=self._transport_prefix(event)))
+        prefix = self._transport_prefix(event)
+        token = (query or "").strip().lower()
+        if not token:
+            await self.reply(sink, command_registry.render_help(self._command_specs, prefix=prefix))
+            return
+        spec = self._command_registry.get(token)
+        if not spec:
+            await self.reply_forbidden(sink, help_renderer.help_not_found(token, self._command_registry, prefix))
+            return
+        await self.reply(sink, help_renderer.render_help_command(spec, prefix=prefix))
 
     async def startup_summary(self) -> str:
         """Return a concise summary of the current bridge state."""

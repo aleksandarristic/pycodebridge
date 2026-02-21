@@ -9,6 +9,7 @@ import re
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Sequence, Tuple
 
 from .command_parse import parse_choose, parse_session_and_id, parse_session_and_prompt, parse_session_or_limit
+from . import help_renderer
 from .model_parse import parse_models_from_lines
 from .router_helpers import (
     DEFAULT_SESSION,
@@ -44,24 +45,6 @@ AUTH_LABELS = {
     AUTH_UNLOCK_GH: "unlock/gh",
     AUTH_TOTP: "totp",
     AUTH_MIXED: "mixed",
-}
-
-HELP_SHORTCUT_TRIGGERS = {
-    "status": ("!st",),
-    "updates": ("!u",),
-    "wait": ("!w",),
-    "ps": ("!ps",),
-    "rerun": ("!retry",),
-    "approve": ("!y",),
-    "deny": ("!n",),
-    "interrupt": ("!stop [session]", "!pause [session]"),
-    "steer": ("!steer <text>", "!s <text>", "!s:<session> <text>"),
-    "answer": ("!a <text>", "!a:<session> <text>"),
-    "git": ("!git ...",),
-    "gh": ("!gh ...",),
-    "logs": ("!log [n]",),
-    "unlock": ("!unlock ...", "!ul ..."),
-    "lock": ("!lock ...",),
 }
 
 _MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{1,63}$")
@@ -164,7 +147,7 @@ class CommandSpec:
 def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
     """Return a command registry and ordered spec list."""
     specs = [
-        CommandSpec("help", "help", "show this help", "General", _cmd_help, AUTH_OPEN, aliases=("commands",)),
+        CommandSpec("help", "help [command]", "show this help", "General", _cmd_help, AUTH_OPEN, aliases=("commands",)),
         CommandSpec("status", "status", "show repo path and sessions", "General", _cmd_status, AUTH_OPEN, aliases=("st",)),
         CommandSpec("stats", "stats [session]", "show usage totals", "General", _cmd_stats, AUTH_OPEN, aliases=("usage",)),
         CommandSpec("peek", "peek [session]", "show active status and last output time", "General", _cmd_peek, AUTH_OPEN, aliases=("pk",)),
@@ -306,47 +289,8 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
 
 
 def render_help(specs: Sequence[CommandSpec], prefix: str = "!c") -> str:
-    """Render help text for the command registry."""
-    grouped = _group_specs(specs)
-    lines = [
-        "Commands:",
-        "Auth tags: [open]=no TOTP, [unlock/default]=default unlock or --totp, [unlock/gh]=gh unlock or --totp, [totp]=always --totp, [mixed]=depends on subcommand",
-        "",
-    ]
-    for group in _ordered_groups(grouped):
-        lines.append(f"{group}:")
-        for spec in grouped[group]:
-            auth_text = AUTH_LABELS.get(spec.auth, spec.auth)
-            triggers = ", ".join(f"**`{trig}`**" for trig in _help_triggers(spec, prefix))
-            lines.append(f"- {triggers} - {spec.description} [{auth_text}]")
-        lines.append("")
-    return "\n".join(lines).strip()
-
-
-def _help_triggers(spec: CommandSpec, prefix: str) -> list[str]:
-    pref = (prefix or "!c").strip()
-    heads = [spec.name] + list(spec.aliases)
-    out: list[str] = []
-    forms = [f.strip() for f in spec.usage.split(" | ") if f.strip()]
-    for form in forms:
-        parts = form.split(maxsplit=1)
-        if not parts:
-            continue
-        head = parts[0]
-        tail = f" {parts[1]}" if len(parts) > 1 else ""
-        if head == spec.name:
-            for alias in heads:
-                out.append(f"{pref} {alias}{tail}".strip())
-        else:
-            out.append(f"{pref} {form}".strip())
-    for shortcut in HELP_SHORTCUT_TRIGGERS.get(spec.name, ()):
-        out.append(shortcut)
-    deduped: list[str] = []
-    for trig in out:
-        t = trig.strip()
-        if t and t not in deduped:
-            deduped.append(t)
-    return deduped
+    """Compatibility wrapper for index help rendering."""
+    return help_renderer.render_help_index(specs, prefix)
 
 
 async def dispatch(
@@ -386,7 +330,7 @@ def _ordered_groups(grouped: Dict[str, List[CommandSpec]]) -> Iterable[str]:
 
 
 async def _cmd_help(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
-    await router.send_help(message, sink)
+    await router.send_help(message, sink, rest)
 
 
 async def _cmd_status(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

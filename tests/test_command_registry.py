@@ -29,7 +29,7 @@ def test_command_registry_help_text():
     assert "Commands:" in text
     assert "General:" in text
     assert "Auth tags: [open]=no TOTP" in text
-    assert "- **`!c help`**, **`!c commands`** - show this help [open]" in text
+    assert "- **`!c help [command]`**, **`!c commands [command]`**, **`!help`** - show this help [open]" in text
     assert "**`!c unlock [gh|all] [status|ttl]`**" in text
     assert "**`!c ul [gh|all] [status|ttl]`**" in text
     assert "**`!unlock ...`**" in text
@@ -46,3 +46,22 @@ def test_command_registry_help_text():
     assert "**`!a <text>`**" in text
     assert "**`!stop [session]`**" in text
     assert "**`!w`**" in text
+
+
+def test_command_registry_detailed_help_uses_examples():
+    registry, _ = build_registry()
+    from codebridge.help_renderer import render_help_command
+
+    text = render_help_command(registry["git"], prefix="!c")
+    assert "**Help: `git`**" in text
+    assert "Examples:" in text
+    assert "`!c git status`" in text
+
+
+def test_help_not_found_has_suggestions():
+    registry, _ = build_registry()
+    from codebridge.help_renderer import help_not_found
+
+    text = help_not_found("gti", registry, prefix="!c")
+    assert "Unknown command `gti`." in text
+    assert "`!c help git`" in text

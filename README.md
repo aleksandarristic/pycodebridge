@@ -148,6 +148,8 @@ Failed/replayed TOTP attempts are rate-limited per user (`platform:user_id`) usi
 
 TOTP not required (read-only in channel):
 - `!c help`
+- `!c help <command>`
+- `!help` (top-level shortcut for `!c help`)
 - `!c status`
 - `!c stats [session]`
 - `!c peek [session]`
@@ -225,6 +227,7 @@ Auth tags used by `!c help`:
 
 General:
 - `help` (alias: `commands`) `[open]`
+- `help <command>` for command-specific details and examples (for example `!c help git`)
 - `status` (alias: `st`), `stats` (alias: `usage`), `peek` (alias: `pk`), `updates` (aliases: `update`, `version`) `[open]`
 - Top-level shortcuts in mapped repo channels: `!st` -> `!c status`, `!u` -> `!c updates`
   - `status` includes contextual `Related:` hints (for example `!c start`, `!ps`, `!w`) when relevant.
