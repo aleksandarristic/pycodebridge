@@ -709,7 +709,6 @@ class Router:
         """Send status summary for the channel and sessions."""
         state = self.state.load()
         queue_statuses = await self.coordinator.snapshot(sink.channel_id)
-        running_sessions = {(s.session or DEFAULT_SESSION) for s in queue_statuses if s.status == "running"}
         running = sum(1 for s in queue_statuses if s.status == "running")
         queued = sum(1 for s in queue_statuses if s.status == "queued")
         ch = state.channels.get(sink.channel_id)
@@ -721,7 +720,7 @@ class Router:
                 f"Sessions ({len(ch.sessions)}/{MAX_SESSIONS_PER_CHANNEL}):",
             ]
             for name, sess in ch.sessions.items():
-                active = name in running_sessions
+                active = await self.get_active(sink.channel_id, name) is not None
                 lines.append(
                     format_session_line(
                         name,
@@ -733,14 +732,8 @@ class Router:
                 )
             current = self.current_session_for_user("", sink.channel_id)
             if current:
-                current_sess = ch.sessions.get(current)
-                current_model = self.cfg.codex.model
-                current_reasoning = self.cfg.codex.model_reasoning_effort
-                if current_sess:
-                    if current_sess.model:
-                        current_model = current_sess.model
-                    if current_sess.reasoning_effort:
-                        current_reasoning = current_sess.reasoning_effort
+                current_model = self.session_model(sink.channel_id, current)
+                current_reasoning = self.session_reasoning_effort(sink.channel_id, current)
                 lines.append(format_current_selection_line(current, current_model, current_reasoning))
             await self.reply(sink, "\n".join(lines))
             return
