@@ -210,7 +210,7 @@ async def dm_clone_repo(
     _, err = await run_limited_command(os.path.dirname(repo_path), ["git", "clone", clone_url, repo_path], timeout=HELPER_TIMEOUT * 2)
     if err:
         return err
-    await dm_reply(router, sink, entry, f"Cloned {clone_url} into {repo_path}. Continue in #codex-{repo_name}")
+    await dm_reply(router, sink, entry, f"Clone complete: {clone_url} -> {repo_path}. Use `#codex-{repo_name}` for prompts.")
     router.logger.info("dm.bind.clonerepo", extra={"platform": event.platform, "user_id": event.author_id, "repo": repo_name})
     router.logger.info("dm.clonerepo.ok", extra={"user_id": event.author_id, "repo": repo_name, "url": clone_url, "path": repo_path})
     return None

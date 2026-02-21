@@ -9,6 +9,7 @@ from ..router_helpers import run_limited_command, trim_output
 from ..transport import ResponseSink
 from ..util.ansi import strip_control_codes
 from ..util.chunk import chunk_text
+from ..util import path as pathutil
 
 if TYPE_CHECKING:
     from ..router import Router
@@ -29,3 +30,49 @@ async def handle_gh(router: "Router", sink: ResponseSink, repo_path: str, rest: 
     text = text.strip() or "(no output)"
     for chunk in chunk_text(text, router.cfg.discord.max_discord_message_chars):
         await router.reply(sink, chunk)
+    if not err:
+        completion = _gh_clone_completion_hint(fields)
+        if completion:
+            await router.reply(sink, completion)
+
+
+def _gh_clone_completion_hint(fields: list[str]) -> str:
+    """Return a clone completion hint for gh clone-style commands."""
+    repo_name = _infer_cloned_repo_name(fields)
+    if repo_name:
+        return f"Clone complete. Use `#codex-{repo_name}` for prompts."
+    return ""
+
+
+def _infer_cloned_repo_name(fields: list[str]) -> str:
+    """Infer a repo name from gh clone arguments."""
+    if len(fields) < 3:
+        return ""
+    if fields[0] == "repo" and fields[1] == "clone":
+        if len(fields) >= 4 and not fields[3].startswith("-"):
+            return _normalize_repo_hint(fields[3])
+        return _normalize_repo_hint(fields[2])
+    if fields[0] == "repo" and fields[1] == "create" and "--clone" in fields:
+        for token in fields[2:]:
+            if token.startswith("-"):
+                continue
+            return _normalize_repo_hint(token)
+    return ""
+
+
+def _normalize_repo_hint(token: str) -> str:
+    candidate = token.strip().rstrip("/")
+    if not candidate:
+        return ""
+    if candidate.endswith(".git"):
+        candidate = candidate[: -len(".git")]
+    if ":" in candidate and "/" in candidate:
+        candidate = candidate.rsplit(":", 1)[1]
+    if "/" in candidate:
+        candidate = candidate.rsplit("/", 1)[1]
+    if not candidate:
+        return ""
+    try:
+        return pathutil.normalize_repo_name(candidate)
+    except ValueError:
+        return ""

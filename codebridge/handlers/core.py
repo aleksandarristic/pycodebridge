@@ -171,7 +171,7 @@ async def handle_clone_repo(
         await router.reply_forbidden(sink, f"git clone failed: {err}")
         router.logger.error("clonerepo.failed", extra={"channel_id": channel_id, "repo": repo_name, "url": clone_url, "error": str(err)})
         return
-    await router.reply(sink, f"Cloned {clone_url} into {repo_path}")
+    await router.reply(sink, f"Clone complete: {clone_url} -> {repo_path}\nUse `#codex-{repo_name}` for prompts.")
     router.logger.info("clonerepo.ok", extra={"channel_id": channel_id, "repo": repo_name, "url": clone_url, "path": repo_path})
 
 
