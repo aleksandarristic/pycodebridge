@@ -1,6 +1,7 @@
 """Per-channel async job queue manager."""
 
 import asyncio
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Dict, Optional
 
@@ -43,7 +44,7 @@ class Manager:
             self._counter += 1
             job_id = f"job-{self._counter}"
             fut: asyncio.Future = asyncio.get_running_loop().create_future()
-            pos = worker.enqueue(_JobRequest(job_id, session, job, fut))
+            pos = await worker.enqueue(_JobRequest(job_id, session, job, fut))
             self._last_jobs[channel_id] = JobRecord(job=job, session=session)
             return pos, job_id, fut
 
@@ -53,7 +54,7 @@ class Manager:
             worker = self._workers.get(channel_id)
             if worker is None:
                 return []
-            return worker.snapshot()
+            return await worker.snapshot()
 
     async def snapshot_all(self) -> Dict[str, list[JobStatus]]:
         """Return snapshots for all channels with queued/running jobs."""
@@ -61,7 +62,7 @@ class Manager:
             items = list(self._workers.items())
         out: Dict[str, list[JobStatus]] = {}
         for channel_id, worker in items:
-            statuses = worker.snapshot()
+            statuses = await worker.snapshot()
             if statuses:
                 out[channel_id] = statuses
         return out
@@ -72,7 +73,7 @@ class Manager:
             worker = self._workers.get(channel_id)
         if worker is None:
             return False
-        return worker.cancel(job_id)
+        return await worker.cancel(job_id)
 
     async def last_job(self, channel_id: str) -> Optional[JobRecord]:
         """Return the most recent enqueued job for a channel."""
@@ -86,25 +87,34 @@ class _JobRequest:
     session: str
     job: Job
     future: asyncio.Future
+    cancelled: bool = False
 
 
 class _Worker:
     """Internal worker that executes jobs sequentially."""
     def __init__(self) -> None:
         self._queue: asyncio.Queue[_JobRequest] = asyncio.Queue()
+        self._pending: "OrderedDict[str, _JobRequest]" = OrderedDict()
         self._active: Optional[_JobRequest] = None
+        self._lock = asyncio.Lock()
 
-    def enqueue(self, req: _JobRequest) -> int:
+    async def enqueue(self, req: _JobRequest) -> int:
         """Enqueue a job request and return queue position."""
-        self._queue.put_nowait(req)
-        return self._queue.qsize()
+        async with self._lock:
+            self._pending[req.job_id] = req
+            self._queue.put_nowait(req)
+            return len(self._pending)
 
     async def run(self) -> None:
         """Run queued jobs in order forever."""
         while True:
             req = await self._queue.get()
-            self._active = req
+            async with self._lock:
+                self._pending.pop(req.job_id, None)
+                self._active = req
             try:
+                if req.cancelled:
+                    continue
                 await req.job()
                 if not req.future.done():
                     req.future.set_result(None)
@@ -112,26 +122,27 @@ class _Worker:
                 if not req.future.done():
                     req.future.set_exception(exc)
             finally:
-                self._active = None
+                async with self._lock:
+                    self._active = None
                 self._queue.task_done()
 
-    def snapshot(self) -> list[JobStatus]:
+    async def snapshot(self) -> list[JobStatus]:
         """Snapshot of current running and queued jobs."""
-        statuses: list[JobStatus] = []
-        if self._active:
-            statuses.append(JobStatus(job_id=self._active.job_id, session=self._active.session, status="running", position=0))
-        queued = list(self._queue._queue)  # type: ignore[attr-defined]
-        for idx, req in enumerate(queued, start=1):
-            statuses.append(JobStatus(job_id=req.job_id, session=req.session, status="queued", position=idx))
-        return statuses
+        async with self._lock:
+            statuses: list[JobStatus] = []
+            if self._active:
+                statuses.append(JobStatus(job_id=self._active.job_id, session=self._active.session, status="running", position=0))
+            for idx, req in enumerate(self._pending.values(), start=1):
+                statuses.append(JobStatus(job_id=req.job_id, session=req.session, status="queued", position=idx))
+            return statuses
 
-    def cancel(self, job_id: str) -> bool:
+    async def cancel(self, job_id: str) -> bool:
         """Cancel a queued job if present."""
-        queued = list(self._queue._queue)  # type: ignore[attr-defined]
-        for idx, req in enumerate(queued):
-            if req.job_id == job_id:
-                del self._queue._queue[idx]  # type: ignore[attr-defined]
-                if not req.future.done():
-                    req.future.set_exception(RuntimeError("cancelled"))
-                return True
-        return False
+        async with self._lock:
+            req = self._pending.pop(job_id, None)
+            if req is None:
+                return False
+            req.cancelled = True
+            if not req.future.done():
+                req.future.set_exception(RuntimeError("cancelled"))
+            return True

@@ -20,13 +20,35 @@ def test_queue_enqueue_and_cancel():
         await fut1
         assert ran == ["job1"]
 
+        gate = asyncio.Event()
+
+        async def blocker():
+            await gate.wait()
+
+        pos_block, _, fut_block = await mgr.enqueue("chan", "default", blocker)
+        assert pos_block == 1
+
+        # Yield once so blocker becomes active and job2 is truly queued behind it.
+        await asyncio.sleep(0)
+
         pos2, id2, fut2 = await mgr.enqueue("chan", "default", job2)
         assert pos2 == 1
+
+        snapshot = await mgr.snapshot("chan")
+        assert len(snapshot) == 2
+        assert snapshot[0].status == "running"
+        assert snapshot[1].status == "queued"
+        assert snapshot[1].job_id == id2
+
         ok = await mgr.cancel("chan", id2)
         assert ok is True
         try:
             await fut2
-        except Exception:
-            pass
+            assert False, "cancelled job future should raise"
+        except RuntimeError as exc:
+            assert str(exc) == "cancelled"
+
+        gate.set()
+        await fut_block
 
     asyncio.run(run())
