@@ -71,3 +71,18 @@ def test_session_service_reset_session_clears_state_and_runtime(tmp_path):
     asyncio.run(run())
     state = store.load()
     assert "default" not in state.channels["chan"].sessions
+
+
+def test_session_service_update_state_preserves_existing_repo_context_on_empty_update(tmp_path):
+    store = Store(str(tmp_path))
+    cfg = config.Config()
+    service = SessionService(store, cfg)
+    service.update_state("chan", "default", "repo", "/tmp/repo", "thread-1", "", "")
+
+    # This mirrors sticky-session selection paths that should not erase repo context.
+    service.update_state("chan", "default", "", "", "", "", "")
+    state = store.load()
+    sess = state.channels["chan"].sessions["default"]
+    assert sess.repo_name == "repo"
+    assert sess.repo_path == "/tmp/repo"
+    assert sess.thread_id == "thread-1"

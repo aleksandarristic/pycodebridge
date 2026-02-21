@@ -70,3 +70,28 @@ def parse_log_count(args: list[str]) -> int:
     if n > 50:
         n = 50
     return n
+
+
+def parse_session_quit_alias(fields: list[str]) -> str:
+    """Parse `<session> /quit` shorthand and return the session token."""
+    if len(fields) >= 2 and fields[1] == "/quit":
+        return fields[0]
+    return ""
+
+
+def parse_session_slash_prompt(cmdline: str) -> tuple[str, str]:
+    """Parse slash-style prompt forms.
+
+    Returns `(session, prompt)` where session is empty when no slash form matches.
+    """
+    raw = (cmdline or "").strip()
+    if not raw:
+        return "", ""
+    if raw.startswith("/"):
+        return "default", raw
+    fields = raw.split()
+    if len(fields) >= 2 and fields[1].startswith("/"):
+        session = fields[0]
+        prompt = raw[len(fields[0]) :].strip()
+        return session, prompt
+    return "", ""

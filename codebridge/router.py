@@ -24,6 +24,7 @@ from .handlers import git_helpers as git_handlers
 from .handlers import repo_helpers as repo_handlers
 from .handlers import system_helpers
 from . import command_registry
+from .command_parse import parse_session_quit_alias, parse_session_slash_prompt
 from .file_transfer import FileTransferService
 from .reply_helpers import send_forbidden, send_reply
 from .util.ansi import strip_control_codes
@@ -275,8 +276,9 @@ class Router:
             await self.reply_forbidden(sink, f"Repo error: {exc}")
             return
 
-        if len(fields) >= 2 and fields[1] == "/quit":
-            session_name = fields[0]
+        quit_session = parse_session_quit_alias(fields)
+        if quit_session:
+            session_name = quit_session
             try:
                 session_name = normalize_session(session_name)
             except ValueError as exc:
@@ -284,18 +286,15 @@ class Router:
                 return
             await self.handle_quit(sink, session_name)
             return
-        if cmdline.startswith("/"):
-            await self.handle_resume(event, sink, repo_name, repo_path, DEFAULT_SESSION, cmdline)
-            return
-        if len(fields) >= 2 and fields[1].startswith("/"):
-            session_name = fields[0]
+        slash_session, slash_prompt = parse_session_slash_prompt(cmdline)
+        if slash_session:
+            session_name = slash_session
             try:
                 session_name = normalize_session(session_name)
             except ValueError as exc:
                 await self.reply_forbidden(sink, str(exc))
                 return
-            prompt = cmdline[len(fields[0]) :].strip()
-            await self.handle_resume(event, sink, repo_name, repo_path, session_name, prompt)
+            await self.handle_resume(event, sink, repo_name, repo_path, session_name, slash_prompt)
             return
 
         if await command_registry.dispatch(
@@ -709,11 +708,20 @@ class Router:
     async def send_status(self, sink: ResponseSink, repo_name: str, repo_path: str) -> None:
         """Send status summary for the channel and sessions."""
         state = self.state.load()
+        queue_statuses = await self.coordinator.snapshot(sink.channel_id)
+        running_sessions = {(s.session or DEFAULT_SESSION) for s in queue_statuses if s.status == "running"}
+        running = sum(1 for s in queue_statuses if s.status == "running")
+        queued = sum(1 for s in queue_statuses if s.status == "queued")
         ch = state.channels.get(sink.channel_id)
         if ch and ch.sessions:
-            lines = [f"Repo: {repo_name}", f"Path: {repo_path}", f"Sessions ({len(ch.sessions)}/{MAX_SESSIONS_PER_CHANNEL}):"]
+            lines = [
+                f"Repo: {repo_name}",
+                f"Path: {repo_path}",
+                f"Codex: {running} running, {queued} queued",
+                f"Sessions ({len(ch.sessions)}/{MAX_SESSIONS_PER_CHANNEL}):",
+            ]
             for name, sess in ch.sessions.items():
-                active = await self.get_active(sink.channel_id, name) is not None
+                active = name in running_sessions
                 lines.append(
                     format_session_line(
                         name,
@@ -725,12 +733,21 @@ class Router:
                 )
             current = self.current_session_for_user("", sink.channel_id)
             if current:
-                current_model = self.session_model(sink.channel_id, current)
-                current_reasoning = self.session_reasoning_effort(sink.channel_id, current)
+                current_sess = ch.sessions.get(current)
+                current_model = self.cfg.codex.model
+                current_reasoning = self.cfg.codex.model_reasoning_effort
+                if current_sess:
+                    if current_sess.model:
+                        current_model = current_sess.model
+                    if current_sess.reasoning_effort:
+                        current_reasoning = current_sess.reasoning_effort
                 lines.append(format_current_selection_line(current, current_model, current_reasoning))
             await self.reply(sink, "\n".join(lines))
             return
-        await self.reply(sink, f"Repo: {repo_name}\nPath: {repo_path}\nNo session attached.")
+        await self.reply(
+            sink,
+            f"Repo: {repo_name}\nPath: {repo_path}\nCodex: {running} running, {queued} queued\nNo session attached.",
+        )
 
     async def send_help(self, sink: ResponseSink) -> None:
         """Send help text for supported commands."""

@@ -7,7 +7,7 @@ import time
 from typing import Any, Dict, Optional
 
 from . import config as cfgmod
-from .router_helpers import PendingConflict, set_sticky
+from .router_helpers import DEFAULT_SESSION, PendingConflict, normalize_session, set_sticky
 from .state import Store, utc_now_iso
 from .util import path as pathutil
 
@@ -125,7 +125,7 @@ class SessionService:
         reasoning_effort: str,
     ) -> None:
         """Update persistent state for a session."""
-        session = session or "default"
+        session = _normalize_session_default(session)
         try:
             repo_name = pathutil.normalize_repo_name(repo_name)
         except ValueError:
@@ -145,9 +145,12 @@ class SessionService:
                 sess = SessionState(repo_name=repo_name, repo_path=repo_path, thread_id=thread_id)
             if not sess.created_at:
                 sess.created_at = utc_now_iso()
-            sess.repo_name = repo_name
-            sess.repo_path = repo_path
-            sess.thread_id = thread_id
+            if repo_name:
+                sess.repo_name = repo_name
+            if repo_path:
+                sess.repo_path = repo_path
+            if thread_id:
+                sess.thread_id = thread_id
             if model:
                 sess.model = model
             elif not sess.model and self._cfg.codex.model:
@@ -164,20 +167,22 @@ class SessionService:
 
     def session_model(self, channel_id: str, session: str) -> str:
         """Return model override for a session or fallback to default."""
+        session = _normalize_session_default(session)
         state = self._state.load()
         ch = state.channels.get(channel_id)
         if ch:
-            sess = ch.sessions.get(session or "default")
+            sess = ch.sessions.get(session)
             if sess and sess.model:
                 return sess.model
         return self._cfg.codex.model
 
     def session_reasoning_effort(self, channel_id: str, session: str) -> str:
         """Return reasoning effort override for a session or fallback to default."""
+        session = _normalize_session_default(session)
         state = self._state.load()
         ch = state.channels.get(channel_id)
         if ch:
-            sess = ch.sessions.get(session or "default")
+            sess = ch.sessions.get(session)
             if sess and sess.reasoning_effort:
                 return sess.reasoning_effort
         return self._cfg.codex.model_reasoning_effort
@@ -192,11 +197,12 @@ class SessionService:
         reasoning_effort: str,
     ) -> None:
         """Set model and reasoning overrides for a session."""
+        session = _normalize_session_default(session)
         state = self._state.load()
         thread_id = ""
         ch = state.channels.get(channel_id)
         if ch:
-            sess = ch.sessions.get(session or "default")
+            sess = ch.sessions.get(session)
             if sess:
                 thread_id = sess.thread_id
         self.update_state(channel_id, session, repo_name, repo_path, thread_id, model, reasoning_effort)
@@ -213,4 +219,14 @@ class SessionService:
 
     def set_sticky(self, channel_id: str, user_id: str, session: str) -> None:
         """Set sticky session selection for a user."""
-        self._state.update(lambda fs: set_sticky(fs, channel_id, user_id, session))
+        self._state.update(lambda fs: set_sticky(fs, channel_id, user_id, _normalize_session_default(session)))
+
+
+def _normalize_session_default(session: str) -> str:
+    raw = (session or "").strip()
+    if not raw:
+        return DEFAULT_SESSION
+    try:
+        return normalize_session(raw)
+    except ValueError:
+        return DEFAULT_SESSION

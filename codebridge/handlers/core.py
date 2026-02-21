@@ -58,8 +58,7 @@ async def handle_start(
         await router.reply(sink, f"Session '{session}' already exists for this channel.\nChoose one:\n!c choose resume\n!c choose replace\n!c choose cancel")
         return
 
-    model = router.session_model(channel_id, session)
-    reasoning = router.session_reasoning_effort(channel_id, session)
+    model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)
     args = router.runner.build_start_args(
         repo_path, router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name), model, reasoning
     )
@@ -85,8 +84,7 @@ async def handle_resume(
     session = normalize_session(session)
     state = router.state.load()
     thread_id = existing_thread(state, channel_id, session)
-    model = router.session_model(channel_id, session)
-    reasoning = router.session_reasoning_effort(channel_id, session)
+    model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)
     if thread_id:
         args = router.runner.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
     elif session_exists(state, channel_id, session):
@@ -228,8 +226,7 @@ async def handle_spec(
         await router.reply_forbidden(sink, f"Session limit reached ({MAX_SESSIONS_PER_CHANNEL}). Stop or reuse an existing session.")
         return
     thread_id = existing_thread(state, channel_id, session)
-    model = router.session_model(channel_id, session)
-    reasoning = router.session_reasoning_effort(channel_id, session)
+    model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)
     prompt = router.spec_prompt(repo_name)
     if thread_id:
         args = router.runner.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
@@ -279,7 +276,10 @@ async def handle_stop(router: "Router", sink: ResponseSink, session: str) -> Non
         await proc.stop()
         await asyncio.sleep(0.5)
         await proc.interrupt()
-        await router.reply(sink, f"Sent stop (ESC then SIGINT) to session '{session or DEFAULT_SESSION}'.")
+        await router.reply(
+            sink,
+            f"Sent stop (ESC then SIGINT) to session '{session or DEFAULT_SESSION}'.{_usage_suffix(router, sink.channel_id, session)}",
+        )
         return
     await router.reply(sink, "No running Codex process.")
 
@@ -289,7 +289,10 @@ async def handle_kill(router: "Router", sink: ResponseSink, session: str) -> Non
     proc = await router.get_active(sink.channel_id, session)
     if proc is not None:
         await proc.kill()
-        await router.reply(sink, f"Sent kill to session '{session or DEFAULT_SESSION}'.")
+        await router.reply(
+            sink,
+            f"Sent kill to session '{session or DEFAULT_SESSION}'.{_usage_suffix(router, sink.channel_id, session)}",
+        )
         return
     await router.reply_forbidden(sink, "No running Codex process.")
 
@@ -299,7 +302,10 @@ async def handle_quit(router: "Router", sink: ResponseSink, session: str) -> Non
     proc = await router.get_active(sink.channel_id, session)
     if proc is not None:
         await proc.write("/quit\n")
-        await router.reply(sink, f"Sent /quit to session '{session or DEFAULT_SESSION}'.")
+        await router.reply(
+            sink,
+            f"Sent /quit to session '{session or DEFAULT_SESSION}'.{_usage_suffix(router, sink.channel_id, session)}",
+        )
         return
     await router.reply_forbidden(sink, "No running Codex process.")
 
@@ -340,3 +346,26 @@ async def handle_answer(router: "Router", event: MessageEvent, sink: ResponseSin
             "chars": len(payload),
         },
     )
+
+
+def _session_model_reasoning_from_state(router: "Router", state, channel_id: str, session: str) -> tuple[str, str]:
+    """Resolve model/reasoning for a session using one already-loaded state snapshot."""
+    default_model = router.cfg.codex.model
+    default_reasoning = router.cfg.codex.model_reasoning_effort
+    ch = state.channels.get(channel_id)
+    if not ch:
+        return default_model, default_reasoning
+    sess = ch.sessions.get(session or DEFAULT_SESSION)
+    if not sess:
+        return default_model, default_reasoning
+    model = sess.model or default_model
+    reasoning = sess.reasoning_effort or default_reasoning
+    return model, reasoning
+
+
+def _usage_suffix(router: "Router", channel_id: str, session: str) -> str:
+    """Render lightweight usage info for end-commands if available."""
+    stats = router.get_usage(channel_id, session or DEFAULT_SESSION)
+    if not stats:
+        return ""
+    return f" Usage so far: input {stats.input_tokens}, output {stats.output_tokens}, total {stats.total_tokens}."

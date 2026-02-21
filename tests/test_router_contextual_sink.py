@@ -86,3 +86,25 @@ def test_contextual_sink_uses_reply_to_when_supported(tmp_path):
 
     asyncio.run(run())
     assert sink.sent == [("hello", None, "msg-1")]
+
+
+def test_send_status_includes_codex_queue_summary(tmp_path):
+    router = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=False, replies=False, uploads=False, downloads=False, typing=False))
+    # Seed one session in persisted state.
+    router.update_state("chan", "default", "repo", str(tmp_path / "repo"), "thread-1", "", "")
+    gate = asyncio.Event()
+
+    async def blocking_job():
+        await gate.wait()
+
+    async def run():
+        await router.coordinator.enqueue("chan", "default", blocking_job)
+        await asyncio.sleep(0)  # let queue start running
+        await router.send_status(sink, "repo", str(tmp_path / "repo"))
+        gate.set()
+
+    asyncio.run(run())
+    assert sink.sent
+    text = sink.sent[-1][0]
+    assert "Codex: 1 running, 0 queued" in text

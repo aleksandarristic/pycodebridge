@@ -52,3 +52,20 @@ def test_queue_enqueue_and_cancel():
         await fut_block
 
     asyncio.run(run())
+
+
+def test_queue_worker_prunes_after_idle():
+    async def run():
+        mgr = Manager(worker_idle_seconds=0.1)
+
+        async def job():
+            return None
+
+        _, _, fut = await mgr.enqueue("chan", "default", job)
+        await fut
+        # Let the worker hit idle timeout and exit.
+        await asyncio.sleep(0.2)
+        await mgr.snapshot_all()
+        assert len(mgr._workers) == 0
+
+    asyncio.run(run())
