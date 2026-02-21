@@ -278,6 +278,9 @@ def test_load_config_git_bootstrap_fields(tmp_path, monkeypatch):
           apply_to_existing_repos: true
           apply_on_repo_create_clone_copy: true
           local_fallback_on_global_failure: true
+          allow_dangerous_ops: true
+          require_confirmation_for_dangerous_ops: true
+          dangerous_confirmation_token: "--really-do-it"
         """,
         encoding="utf-8",
     )
@@ -292,3 +295,6 @@ def test_load_config_git_bootstrap_fields(tmp_path, monkeypatch):
     assert cfg.git.apply_to_existing_repos is True
     assert cfg.git.apply_on_repo_create_clone_copy is True
     assert cfg.git.local_fallback_on_global_failure is True
+    assert cfg.git.allow_dangerous_ops is True
+    assert cfg.git.require_confirmation_for_dangerous_ops is True
+    assert cfg.git.dangerous_confirmation_token == "--really-do-it"

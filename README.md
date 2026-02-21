@@ -121,6 +121,9 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `apply_to_existing_repos` (default `true`) — when global bootstrap fails and local fallback is enabled, apply settings to existing repos.
 - `apply_on_repo_create_clone_copy` (default `true`) — apply local settings automatically after `!c create`, `!c clone`, and `!c copy`.
 - `local_fallback_on_global_failure` (default `true`) — if global config write fails, try repo-local config instead.
+- `allow_dangerous_ops` (default `false`) — allow dangerous git helper operations (force push, branch delete) when explicitly enabled.
+- `require_confirmation_for_dangerous_ops` (default `true`) — require explicit confirmation token for dangerous git helper operations.
+- `dangerous_confirmation_token` (default `--confirm-dangerous`) — confirmation token required when dangerous git helper operations are enabled.
 
 ### `repo_bootstrap`
 - `agents_template` (default empty) — optional AGENTS.md template for `!c create`.
@@ -146,7 +149,7 @@ TOTP not required (read-only in channel):
 - `!c ps`
 - `!c unlock [gh|all] status`
 - `!c lock [gh|all]`
-- `!c git status|log|branches|show|diff|remote`
+- `!c git status|log|branches|branch|show|diff|remote`
 - `!git ...` (shortcut for `!c git ...`)
 
 TOTP always required (high-risk in channel):
@@ -244,6 +247,7 @@ Repo helpers:
 - `show` (aliases: `showrepo`, `tree`), `changes` (alias: `showchanges`) `[open]`
 - `tests` (alias: `test`), `download` (alias: `dl`) `[unlock/default]`
 - `git` `[mixed]`
+  - Dangerous `git` helper operations (force push, branch delete) require opt-in and explicit confirmation token.
 - `gh` `[unlock/gh]` (examples: `!c gh repo sync` or `!gh repo sync`)
 
 Queue:

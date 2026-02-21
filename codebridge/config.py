@@ -126,6 +126,9 @@ class GitConfig:
     apply_to_existing_repos: bool = True
     apply_on_repo_create_clone_copy: bool = True
     local_fallback_on_global_failure: bool = True
+    allow_dangerous_ops: bool = False
+    require_confirmation_for_dangerous_ops: bool = True
+    dangerous_confirmation_token: str = "--confirm-dangerous"
 
 
 @dataclass
@@ -276,6 +279,13 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.git.local_fallback_on_global_failure = bool(
         git.get("local_fallback_on_global_failure", cfg.git.local_fallback_on_global_failure)
     )
+    cfg.git.allow_dangerous_ops = bool(git.get("allow_dangerous_ops", cfg.git.allow_dangerous_ops))
+    cfg.git.require_confirmation_for_dangerous_ops = bool(
+        git.get("require_confirmation_for_dangerous_ops", cfg.git.require_confirmation_for_dangerous_ops)
+    )
+    cfg.git.dangerous_confirmation_token = str(
+        git.get("dangerous_confirmation_token", cfg.git.dangerous_confirmation_token)
+    )
 
     repo_bootstrap = raw.get("repo_bootstrap", {}) or {}
     cfg.repo_bootstrap.agents_template = repo_bootstrap.get(
@@ -328,6 +338,8 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.transport.adapter = DEFAULT_TRANSPORT_ADAPTER
     if cfg.git.credential_helper is None:
         cfg.git.credential_helper = DEFAULT_GIT_CREDENTIAL_HELPER
+    if not cfg.git.dangerous_confirmation_token:
+        cfg.git.dangerous_confirmation_token = "--confirm-dangerous"
     if not cfg.state.log_dir and cfg.state.data_dir:
         cfg.state.log_dir = os.path.join(cfg.state.data_dir, "logs")
     if not cfg.repo_bootstrap.spec_prompt:

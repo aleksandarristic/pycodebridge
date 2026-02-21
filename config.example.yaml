@@ -64,6 +64,9 @@ git:
   apply_to_existing_repos: true
   apply_on_repo_create_clone_copy: true
   local_fallback_on_global_failure: true
+  allow_dangerous_ops: false
+  require_confirmation_for_dangerous_ops: true
+  dangerous_confirmation_token: "--confirm-dangerous"
 
 files:
   max_upload_mb: 200

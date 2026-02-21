@@ -19,7 +19,7 @@ async def handle_git(router: "Router", sink: ResponseSink, repo_path: str, rest:
     """Run safe git helper commands."""
     fields = shlex.split(rest) if rest else []
     if not fields:
-        await router.reply(sink, "Usage: !c git <status|log|branches|show|diff|remote|pull|commit|push|merge> [args]")
+        await router.reply(sink, "Usage: !c git <status|log|branches|branch|show|diff|remote|pull|commit|push|merge> [args]")
         return
     sub = fields[0].lower()
     args = fields[1:]
@@ -41,6 +41,12 @@ async def handle_git(router: "Router", sink: ResponseSink, repo_path: str, rest:
             await router.reply(sink, "Usage: !c git show <rev>")
             return
         git_args = ["show", args[0]] + args[1:]
+    elif sub == "branch":
+        dangerous_reason = _dangerous_git_reason(sub, args)
+        ok, args = await _allow_dangerous_or_reply(router, sink, dangerous_reason, args)
+        if not ok:
+            return
+        git_args = ["branch"] + args
     elif sub == "diff":
         if not args:
             await router.reply_forbidden(sink, "Usage: !c git diff <args>")
@@ -61,8 +67,9 @@ async def handle_git(router: "Router", sink: ResponseSink, repo_path: str, rest:
         msg = " ".join(args)
         git_args = ["commit", "-am", msg]
     elif sub == "push":
-        if has_forbidden_flags(args):
-            await router.reply_forbidden(sink, "Forbidden flags detected (--force/-f/--rebase/--squash).")
+        dangerous_reason = _dangerous_git_reason(sub, args)
+        ok, args = await _allow_dangerous_or_reply(router, sink, dangerous_reason, args)
+        if not ok:
             return
         git_args = ["push"] + args
     elif sub == "merge":
@@ -86,3 +93,40 @@ async def handle_git(router: "Router", sink: ResponseSink, repo_path: str, rest:
         text = f"git {sub} error: {err}\n{text}"
     for chunk in chunk_text(text, router.cfg.discord.max_discord_message_chars):
         await router.reply(sink, chunk)
+
+
+def _dangerous_git_reason(sub: str, args: list[str]) -> str:
+    if sub == "push":
+        force_flags = {"-f", "--force", "--force-with-lease"}
+        if any(a in force_flags for a in args):
+            return "force push"
+        if "--delete" in args:
+            return "remote branch delete"
+    if sub == "branch":
+        if any(a in {"-d", "-D", "--delete"} for a in args):
+            return "local branch delete"
+    return ""
+
+
+async def _allow_dangerous_or_reply(
+    router: "Router", sink: ResponseSink, reason: str, args: list[str]
+) -> tuple[bool, list[str]]:
+    if not reason:
+        return True, args
+    token = (router.cfg.git.dangerous_confirmation_token or "--confirm-dangerous").strip() or "--confirm-dangerous"
+    confirmed = token in args
+    filtered = [a for a in args if a != token]
+    if not router.cfg.git.allow_dangerous_ops:
+        await router.reply_forbidden(
+            sink,
+            f"Dangerous git operation blocked ({reason}). "
+            "Set `git.allow_dangerous_ops: true` to enable guarded execution.",
+        )
+        return False, filtered
+    if router.cfg.git.require_confirmation_for_dangerous_ops and not confirmed:
+        await router.reply_forbidden(
+            sink,
+            f"Dangerous git operation detected ({reason}). Re-run with `{token}` to confirm.",
+        )
+        return False, filtered
+    return True, filtered
