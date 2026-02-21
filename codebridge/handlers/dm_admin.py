@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Optional
 
 from .. import command_registry, help_renderer
 from ..audit import Entry
-from ..reply_helpers import send_reply
 from ..router_helpers import (
     DEFAULT_SESSION,
     HELPER_TIMEOUT,
@@ -22,8 +21,6 @@ from ..router_helpers import (
 from ..state import utc_now_iso
 from ..transport import Capabilities, MessageEvent, ResponseSink
 from ..util import path as pathutil
-from ..util.ansi import strip_control_codes
-from ..util.chunk import chunk_text
 
 if TYPE_CHECKING:
     from ..router import Router
@@ -49,18 +46,13 @@ _DM_SHORTCUT_COMMANDS = {"gh", "help", "lock", "status", "unlock", "updates"}
 class _PrefixedSink:
     """Response sink wrapper that prefixes messages with a repo name."""
 
-    def __init__(self, sink: ResponseSink, repo_name: str, max_chars: int) -> None:
+    def __init__(self, sink: ResponseSink, repo_name: str) -> None:
         self._sink = sink
         self._repo_name = repo_name
-        self._max_chars = max_chars
         self.channel_id = sink.channel_id
 
     async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
-        prefix = f"[{self._repo_name}] "
-        text = strip_control_codes(content or "")
-        budget = max(self._max_chars - len(prefix), 1)
-        for chunk in chunk_text(text, budget):
-            await self._sink.send(f"{prefix}{chunk}", thread_id=thread_id, reply_to_id=reply_to_id)
+        await self._sink.send(f"[{self._repo_name}] {content}", thread_id=thread_id, reply_to_id=reply_to_id)
 
     def capabilities(self) -> Capabilities:
         return self._sink.capabilities()
@@ -116,7 +108,7 @@ def dm_binding_help_text() -> str:
 async def dm_reply(router: "Router", sink: ResponseSink, entry: Optional[Entry], msg: str) -> None:
     """Send a DM reply and record it to audit logs."""
     router.append_audit_output(entry, msg)
-    await send_reply(sink, msg, router.cfg.discord.max_discord_message_chars)
+    await sink.send(msg)
 
 
 def dm_audit_start(router: "Router", event: MessageEvent, cmd: str, rest: str) -> Optional[Entry]:
@@ -347,11 +339,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
     if not content.startswith(prefix):
         relay_session, ambiguous = await router.pending_input_session(event)
         if ambiguous:
-            await send_reply(
-                sink,
-                forbidden_message("Multiple sessions are waiting for input. Use `!c answer <session> -- <text>`."),
-                router.cfg.discord.max_discord_message_chars,
-            )
+            await sink.send(forbidden_message("Multiple sessions are waiting for input. Use `!c answer <session> -- <text>`."))
             return
         if relay_session and not event.attachments:
             relay_text = content.strip()
@@ -364,20 +352,16 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
             await router.handle_answer(event, sink, relay_session, relay_text)
             return
         if not router._transport_user_allowed(event):
-            await send_reply(sink, forbidden_message("You are not allowed to use this bot."), router.cfg.discord.max_discord_message_chars)
+            await sink.send(forbidden_message("You are not allowed to use this bot."))
             return
         bound_repo = router.get_dm_binding(event)
         if not bound_repo:
-            await send_reply(
-                sink,
-                "No repo bound. Send `!c repos` to list and then `!c bind <repo>` to bind a repo. Send `!c help` for instructions.",
-                router.cfg.discord.max_discord_message_chars,
-            )
+            await sink.send("No repo bound. Send `!c repos` to list and then `!c bind <repo>` to bind a repo. Send `!c help` for instructions.")
             return
         try:
             repo_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, bound_repo)
         except Exception as exc:
-            await send_reply(sink, forbidden_message(f"Repo error: {exc}"), router.cfg.discord.max_discord_message_chars)
+            await sink.send(forbidden_message(f"Repo error: {exc}"))
             return
         if event.attachments:
             if router._totp_enabled(event):
@@ -387,7 +371,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
             await router.handle_upload_request(event, sink, bound_repo, repo_path)
             return
         session = router.current_session_for_user(event.author_id, event.channel_id)
-        prefixed_sink = _PrefixedSink(sink, bound_repo, router.cfg.discord.max_discord_message_chars)
+        prefixed_sink = _PrefixedSink(sink, bound_repo)
         if router._totp_enabled(event) and not router._totp_is_unlocked(event):
             ok, content = await router.require_totp(event, sink, "resume", content)
             if not ok:
@@ -607,7 +591,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
                 await send_forbidden(f"Repo error: {exc}")
                 return
             session = router.current_session_for_user(event.author_id, event.channel_id)
-            prefixed_sink = _PrefixedSink(sink, repo_name, router.cfg.discord.max_discord_message_chars)
+            prefixed_sink = _PrefixedSink(sink, repo_name)
             router.logger.info(
                 "dm.repo",
                 extra={"platform": event.platform, "user_id": event.author_id, "repo": repo_name, "session": session},
@@ -693,7 +677,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         await send_forbidden(f"Repo error: {exc}")
         return
     session = router.current_session_for_user(event.author_id, event.channel_id)
-    prefixed_sink = _PrefixedSink(sink, bound_repo, router.cfg.discord.max_discord_message_chars)
+    prefixed_sink = _PrefixedSink(sink, bound_repo)
     if router._totp_enabled(event) and not router._totp_is_unlocked(event):
         ok, cmdline = await router.require_totp(event, sink, "resume", cmdline)
         if not ok:

@@ -675,15 +675,13 @@ def test_dm_admin_reset_all_rejected_for_non_admin(tmp_path):
     assert any("You are not allowed to use DM admin commands." in msg for msg in sink.sent)
 
 
-def test_dm_prefixed_sink_chunks_within_limit():
+def test_dm_prefixed_sink_adds_repo_prefix():
     sink = _FakeSink("dm-1")
-    prefixed = dm_admin._PrefixedSink(sink, "repo", 20)
+    prefixed = dm_admin._PrefixedSink(sink, "repo")
 
     async def run():
-        await prefixed.send("abcdefghijklmnopqrstuvwxyz")
+        await prefixed.send("hello")
 
     asyncio.run(run())
 
-    assert len(sink.sent) > 1
-    assert all(msg.startswith("[repo] ") for msg in sink.sent)
-    assert all(len(msg) <= 20 for msg in sink.sent)
+    assert sink.sent == ["[repo] hello"]
