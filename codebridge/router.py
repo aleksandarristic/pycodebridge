@@ -623,11 +623,18 @@ class Router:
         )
 
     async def handle_lock(self, event: MessageEvent, sink: ResponseSink, rest: str = "") -> None:
-        """Clear active unlock scopes for this user account on the current platform."""
+        """Handle lock command actions (clear, status, extend)."""
         try:
-            scope = self._parse_lock_scope(rest)
+            action, scope, ttl_seconds = self._parse_lock_action(rest)
         except ValueError as exc:
             await self.reply_forbidden(sink, str(exc))
+            return
+        if action == "status":
+            await self._reply_unlock_status(event, sink, scope)
+            return
+        if action == "extend":
+            assert ttl_seconds is not None
+            await self._extend_unlock_window(event, sink, scope, ttl_seconds)
             return
         if scope == "all":
             self._clear_totp_unlock(event, _UNLOCK_SCOPE_DEFAULT)
@@ -795,7 +802,7 @@ class Router:
             return
         await self.reply(sink, f"Codex is running for session '{session}'.")
 
-    async def send_status(self, sink: ResponseSink, repo_name: str, repo_path: str) -> None:
+    async def send_status(self, event: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str) -> None:
         """Send status summary for the channel and sessions."""
         state = self.state.load()
         queue_statuses = await self.coordinator.snapshot(sink.channel_id)
@@ -810,6 +817,7 @@ class Router:
             lines = [
                 f"Repo: {repo_name}",
                 f"Path: {repo_path}",
+                self._format_unlock_status_line(event),
                 f"Sessions ({len(ch.sessions)}/{MAX_SESSIONS_PER_CHANNEL}):",
             ]
             for name, sess in ch.sessions.items():
@@ -832,7 +840,11 @@ class Router:
             return
         await self.reply(
             sink,
-            self._with_related(f"Repo: {repo_name}\nPath: {repo_path}\nNo session attached.", "!c start", *related),
+            self._with_related(
+                f"Repo: {repo_name}\nPath: {repo_path}\n{self._format_unlock_status_line(event)}\nNo session attached.",
+                "!c start",
+                *related,
+            ),
         )
 
     def _with_related(self, message: str, *commands: str) -> str:
@@ -1192,6 +1204,10 @@ class Router:
     def _totp_required_for_command(self, event: MessageEvent, cmd: str, rest: str) -> bool:
         token = self._canonical_command(cmd)
         if token == "lock":
+            if self._lock_status_requested(rest):
+                return False
+            if self._lock_extend_requested(rest):
+                return not self._totp_is_unlocked(event)
             return False
         if token == "unlock" and self._unlock_status_requested(rest):
             return False
@@ -1260,13 +1276,50 @@ class Router:
             raise ValueError("Usage: !c unlock [gh|all] <totp> [ttl], or !c unlock [gh|all] status")
         return scope, tail[0]
 
-    def _parse_lock_scope(self, rest: str) -> str:
-        raw = (rest or "").strip().lower()
+    def _lock_status_requested(self, rest: str) -> bool:
+        parts = (rest or "").strip().lower().split()
+        if not parts:
+            return False
+        if parts[0] in _UNLOCK_STATUS_TOKENS:
+            return True
+        return len(parts) >= 2 and parts[0] == "status" and parts[1] in {"all", _UNLOCK_SCOPE_DEFAULT, _UNLOCK_SCOPE_GH}
+
+    def _lock_extend_requested(self, rest: str) -> bool:
+        parts = (rest or "").strip().lower().split()
+        return bool(parts) and parts[0] == "extend"
+
+    def _parse_lock_action(self, rest: str) -> tuple[str, str, Optional[int]]:
+        raw = (rest or "").strip()
         if not raw:
-            return "all"
-        if raw in {"all", _UNLOCK_SCOPE_DEFAULT, _UNLOCK_SCOPE_GH}:
-            return raw
-        raise ValueError("Usage: !c lock [gh|all]")
+            return "clear", "all", None
+        parts = raw.split()
+        first = parts[0].lower()
+        if first in {"all", _UNLOCK_SCOPE_DEFAULT, _UNLOCK_SCOPE_GH} and len(parts) == 1:
+            return "clear", first, None
+        if first == "status" or first in _UNLOCK_STATUS_TOKENS:
+            if first in _UNLOCK_STATUS_TOKENS and len(parts) == 1:
+                return "status", "all", None
+            if first == "status":
+                scope = "all"
+                if len(parts) >= 2:
+                    scope = parts[1].lower()
+                if scope not in {"all", _UNLOCK_SCOPE_DEFAULT, _UNLOCK_SCOPE_GH} or len(parts) > 2:
+                    raise ValueError("Usage: !c lock [gh|all] | !c lock status [gh|all] | !c lock extend [gh|all] <ttl>")
+                return "status", scope, None
+        if first == "extend":
+            if len(parts) == 2:
+                scope = _UNLOCK_SCOPE_DEFAULT
+                ttl_text = parts[1]
+            elif len(parts) == 3:
+                scope = parts[1].lower()
+                ttl_text = parts[2]
+                if scope not in {"all", _UNLOCK_SCOPE_DEFAULT, _UNLOCK_SCOPE_GH}:
+                    raise ValueError("Usage: !c lock [gh|all] | !c lock status [gh|all] | !c lock extend [gh|all] <ttl>")
+            else:
+                raise ValueError("Usage: !c lock [gh|all] | !c lock status [gh|all] | !c lock extend [gh|all] <ttl>")
+            ttl_seconds = self._parse_unlock_ttl_seconds(ttl_text)
+            return "extend", scope, ttl_seconds
+        raise ValueError("Usage: !c lock [gh|all] | !c lock status [gh|all] | !c lock extend [gh|all] <ttl>")
 
     async def _reply_unlock_status(self, event: MessageEvent, sink: ResponseSink, scope: str) -> None:
         scopes = [_UNLOCK_SCOPE_DEFAULT, _UNLOCK_SCOPE_GH] if scope == "all" else [scope]
@@ -1279,6 +1332,43 @@ class Router:
                 continue
             lines.append(f"TOTP {labels.get(realm, realm)} unlock: active for {self._format_duration(remaining)}.")
         await self.reply(sink, "\n".join(lines))
+
+    async def _extend_unlock_window(self, event: MessageEvent, sink: ResponseSink, scope: str, ttl_seconds: int) -> None:
+        scopes = [_UNLOCK_SCOPE_DEFAULT, _UNLOCK_SCOPE_GH] if scope == "all" else [scope]
+        labels = {_UNLOCK_SCOPE_DEFAULT: "default", _UNLOCK_SCOPE_GH: "gh"}
+        now = time.time()
+        lines: list[str] = []
+        for realm in scopes:
+            key = self._totp_unlock_scope_key(event, realm)
+            current_until = self._totp_unlock_until.get(key, 0.0)
+            base = current_until if current_until > now else now
+            new_until = base + max(1, ttl_seconds)
+            self._totp_unlock_until[key] = new_until
+            old_remaining = max(0, int(current_until - now))
+            new_remaining = max(0, int(new_until - now))
+            lines.append(
+                f"TOTP {labels.get(realm, realm)} unlock extended by {self._format_duration(ttl_seconds)} "
+                f"(from {self._format_duration(old_remaining)} to {self._format_duration(new_remaining)} remaining)."
+            )
+            self.logger.info(
+                "security.totp_unlock_window_extended",
+                extra={
+                    "platform": event.platform,
+                    "user_id": event.author_id,
+                    "scope": realm,
+                    "extend_seconds": ttl_seconds,
+                    "old_remaining_seconds": old_remaining,
+                    "new_remaining_seconds": new_remaining,
+                },
+            )
+        await self.reply(sink, "\n".join(lines))
+
+    def _format_unlock_status_line(self, event: MessageEvent) -> str:
+        default_remaining = self._totp_unlock_remaining(event, _UNLOCK_SCOPE_DEFAULT)
+        gh_remaining = self._totp_unlock_remaining(event, _UNLOCK_SCOPE_GH)
+        default_text = f"{self._format_duration(default_remaining)} remaining" if default_remaining > 0 else "locked"
+        gh_text = f"{self._format_duration(gh_remaining)} remaining" if gh_remaining > 0 else "locked"
+        return f"Unlocks: default {default_text}, gh {gh_text}"
 
     def _normalize_unlock_totp_syntax(self, cmdline: str) -> str:
         parts = cmdline.split()

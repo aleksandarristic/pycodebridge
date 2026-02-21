@@ -139,7 +139,9 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 Prefix default is `!c`. Channels should be named `codex-<repo>`.
 When `discord.totp_enabled: true`, use `!c unlock <totp> [ttl]` to unlock default commands for your account (`30m`, `1h`, `2h`; default `1h`).
 Use `!c unlock gh <totp> [ttl]` for GitHub CLI commands, or `!c unlock all <totp> [ttl]` to unlock both scopes.
-Use `!c unlock [gh|all] status` to check remaining time and `!c lock [gh|all]` to clear unlock windows (`!c lock` clears all scopes).
+Use `!c unlock [gh|all] status` or `!c lock status [gh|all]` to check remaining time.
+Use `!c lock [gh|all]` to clear unlock windows (`!c lock` clears all scopes).
+Use `!c lock extend [gh|all] <ttl>` to extend unlock windows (`30m`, `1h`, `2h`, etc.).
 While default scope is unlocked, plain chat prompts are accepted even if `allow_plain_prompts` is `false`.
 Failed/replayed TOTP attempts are rate-limited per user (`platform:user_id`) using the limiter settings above.
 
@@ -155,6 +157,7 @@ TOTP not required (read-only in channel):
 - `!c ps`
 - `!c unlock [gh|all] status`
 - `!c lock [gh|all]`
+- `!c lock status [gh|all]`
 - `!c git status|log|branches|branch|show|diff|remote`
 - `!git ...` (shortcut for `!c git ...`)
 
@@ -221,11 +224,12 @@ General:
 - `status` (alias: `st`), `stats` (alias: `usage`), `peek` (alias: `pk`), `updates` (aliases: `update`, `version`) `[open]`
 - Top-level shortcuts in mapped repo channels: `!st` -> `!c status`, `!u` -> `!c updates`
   - `status` includes contextual `Related:` hints (for example `!c start`, `!ps`, `!w`) when relevant.
+  - `status` also shows lock state for your account (`default` and `gh` unlock remaining time).
 - `config` (alias: `cfg`) `[unlock/default]`
 
 Security:
 - `unlock` (alias: `ul`) `[totp]` (`unlock ... status` is `[open]`)
-- `lock` (alias: `lk`) `[open]`
+- `lock` (alias: `lk`) `[open]` for clear/status; `lock extend ...` requires default unlock (or `--totp`)
 
 Sessions:
 - `start` (alias: `run`), `resume` (alias: `rs`), `choose` (alias: `pick`) `[unlock/default]`

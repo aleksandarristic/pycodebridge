@@ -746,14 +746,38 @@ def test_totp_unlock_status_and_lock(tmp_path, monkeypatch):
     async def run():
         await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "codex-repo"), sink)
         await router.handle_message(_discord_event("!c unlock status", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c lock status", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c status", "codex-repo"), sink)
         await router.handle_message(_discord_event("!c lock", "codex-repo"), sink)
         await router.handle_message(_discord_event("hello", "codex-repo"), sink)
 
     asyncio.run(run())
     assert any("TOTP default unlock: active for" in msg for msg, _, _ in sink.sent)
     assert any("TOTP gh unlock: inactive." in msg for msg, _, _ in sink.sent)
+    assert any("Unlocks: default" in msg for msg, _, _ in sink.sent)
     assert any("TOTP unlocks cleared for your account." in msg for msg, _, _ in sink.sent)
     assert any("TOTP required for 'resume'" in msg for msg, _, _ in sink.sent)
+
+
+def test_totp_lock_extend_updates_remaining_time(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c lock extend 30m", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c lock status", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert any("unlock extended by 30m" in msg for msg, _, _ in sink.sent)
+    assert any("TOTP default unlock: active for" in msg for msg, _, _ in sink.sent)
 
 
 def test_totp_unlock_gh_is_separate_scope(tmp_path, monkeypatch):

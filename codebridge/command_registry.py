@@ -169,7 +169,15 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             AUTH_TOTP,
             aliases=("ul",),
         ),
-        CommandSpec("lock", "lock [gh|all]", "clear unlock scopes for your account", "Security", _cmd_lock, AUTH_OPEN, aliases=("lk",)),
+        CommandSpec(
+            "lock",
+            "lock [gh|all] | lock status [gh|all] | lock extend [gh|all] <ttl>",
+            "clear unlocks, show unlock status, or extend unlock window",
+            "Security",
+            _cmd_lock,
+            AUTH_OPEN,
+            aliases=("lk",),
+        ),
         CommandSpec("start", "start [session]", "start a new Codex session", "Sessions", _cmd_start, AUTH_UNLOCK, aliases=("run",)),
         CommandSpec("resume", "resume [session] <prompt>", "resume with prompt", "Sessions", _cmd_resume, AUTH_UNLOCK, aliases=("rs",)),
         CommandSpec(
@@ -338,7 +346,7 @@ async def _cmd_help(router: Any, message: MessageEvent, sink: ResponseSink, repo
 
 
 async def _cmd_status(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
-    await router.send_status(sink, repo_name, repo_path)
+    await router.send_status(message, sink, repo_name, repo_path)
 
 
 async def _cmd_stats(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
