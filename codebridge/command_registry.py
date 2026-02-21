@@ -135,8 +135,8 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec("status", "status", "show repo path and sessions", "General", _cmd_status),
         CommandSpec("stats", "stats [session]", "show usage totals", "General", _cmd_stats),
         CommandSpec("peek", "peek [session]", "show active status and last output time", "General", _cmd_peek),
-        CommandSpec("unlock", "unlock [status|ttl]", "unlock this chat for non-high-risk commands", "General", _cmd_unlock),
-        CommandSpec("lock", "lock", "clear unlock for this chat", "General", _cmd_lock),
+        CommandSpec("unlock", "unlock [gh|all] [status|ttl]", "unlock command scopes for your account", "General", _cmd_unlock),
+        CommandSpec("lock", "lock [gh|all]", "clear unlock scopes for your account", "General", _cmd_lock),
         CommandSpec("config", "config", "show effective config", "General", _cmd_config),
         CommandSpec("start", "start [session]", "start a new Codex session", "Sessions", _cmd_start),
         CommandSpec("resume", "resume [session] <prompt>", "resume with prompt", "Sessions", _cmd_resume),
@@ -280,7 +280,7 @@ async def _cmd_unlock(router: Any, message: MessageEvent, sink: ResponseSink, re
 
 
 async def _cmd_lock(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
-    await router.handle_lock(message, sink)
+    await router.handle_lock(message, sink, rest)
 
 
 async def _cmd_config(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

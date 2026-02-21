@@ -112,9 +112,10 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 
 ## Commands
 Prefix default is `!c`. Channels should be named `codex-<repo>`.
-When `discord.totp_enabled: true`, use `!c unlock --totp 123456 [ttl]` to unlock non-high-risk commands in the current chat for a TTL (`30m`, `1h`, `2h`; default `1h`).
-Use `!c unlock status` to check remaining time and `!c lock` to clear the unlock window.
-While unlocked, plain chat prompts are accepted even if `allow_plain_prompts` is `false`.
+When `discord.totp_enabled: true`, use `!c unlock <totp> [ttl]` to unlock default commands for your account (`30m`, `1h`, `2h`; default `1h`).
+Use `!c unlock gh <totp> [ttl]` for GitHub CLI commands, or `!c unlock all <totp> [ttl]` to unlock both scopes.
+Use `!c unlock [gh|all] status` to check remaining time and `!c lock [gh|all]` to clear unlock windows (`!c lock` clears all scopes).
+While default scope is unlocked, plain chat prompts are accepted even if `allow_plain_prompts` is `false`.
 Failed/replayed TOTP attempts are rate-limited per user (`platform:user_id`) using the limiter settings above.
 
 TOTP not required (read-only in channel):
@@ -126,18 +127,20 @@ TOTP not required (read-only in channel):
 - `!c showrepo`
 - `!c showchanges`
 - `!c ps`
-- `!c unlock status`
-- `!c lock`
+- `!c unlock [gh|all] status`
+- `!c lock [gh|all]`
 - `!c git status|log|branches|show|diff`
 
 TOTP always required (high-risk in channel):
-- `!c unlock [ttl]`
+- `!c unlock [gh|all] [ttl]`
 - `!c createrepo`
 - `!c clonerepo <url>`
 - `!c copyrepo <newname>`
 - `!c git` write commands (`pull`, `commit`, `push`, `merge`, etc.)
-- `!c gh <args>`
 - Upload flows (attachment submit and upload-path response)
+
+TOTP required for GitHub CLI unless gh scope is unlocked:
+- `!c gh <args>`
 
 TOTP required unless the chat is unlocked:
 - `!c start [session]`
@@ -165,7 +168,7 @@ TOTP required unless the chat is unlocked:
 
 General:
 - `!c help`, `!c status`, `!c config`, `!c stats [session]`, `!c peek [session]`
-- `!c unlock [status|ttl]`, `!c lock`
+- `!c unlock [gh|all] [status|ttl]`, `!c lock [gh|all]`
 
 Sessions:
 - `!c start [session]`
@@ -222,18 +225,20 @@ Repo names passed to DM commands are normalized to lowercase (for example, `Prob
 - `!c copyrepo <from> <to>`
 - `!c deleterepo <name>` (alias: `delete`)
 - `!c renamerepo <from> <to>` (alias: `rename`)
-- `!c unlock [status|ttl]`
-- `!c lock`
+- `!c unlock [gh|all] [status|ttl]`
+- `!c lock [gh|all]`
 
 When `discord.totp_enabled: true`, TOTP is always required in DMs for:
-- `!c unlock [ttl]`
+- `!c unlock [gh|all] [ttl]`
 - `!c createrepo <name>`
 - `!c clonerepo <name> <url>`
 - `!c copyrepo <from> <to>`
 - `!c deleterepo <name>` / `!c delete <name>`
 - `!c renamerepo <from> <to>` / `!c rename <from> <to>`
-- `!c gh <args>`
 - DM upload flows (attachment submit and upload-path response)
+
+TOTP is required in DMs for GitHub CLI unless gh scope is unlocked:
+- `!c gh <args>`
 
 TOTP is required in DMs unless the DM is unlocked for:
 - `!c bind <repo>`
@@ -251,8 +256,8 @@ TOTP is not required in DMs for:
 - `!c sessions`
 - `!c status`
 - `!c config`
-- `!c unlock status`
-- `!c lock`
+- `!c unlock [gh|all] status`
+- `!c lock [gh|all]`
 
 When a repo is bound in DMs, a message without `!c` is treated as a prompt unless Codex is currently awaiting input (then it is relayed to the active session stdin).
 Attachments in channels or bound DMs will prompt for a destination path before saving.

@@ -64,8 +64,8 @@ def dm_help_text() -> str:
         "copyrepo <from> <to> — copy repo\n"
         "deleterepo <name> — delete repo\n"
         "renamerepo <from> <to> — rename repo\n"
-        "unlock [status|ttl] — unlock this DM for non-high-risk commands\n"
-        "lock — clear unlock for this DM\n"
+        "unlock [gh|all] [status|ttl] — unlock command scopes for your account\n"
+        "lock [gh|all] — clear unlock scopes for your account\n"
     )
 
 
@@ -77,8 +77,8 @@ def dm_binding_help_text() -> str:
         "use <repo> — alias for bind\n"
         "repo <repo> <prompt> — run a one-off prompt against a repo\n"
         "gh <args> — run GitHub CLI (bound repo cwd, or code_root if unbound)\n"
-        "unlock [status|ttl] — unlock this DM for non-high-risk commands\n"
-        "lock — clear unlock for this DM\n"
+        "unlock [gh|all] [status|ttl] — unlock command scopes for your account\n"
+        "lock [gh|all] — clear unlock scopes for your account\n"
         "unbind — clear bound repo\n"
         "status — show current bound repo and session\n"
     )
@@ -355,6 +355,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
     cmdline = content[len(prefix) :].strip()
     if not cmdline:
         return
+    cmdline = router._normalize_unlock_totp_syntax(cmdline)
     fields = cmdline.split()
     cmd = fields[0].lower()
     rest = cmdline[len(fields[0]) :].strip()
@@ -478,7 +479,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
             await router.handle_unlock(event, sink, rest)
             return
         if cmd == "lock":
-            await router.handle_lock(event, sink)
+            await router.handle_lock(event, sink, rest)
             return
         if cmd == "status":
             bound = router.get_dm_binding(event)
@@ -551,13 +552,14 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         if not router._transport_user_allowed(event):
             await send_forbidden("You are not allowed to use this bot.")
             return
-        ok, cmdline = await router.require_totp(event, sink, cmd, cmdline)
-        if not ok:
-            return
-        fields = cmdline.split()
-        if not fields:
-            return
-        rest = cmdline[len(fields[0]) :].strip()
+        if router._totp_enabled(event) and not router._totp_is_unlocked(event, "gh"):
+            ok, cmdline = await router.require_totp(event, sink, cmd, cmdline)
+            if not ok:
+                return
+            fields = cmdline.split()
+            if not fields:
+                return
+            rest = cmdline[len(fields[0]) :].strip()
         if not rest.strip():
             await send_forbidden("Usage: !c gh <args>")
             return

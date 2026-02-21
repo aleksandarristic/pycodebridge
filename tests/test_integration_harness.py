@@ -474,7 +474,7 @@ def test_totp_unlock_allows_plain_resume_for_ttl(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event(f"!c unlock --totp {_totp_code(secret)} 2h", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 2h", "codex-repo"), sink)
         await router.handle_message(_discord_event("hi there", "codex-repo"), sink)
 
     asyncio.run(run())
@@ -494,7 +494,7 @@ def test_totp_unlock_still_requires_totp_for_high_risk(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event(f"!c unlock --totp {_totp_code(secret)}", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)}", "codex-repo"), sink)
         await router.handle_message(_discord_event("!c gh pr status", "codex-repo"), sink)
 
     asyncio.run(run())
@@ -515,15 +515,84 @@ def test_totp_unlock_status_and_lock(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event(f"!c unlock --totp {_totp_code(secret)} 1h", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "codex-repo"), sink)
         await router.handle_message(_discord_event("!c unlock status", "codex-repo"), sink)
         await router.handle_message(_discord_event("!c lock", "codex-repo"), sink)
         await router.handle_message(_discord_event("hello", "codex-repo"), sink)
 
     asyncio.run(run())
-    assert any("TOTP unlock is active for" in msg for msg, _, _ in sink.sent)
-    assert any("TOTP unlock cleared for this chat." in msg for msg, _, _ in sink.sent)
+    assert any("TOTP default unlock: active for" in msg for msg, _, _ in sink.sent)
+    assert any("TOTP gh unlock: inactive." in msg for msg, _, _ in sink.sent)
+    assert any("TOTP unlocks cleared for your account." in msg for msg, _, _ in sink.sent)
     assert any("TOTP required for 'resume'" in msg for msg, _, _ in sink.sent)
+
+
+def test_totp_unlock_gh_is_separate_scope(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event(f"!c unlock gh {_totp_code(secret)} 1h", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c gh pr status", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert any("TOTP gh unlock active for 1h" in msg for msg, _, _ in sink.sent)
+    assert not any("TOTP required for 'gh'" in msg for msg, _, _ in sink.sent)
+    assert any("TOTP required for 'start'" in msg for msg, _, _ in sink.sent)
+
+
+def test_totp_unlock_all_covers_default_and_gh(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, runner = _build_router(tmp_path, totp_enabled=True)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event(f"!c unlock all {_totp_code(secret)} 1h", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c gh pr status", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert any("default + gh" in msg for msg, _, _ in sink.sent)
+    assert not any("TOTP required for 'start'" in msg for msg, _, _ in sink.sent)
+    assert not any("TOTP required for 'gh'" in msg for msg, _, _ in sink.sent)
+    assert any(args and args[0] == "start" for args in runner.calls)
+
+
+def test_totp_unlock_is_global_for_user_across_channels(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, runner = _build_router(tmp_path, totp_enabled=True)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "codex-repo", channel_id="chan-a"), sink)
+        await router.handle_message(_discord_event("hello", "codex-repo", channel_id="chan-b"), sink)
+        await router.handle_message(_discord_event("!c lock", "codex-repo", channel_id="chan-b"), sink)
+        await router.handle_message(_discord_event("!c start", "codex-repo", channel_id="chan-a"), sink)
+
+    asyncio.run(run())
+    assert any(args and args[0] == "start" for args in runner.calls)
+    assert any("TOTP unlocks cleared for your account." in msg for msg, _, _ in sink.sent)
+    assert any("TOTP required for 'start'" in msg for msg, _, _ in sink.sent)
 
 
 def test_totp_git_status_read_only_without_totp(tmp_path, monkeypatch):

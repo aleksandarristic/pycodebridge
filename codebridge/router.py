@@ -44,6 +44,9 @@ _TOTP_ARG_RE = re.compile(r"(?:^|\s)--totp\s+(\d{6})(?=\s|$)")
 _AWAITING_INPUT_TTL_SECONDS = 900
 _DEFAULT_UNLOCK_SECONDS = 3600
 _UNLOCK_TTL_RE = re.compile(r"^(\d+)\s*([mhd])$", re.IGNORECASE)
+_UNLOCK_STATUS_TOKENS = {"status", "state"}
+_UNLOCK_SCOPE_DEFAULT = "default"
+_UNLOCK_SCOPE_GH = "gh"
 _READ_ONLY_COMMANDS = {
     "help",
     "status",
@@ -217,6 +220,7 @@ class Router:
         cmdline = content[len(prefix) :].strip()
         if not cmdline:
             return
+        cmdline = self._normalize_unlock_totp_syntax(cmdline)
 
         pending_cmdline = cmdline
         if self.file_transfers.has_pending_upload(event) and self._totp_enabled(event):
@@ -474,31 +478,59 @@ class Router:
         await self.reply(sink, f"Requeued job {job_id}.")
 
     async def handle_unlock(self, event: MessageEvent, sink: ResponseSink, rest: str) -> None:
-        """Unlock non-high-risk commands for this user+chat for a TTL."""
-        token = (rest or "").strip().lower()
-        if token in {"status", "state"}:
-            remaining = self._totp_unlock_remaining(event)
-            if remaining <= 0:
-                await self.reply(sink, "TOTP unlock is inactive.")
-                return
-            await self.reply(sink, f"TOTP unlock is active for {self._format_duration(remaining)}.")
-            return
+        """Unlock TOTP scopes for this user account on the current platform."""
         try:
-            ttl_seconds = self._parse_unlock_ttl_seconds(rest)
+            scope, value = self._parse_unlock_scope_and_value(rest)
         except ValueError as exc:
             await self.reply_forbidden(sink, str(exc))
             return
-        self._set_totp_unlock(event, ttl_seconds)
+        if value == "status":
+            await self._reply_unlock_status(event, sink, scope)
+            return
+        try:
+            ttl_seconds = self._parse_unlock_ttl_seconds(value)
+        except ValueError as exc:
+            await self.reply_forbidden(sink, str(exc))
+            return
+        if scope == "all":
+            self._set_totp_unlock(event, _UNLOCK_SCOPE_DEFAULT, ttl_seconds)
+            self._set_totp_unlock(event, _UNLOCK_SCOPE_GH, ttl_seconds)
+            await self.reply(
+                sink,
+                f"TOTP unlock active for {self._format_duration(ttl_seconds)} for your account (default + gh). "
+                "High-risk commands still require --totp.",
+            )
+            return
+        self._set_totp_unlock(event, scope, ttl_seconds)
+        if scope == _UNLOCK_SCOPE_GH:
+            await self.reply(
+                sink,
+                f"TOTP gh unlock active for {self._format_duration(ttl_seconds)} for your account.",
+            )
+            return
         await self.reply(
             sink,
-            f"TOTP unlock active for {self._format_duration(ttl_seconds)} in this chat. "
+            f"TOTP unlock active for {self._format_duration(ttl_seconds)} for your account. "
             "High-risk commands still require --totp.",
         )
 
-    async def handle_lock(self, event: MessageEvent, sink: ResponseSink) -> None:
-        """Clear any active unlock for this user+chat."""
-        self._clear_totp_unlock(event)
-        await self.reply(sink, "TOTP unlock cleared for this chat.")
+    async def handle_lock(self, event: MessageEvent, sink: ResponseSink, rest: str = "") -> None:
+        """Clear active unlock scopes for this user account on the current platform."""
+        try:
+            scope = self._parse_lock_scope(rest)
+        except ValueError as exc:
+            await self.reply_forbidden(sink, str(exc))
+            return
+        if scope == "all":
+            self._clear_totp_unlock(event, _UNLOCK_SCOPE_DEFAULT)
+            self._clear_totp_unlock(event, _UNLOCK_SCOPE_GH)
+            await self.reply(sink, "TOTP unlocks cleared for your account.")
+            return
+        self._clear_totp_unlock(event, scope)
+        if scope == _UNLOCK_SCOPE_GH:
+            await self.reply(sink, "TOTP gh unlock cleared for your account.")
+            return
+        await self.reply(sink, "TOTP unlock cleared for your account.")
 
     async def handle_select_session(self, event: MessageEvent, sink: ResponseSink, session: str) -> None:
         """Set the sticky session selection for a user."""
@@ -898,12 +930,14 @@ class Router:
 
     def _totp_required_for_command(self, event: MessageEvent, cmd: str, rest: str) -> bool:
         token = (cmd or "").strip().lower()
-        if token in {"lock"}:
+        if token == "lock":
             return False
-        if token in {"unlock"} and (rest or "").strip().lower() in {"status", "state"}:
+        if token == "unlock" and self._unlock_status_requested(rest):
             return False
         if token == "git" and self._git_subcommand(rest) in _GIT_READ_ONLY_SUBCOMMANDS:
             return False
+        if token == "gh":
+            return not self._totp_is_unlocked(event, _UNLOCK_SCOPE_GH)
         if self._totp_command_is_high_risk(token, rest):
             return True
         if token in _READ_ONLY_COMMANDS:
@@ -913,14 +947,14 @@ class Router:
         return True
 
     def _totp_command_is_high_risk(self, cmd: str, rest: str) -> bool:
-        if cmd in {"createrepo", "clonerepo", "copyrepo", "deleterepo", "delete", "renamerepo", "rename", "gh"}:
+        if cmd in {"createrepo", "clonerepo", "copyrepo", "deleterepo", "delete", "renamerepo", "rename"}:
             return True
         if cmd == "git":
             subcmd = self._git_subcommand(rest)
             if not subcmd:
                 return True
             return subcmd not in _GIT_READ_ONLY_SUBCOMMANDS
-        if cmd == "unlock":
+        if cmd == "unlock" and not self._unlock_status_requested(rest):
             return True
         return False
 
@@ -930,11 +964,84 @@ class Router:
             return ""
         return parts[0].strip().lower()
 
-    def _totp_unlock_scope_key(self, event: MessageEvent) -> str:
-        return f"{event.platform}:{event.channel_id}:{event.author_id}"
+    def _unlock_status_requested(self, rest: str) -> bool:
+        parts = (rest or "").strip().lower().split()
+        if not parts:
+            return False
+        if parts[0] in _UNLOCK_STATUS_TOKENS:
+            return True
+        return len(parts) >= 2 and parts[0] in {"all", _UNLOCK_SCOPE_DEFAULT, _UNLOCK_SCOPE_GH} and parts[1] in _UNLOCK_STATUS_TOKENS
 
-    def _totp_unlock_remaining(self, event: MessageEvent) -> int:
-        key = self._totp_unlock_scope_key(event)
+    def _parse_unlock_scope_and_value(self, rest: str) -> tuple[str, str]:
+        raw = (rest or "").strip()
+        if not raw:
+            return _UNLOCK_SCOPE_DEFAULT, ""
+        parts = raw.split()
+        first = parts[0].lower()
+        if first in _UNLOCK_STATUS_TOKENS:
+            if len(parts) != 1:
+                raise ValueError("Usage: !c unlock [gh|all] <totp> [ttl], or !c unlock [gh|all] status")
+            return "all", "status"
+        scope = _UNLOCK_SCOPE_DEFAULT
+        idx = 0
+        if first in {"all", _UNLOCK_SCOPE_DEFAULT, _UNLOCK_SCOPE_GH}:
+            scope = first
+            idx = 1
+        tail = parts[idx:]
+        if not tail:
+            return scope, ""
+        marker = tail[0].lower()
+        if marker in _UNLOCK_STATUS_TOKENS:
+            if len(tail) != 1:
+                raise ValueError("Usage: !c unlock [gh|all] <totp> [ttl], or !c unlock [gh|all] status")
+            return scope, "status"
+        if len(tail) != 1:
+            raise ValueError("Usage: !c unlock [gh|all] <totp> [ttl], or !c unlock [gh|all] status")
+        return scope, tail[0]
+
+    def _parse_lock_scope(self, rest: str) -> str:
+        raw = (rest or "").strip().lower()
+        if not raw:
+            return "all"
+        if raw in {"all", _UNLOCK_SCOPE_DEFAULT, _UNLOCK_SCOPE_GH}:
+            return raw
+        raise ValueError("Usage: !c lock [gh|all]")
+
+    async def _reply_unlock_status(self, event: MessageEvent, sink: ResponseSink, scope: str) -> None:
+        scopes = [_UNLOCK_SCOPE_DEFAULT, _UNLOCK_SCOPE_GH] if scope == "all" else [scope]
+        labels = {_UNLOCK_SCOPE_DEFAULT: "default", _UNLOCK_SCOPE_GH: "gh"}
+        lines: list[str] = []
+        for realm in scopes:
+            remaining = self._totp_unlock_remaining(event, realm)
+            if remaining <= 0:
+                lines.append(f"TOTP {labels.get(realm, realm)} unlock: inactive.")
+                continue
+            lines.append(f"TOTP {labels.get(realm, realm)} unlock: active for {self._format_duration(remaining)}.")
+        await self.reply(sink, "\n".join(lines))
+
+    def _normalize_unlock_totp_syntax(self, cmdline: str) -> str:
+        parts = cmdline.split()
+        if not parts or parts[0].lower() != "unlock":
+            return cmdline
+        if _TOTP_ARG_RE.search(cmdline):
+            return cmdline
+        index = 1
+        if len(parts) <= index:
+            return cmdline
+        if parts[index].lower() in {"all", _UNLOCK_SCOPE_DEFAULT, _UNLOCK_SCOPE_GH}:
+            index += 1
+            if len(parts) <= index:
+                return cmdline
+        if re.fullmatch(r"\d{6}", parts[index]):
+            parts.insert(index, "--totp")
+            return " ".join(parts)
+        return cmdline
+
+    def _totp_unlock_scope_key(self, event: MessageEvent, scope: str = _UNLOCK_SCOPE_DEFAULT) -> str:
+        return f"{event.platform}:{event.author_id}:{scope}"
+
+    def _totp_unlock_remaining(self, event: MessageEvent, scope: str = _UNLOCK_SCOPE_DEFAULT) -> int:
+        key = self._totp_unlock_scope_key(event, scope)
         until = self._totp_unlock_until.get(key, 0.0)
         now = time.time()
         if until <= now:
@@ -942,11 +1049,11 @@ class Router:
             return 0
         return max(0, int(until - now))
 
-    def _totp_is_unlocked(self, event: MessageEvent) -> bool:
-        return self._totp_unlock_remaining(event) > 0
+    def _totp_is_unlocked(self, event: MessageEvent, scope: str = _UNLOCK_SCOPE_DEFAULT) -> bool:
+        return self._totp_unlock_remaining(event, scope) > 0
 
-    def _set_totp_unlock(self, event: MessageEvent, ttl_seconds: int) -> None:
-        key = self._totp_unlock_scope_key(event)
+    def _set_totp_unlock(self, event: MessageEvent, scope: str, ttl_seconds: int) -> None:
+        key = self._totp_unlock_scope_key(event, scope)
         self._totp_unlock_until[key] = time.time() + max(1, ttl_seconds)
         self.logger.info(
             "security.totp_unlock_window_set",
@@ -955,12 +1062,13 @@ class Router:
                 "channel_id": event.channel_id,
                 "is_dm": event.is_dm,
                 "user_id": event.author_id,
+                "scope": scope,
                 "ttl_seconds": ttl_seconds,
             },
         )
 
-    def _clear_totp_unlock(self, event: MessageEvent) -> None:
-        key = self._totp_unlock_scope_key(event)
+    def _clear_totp_unlock(self, event: MessageEvent, scope: str) -> None:
+        key = self._totp_unlock_scope_key(event, scope)
         self._totp_unlock_until.pop(key, None)
         self.logger.info(
             "security.totp_unlock_window_cleared",
@@ -969,6 +1077,7 @@ class Router:
                 "channel_id": event.channel_id,
                 "is_dm": event.is_dm,
                 "user_id": event.author_id,
+                "scope": scope,
             },
         )
 
@@ -978,7 +1087,7 @@ class Router:
             return _DEFAULT_UNLOCK_SECONDS
         match = _UNLOCK_TTL_RE.match(raw)
         if not match:
-            raise ValueError("Usage: !c unlock --totp 123456 [ttl], where ttl is like 30m, 1h, or 2h.")
+            raise ValueError("Unlock ttl must be like 30m, 1h, or 2h.")
         value = int(match.group(1))
         if value <= 0:
             raise ValueError("Unlock ttl must be greater than 0.")
@@ -1067,9 +1176,15 @@ class Router:
             return False, text
         code, cleaned = self._extract_totp_arg(text)
         if not code:
+            detail = f"TOTP required for '{command_name}'. Add `--totp 123456` to the command."
+            if command_name == "unlock":
+                detail = (
+                    "TOTP required for 'unlock'. Use `!c unlock <totp> [ttl]`, "
+                    "`!c unlock gh <totp> [ttl]`, or append `--totp 123456`."
+                )
             await self.reply_forbidden(
                 sink,
-                f"TOTP required for '{command_name}'. Add `--totp 123456` to the command.",
+                detail,
             )
             return False, text
         env_name = self.cfg.discord.totp_secret_env
