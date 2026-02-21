@@ -588,12 +588,20 @@ class Router:
     async def handle_unlock(self, event: MessageEvent, sink: ResponseSink, rest: str) -> None:
         """Unlock TOTP scopes for this user account on the current platform."""
         try:
-            scope, value = self._parse_unlock_scope_and_value(rest)
+            action, scope, value = self._parse_unlock_action(rest)
         except ValueError as exc:
             await self.reply_forbidden(sink, str(exc))
             return
-        if value == "status":
+        if action == "status":
             await self._reply_unlock_status(event, sink, scope)
+            return
+        if action == "extend":
+            try:
+                ttl_seconds = self._parse_unlock_ttl_seconds(value)
+            except ValueError as exc:
+                await self.reply_forbidden(sink, str(exc))
+                return
+            await self._extend_unlock_window(event, sink, scope, ttl_seconds)
             return
         try:
             ttl_seconds = self._parse_unlock_ttl_seconds(value)
@@ -1207,7 +1215,7 @@ class Router:
             if self._lock_status_requested(rest):
                 return False
             if self._lock_extend_requested(rest):
-                return not self._totp_is_unlocked(event)
+                return True
             return False
         if token == "unlock" and self._unlock_status_requested(rest):
             return False
@@ -1249,16 +1257,26 @@ class Router:
             return True
         return len(parts) >= 2 and parts[0] in {"all", _UNLOCK_SCOPE_DEFAULT, _UNLOCK_SCOPE_GH} and parts[1] in _UNLOCK_STATUS_TOKENS
 
-    def _parse_unlock_scope_and_value(self, rest: str) -> tuple[str, str]:
+    def _parse_unlock_action(self, rest: str) -> tuple[str, str, str]:
         raw = (rest or "").strip()
         if not raw:
-            return _UNLOCK_SCOPE_DEFAULT, ""
+            return "set", _UNLOCK_SCOPE_DEFAULT, ""
         parts = raw.split()
         first = parts[0].lower()
         if first in _UNLOCK_STATUS_TOKENS:
             if len(parts) != 1:
-                raise ValueError("Usage: !c unlock [gh|all] <totp> [ttl], or !c unlock [gh|all] status")
-            return "all", "status"
+                raise ValueError(
+                    "Usage: !c unlock [gh|all] <totp> [ttl], !c unlock [gh|all] status, or !c unlock extend [gh|all] <ttl>"
+                )
+            return "status", "all", "status"
+        if first == "extend":
+            if len(parts) == 2:
+                return "extend", _UNLOCK_SCOPE_DEFAULT, parts[1]
+            if len(parts) == 3 and parts[1].lower() in {"all", _UNLOCK_SCOPE_DEFAULT, _UNLOCK_SCOPE_GH}:
+                return "extend", parts[1].lower(), parts[2]
+            raise ValueError(
+                "Usage: !c unlock [gh|all] <totp> [ttl], !c unlock [gh|all] status, or !c unlock extend [gh|all] <ttl>"
+            )
         scope = _UNLOCK_SCOPE_DEFAULT
         idx = 0
         if first in {"all", _UNLOCK_SCOPE_DEFAULT, _UNLOCK_SCOPE_GH}:
@@ -1266,15 +1284,19 @@ class Router:
             idx = 1
         tail = parts[idx:]
         if not tail:
-            return scope, ""
+            return "set", scope, ""
         marker = tail[0].lower()
         if marker in _UNLOCK_STATUS_TOKENS:
             if len(tail) != 1:
-                raise ValueError("Usage: !c unlock [gh|all] <totp> [ttl], or !c unlock [gh|all] status")
-            return scope, "status"
+                raise ValueError(
+                    "Usage: !c unlock [gh|all] <totp> [ttl], !c unlock [gh|all] status, or !c unlock extend [gh|all] <ttl>"
+                )
+            return "status", scope, "status"
         if len(tail) != 1:
-            raise ValueError("Usage: !c unlock [gh|all] <totp> [ttl], or !c unlock [gh|all] status")
-        return scope, tail[0]
+            raise ValueError(
+                "Usage: !c unlock [gh|all] <totp> [ttl], !c unlock [gh|all] status, or !c unlock extend [gh|all] <ttl>"
+            )
+        return "set", scope, tail[0]
 
     def _lock_status_requested(self, rest: str) -> bool:
         parts = (rest or "").strip().lower().split()
@@ -1337,6 +1359,14 @@ class Router:
         scopes = [_UNLOCK_SCOPE_DEFAULT, _UNLOCK_SCOPE_GH] if scope == "all" else [scope]
         labels = {_UNLOCK_SCOPE_DEFAULT: "default", _UNLOCK_SCOPE_GH: "gh"}
         now = time.time()
+        missing = [realm for realm in scopes if self._totp_unlock_remaining(event, realm) <= 0]
+        if missing:
+            rendered = ", ".join(labels.get(r, r) for r in missing)
+            await self.reply_forbidden(
+                sink,
+                f"No active unlock window to extend for: {rendered}. Use `!c unlock` first.",
+            )
+            return
         lines: list[str] = []
         for realm in scopes:
             key = self._totp_unlock_scope_key(event, realm)

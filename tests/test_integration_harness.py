@@ -773,10 +773,52 @@ def test_totp_lock_extend_updates_remaining_time(tmp_path, monkeypatch):
     async def run():
         await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "codex-repo"), sink)
         await router.handle_message(_discord_event("!c lock extend 30m", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c lock extend 30m --totp {_totp_code(secret, step_offset=1)}", "codex-repo"), sink)
         await router.handle_message(_discord_event("!c lock status", "codex-repo"), sink)
 
     asyncio.run(run())
+    assert any("TOTP required for 'lock'" in msg for msg, _, _ in sink.sent)
     assert any("unlock extended by 30m" in msg for msg, _, _ in sink.sent)
+    assert any("TOTP default unlock: active for" in msg for msg, _, _ in sink.sent)
+
+
+def test_totp_extend_requires_active_unlock_window(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event(f"!c lock extend 30m --totp {_totp_code(secret)}", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock extend 30m --totp {_totp_code(secret, step_offset=1)}", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert any("No active unlock window to extend" in msg for msg, _, _ in sink.sent)
+
+
+def test_totp_unlock_extend_alias_works(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock extend 15m --totp {_totp_code(secret, step_offset=1)}", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c lock status", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert any("unlock extended by 15m" in msg for msg, _, _ in sink.sent)
     assert any("TOTP default unlock: active for" in msg for msg, _, _ in sink.sent)
 
 

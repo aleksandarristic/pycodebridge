@@ -30,8 +30,8 @@ def test_command_registry_help_text():
     assert "General:" in text
     assert "Auth tags: [open]=no TOTP" in text
     assert "help — show this help [open] (aliases: commands)" in text
-    assert "unlock [gh|all] [status|ttl] — unlock command scopes for your account (status is open) [totp] (aliases: ul)" in text
-    assert "lock [gh|all] | lock status [gh|all] | lock extend [gh|all] <ttl> — clear unlocks, show unlock status, or extend unlock window [open] (aliases: lk)" in text
+    assert "unlock [gh|all] [status|ttl] | unlock extend [gh|all] <ttl> — unlock command scopes for your account (status is open; extend requires totp) [totp] (aliases: ul)" in text
+    assert "lock [gh|all] | lock status [gh|all] | lock extend [gh|all] <ttl> — clear unlocks, show unlock status, or extend unlock window [mixed] (aliases: lk)" in text
     assert "use <session> — set your sticky session [unlock/default] (aliases: select)" in text
     assert "reset [session] — reset session context [unlock/default]" in text
     assert "create — create repo in code_root and git init [totp] (aliases: createrepo, new)" in text

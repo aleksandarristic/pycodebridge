@@ -139,9 +139,10 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 Prefix default is `!c`. Channels should be named `codex-<repo>`.
 When `discord.totp_enabled: true`, use `!c unlock <totp> [ttl]` to unlock default commands for your account (`30m`, `1h`, `2h`; default `1h`).
 Use `!c unlock gh <totp> [ttl]` for GitHub CLI commands, or `!c unlock all <totp> [ttl]` to unlock both scopes.
+Use `!c unlock extend [gh|all] <ttl> --totp <code>` to extend active unlock windows.
 Use `!c unlock [gh|all] status` or `!c lock status [gh|all]` to check remaining time.
 Use `!c lock [gh|all]` to clear unlock windows (`!c lock` clears all scopes).
-Use `!c lock extend [gh|all] <ttl>` to extend unlock windows (`30m`, `1h`, `2h`, etc.).
+Use `!c lock extend [gh|all] <ttl> --totp <code>` to extend active unlock windows (`30m`, `1h`, `2h`, etc.).
 While default scope is unlocked, plain chat prompts are accepted even if `allow_plain_prompts` is `false`.
 Failed/replayed TOTP attempts are rate-limited per user (`platform:user_id`) using the limiter settings above.
 
@@ -163,6 +164,8 @@ TOTP not required (read-only in channel):
 
 TOTP always required (high-risk in channel):
 - `!c unlock [gh|all] [ttl]`
+- `!c unlock extend [gh|all] <ttl>`
+- `!c lock extend [gh|all] <ttl>`
 - `!c create` (aliases: `createrepo`, `new`)
 - `!c clone <url>` (alias: `clonerepo`)
 - `!c copy <newname>` (aliases: `copyrepo`, `cp`)
@@ -229,7 +232,7 @@ General:
 
 Security:
 - `unlock` (alias: `ul`) `[totp]` (`unlock ... status` is `[open]`)
-- `lock` (alias: `lk`) `[open]` for clear/status; `lock extend ...` requires default unlock (or `--totp`)
+- `lock` (alias: `lk`) `[mixed]` (`lock`/`lock status` are `[open]`; `lock extend ...` is `[totp]`)
 
 Sessions:
 - `start` (alias: `run`), `resume` (alias: `rs`), `choose` (alias: `pick`) `[unlock/default]`
@@ -293,6 +296,8 @@ Repo names passed to DM commands are normalized to lowercase (for example, `Prob
 
 When `discord.totp_enabled: true`, TOTP is always required in DMs for:
 - `!c unlock [gh|all] [ttl]`
+- `!c unlock extend [gh|all] <ttl>`
+- `!c lock extend [gh|all] <ttl>`
 - `!c create <name>` / `!c createrepo <name>` / `!c new <name>`
 - `!c clone <name> <url>` / `!c clonerepo <name> <url>`
 - `!c copy <from> <to>` / `!c copyrepo <from> <to>` / `!c cp <from> <to>`
