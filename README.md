@@ -159,6 +159,7 @@ TOTP not required (read-only in channel):
 - `!c unlock [gh|all] status`
 - `!c lock [gh|all]`
 - `!c lock status [gh|all]`
+- `!unlock ...`, `!ul ...`, `!lock ...` (top-level shortcuts for `!c unlock ...` / `!c lock ...` in mapped repo channels)
 - `!c git status|log|branches|branch|show|diff|remote`
 - `!git ...` (shortcut for `!c git ...`)
 

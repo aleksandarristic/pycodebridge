@@ -370,6 +370,12 @@ class Router:
             return ("git " + _tail("!git")).strip()
         if lower == "!gh" or lower.startswith("!gh "):
             return ("gh " + _tail("!gh")).strip()
+        if lower == "!unlock" or lower.startswith("!unlock "):
+            return ("unlock " + _tail("!unlock")).strip()
+        if lower == "!ul" or lower.startswith("!ul "):
+            return ("unlock " + _tail("!ul")).strip()
+        if lower == "!lock" or lower.startswith("!lock "):
+            return ("lock " + _tail("!lock")).strip()
         if lower == "!log" or lower.startswith("!log "):
             return ("logs " + _tail("!log")).strip()
         return ""
@@ -1402,7 +1408,7 @@ class Router:
 
     def _normalize_unlock_totp_syntax(self, cmdline: str) -> str:
         parts = cmdline.split()
-        if not parts or parts[0].lower() != "unlock":
+        if not parts or parts[0].lower() not in {"unlock", "ul"}:
             return cmdline
         if _TOTP_ARG_RE.search(cmdline):
             return cmdline
