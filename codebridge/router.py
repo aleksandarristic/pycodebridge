@@ -708,15 +708,11 @@ class Router:
     async def send_status(self, sink: ResponseSink, repo_name: str, repo_path: str) -> None:
         """Send status summary for the channel and sessions."""
         state = self.state.load()
-        queue_statuses = await self.coordinator.snapshot(sink.channel_id)
-        running = sum(1 for s in queue_statuses if s.status == "running")
-        queued = sum(1 for s in queue_statuses if s.status == "queued")
         ch = state.channels.get(sink.channel_id)
         if ch and ch.sessions:
             lines = [
                 f"Repo: {repo_name}",
                 f"Path: {repo_path}",
-                f"Codex: {running} running, {queued} queued",
                 f"Sessions ({len(ch.sessions)}/{MAX_SESSIONS_PER_CHANNEL}):",
             ]
             for name, sess in ch.sessions.items():
@@ -737,10 +733,7 @@ class Router:
                 lines.append(format_current_selection_line(current, current_model, current_reasoning))
             await self.reply(sink, "\n".join(lines))
             return
-        await self.reply(
-            sink,
-            f"Repo: {repo_name}\nPath: {repo_path}\nCodex: {running} running, {queued} queued\nNo session attached.",
-        )
+        await self.reply(sink, f"Repo: {repo_name}\nPath: {repo_path}\nNo session attached.")
 
     async def send_help(self, sink: ResponseSink) -> None:
         """Send help text for supported commands."""
