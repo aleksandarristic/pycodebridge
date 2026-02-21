@@ -696,6 +696,8 @@ def test_integration_dm_shortcuts_and_help_details(tmp_path):
     async def run():
         await router.handle_message(_discord_dm_event("!help"), sink)
         await router.handle_message(_discord_dm_event("!help git"), sink)
+        await router.handle_message(_discord_dm_event("!c commands"), sink)
+        await router.handle_message(_discord_dm_event("!c commands git"), sink)
         await router.handle_message(_discord_dm_event("!st"), sink)
         await router.handle_message(_discord_dm_event("!u"), sink)
         await router.handle_message(_discord_dm_event("!unlock status"), sink)

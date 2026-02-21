@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from ..router import Router
 
 _DM_COMMAND_ALIASES = {
+    "commands": "help",
     "ul": "unlock",
     "lk": "lock",
     "createrepo": "create",
