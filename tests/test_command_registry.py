@@ -36,7 +36,7 @@ def test_command_registry_help_text():
     assert "reset [session] — reset session context [unlock/default]" in text
     assert "create — create repo in code_root and git init [totp] (aliases: createrepo, new)" in text
     assert "Repo helpers:" in text
-    assert "git <status|log|branches|show|diff|pull|commit|push|merge> — git helpers [mixed]" in text
+    assert "git <status|log|branches|show|diff|remote|pull|commit|push|merge> — git helpers [mixed]" in text
     assert "gh <args> — GitHub CLI helper passthrough [unlock/gh]" in text
     assert "answer [session] -- <text> | answer <text> — send input to active Codex session [unlock/default] (aliases: reply)" in text
     assert "wait — show sessions awaiting input [unlock/default]" in text

@@ -700,6 +700,25 @@ def test_totp_git_status_read_only_without_totp(tmp_path, monkeypatch):
     assert not any("TOTP required for 'git'" in msg for msg, _, _ in sink.sent)
 
 
+def test_totp_git_remote_read_only_without_totp(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c git remote -v", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert not any("TOTP required for 'git'" in msg for msg, _, _ in sink.sent)
+    assert not any("Unknown git subcommand." in msg for msg, _, _ in sink.sent)
+
+
 def test_totp_updates_read_only_without_totp(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()

@@ -59,7 +59,7 @@ _READ_ONLY_COMMANDS = {
     "changes",
     "ps",
 }
-_GIT_READ_ONLY_SUBCOMMANDS = {"status", "log", "branches", "show", "diff"}
+_GIT_READ_ONLY_SUBCOMMANDS = {"status", "log", "branches", "show", "diff", "remote"}
 
 
 def _git_commit_hash() -> str:

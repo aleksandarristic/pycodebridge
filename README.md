@@ -131,7 +131,7 @@ TOTP not required (read-only in channel):
 - `!c ps`
 - `!c unlock [gh|all] status`
 - `!c lock [gh|all]`
-- `!c git status|log|branches|show|diff`
+- `!c git status|log|branches|show|diff|remote`
 
 TOTP always required (high-risk in channel):
 - `!c unlock [gh|all] [ttl]`
