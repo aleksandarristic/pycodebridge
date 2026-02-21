@@ -30,6 +30,7 @@ from .util.ansi import strip_control_codes
 from .util.chunk import chunk_text
 from .util.prompt import needs_user_input
 from .totp import TotpAttemptLimiter, verify_totp
+from . import git_bootstrap
 from .router_helpers import (
     DEFAULT_SESSION,
     MAX_SESSIONS_PER_CHANNEL,
@@ -435,6 +436,16 @@ class Router:
     async def handle_download(self, sink: ResponseSink, repo_path: str, rel_path: str) -> None:
         """Send a file from the repo to the channel."""
         await self.file_transfers.handle_download(sink, repo_path, rel_path, self.reply_forbidden)
+
+    async def bootstrap_git_config(self) -> None:
+        """Apply startup git bootstrap settings."""
+        await git_bootstrap.bootstrap_startup(self.cfg, self.logger)
+
+    async def bootstrap_repo_git_config(self, repo_path: str) -> None:
+        """Apply git bootstrap settings to a repo local config when configured."""
+        if not self.cfg.git.enabled or not self.cfg.git.apply_on_repo_create_clone_copy:
+            return
+        await git_bootstrap.apply_repo_local(self.cfg, self.logger, repo_path)
 
     async def handle_updates(self, sink: ResponseSink, repo_path: str) -> None:
         """Check installed Codex CLI version against npm latest."""

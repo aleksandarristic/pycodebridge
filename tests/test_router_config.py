@@ -10,6 +10,10 @@ def test_render_config_text_includes_core_fields():
     cfg.codex.network_access = True
     cfg.codex.model = "gpt-test"
     cfg.codex.model_reasoning_effort = "medium"
+    cfg.git.enabled = True
+    cfg.git.user_name = "Dev"
+    cfg.git.user_email = "dev@example.com"
+    cfg.git.credential_helper = "!gh auth git-credential"
     cfg.discord.prefix = "!c"
     cfg.discord.allow_plain_prompts = True
     cfg.discord.channel_name_regex = "^codex-(.*)$"
@@ -29,6 +33,10 @@ def test_render_config_text_includes_core_fields():
     assert "network_access: True" in text
     assert "model: gpt-test" in text
     assert "model_reasoning_effort: medium" in text
+    assert "git_bootstrap_enabled: True" in text
+    assert "git_user_name_set: True" in text
+    assert "git_user_email_set: True" in text
+    assert "git_credential_helper_set: True" in text
     assert "prefix: !c" in text
     assert "allow_plain_prompts: True" in text
     assert "channel regex: ^codex-(.*)$" in text

@@ -19,6 +19,7 @@ DEFAULT_CONFLICT_TTL_SECONDS = 60
 DEFAULT_TRANSPORT_ADAPTER = "discord"
 DEFAULT_AUDIT_REDACT = False
 DEFAULT_MAX_UPLOAD_MB = 200
+DEFAULT_GIT_CREDENTIAL_HELPER = "!gh auth git-credential"
 
 DEFAULT_START_PROMPT = (
     "Hello. This is a Discord-bridged Codex session for repo: {{REPO_NAME}}.\n"
@@ -114,6 +115,20 @@ class TransportConfig:
 
 
 @dataclass
+class GitConfig:
+    """Git bootstrap configuration."""
+    enabled: bool = False
+    user_name: str = ""
+    user_email: str = ""
+    credential_helper: str = DEFAULT_GIT_CREDENTIAL_HELPER
+    global_config_path: str = ""
+    apply_on_startup: bool = True
+    apply_to_existing_repos: bool = True
+    apply_on_repo_create_clone_copy: bool = True
+    local_fallback_on_global_failure: bool = True
+
+
+@dataclass
 @dataclass
 class FilesConfig:
     """File transfer configuration."""
@@ -136,6 +151,7 @@ class Config:
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
     audit: AuditConfig = field(default_factory=AuditConfig)
     transport: TransportConfig = field(default_factory=TransportConfig)
+    git: GitConfig = field(default_factory=GitConfig)
     files: FilesConfig = field(default_factory=FilesConfig)
     repo_bootstrap: RepoBootstrapConfig = field(default_factory=RepoBootstrapConfig)
 
@@ -246,6 +262,21 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     transport = raw.get("transport", {}) or {}
     cfg.transport.adapter = transport.get("adapter", cfg.transport.adapter)
 
+    git = raw.get("git", {}) or {}
+    cfg.git.enabled = bool(git.get("enabled", cfg.git.enabled))
+    cfg.git.user_name = git.get("user_name", cfg.git.user_name)
+    cfg.git.user_email = git.get("user_email", cfg.git.user_email)
+    cfg.git.credential_helper = git.get("credential_helper", cfg.git.credential_helper)
+    cfg.git.global_config_path = git.get("global_config_path", cfg.git.global_config_path)
+    cfg.git.apply_on_startup = bool(git.get("apply_on_startup", cfg.git.apply_on_startup))
+    cfg.git.apply_to_existing_repos = bool(git.get("apply_to_existing_repos", cfg.git.apply_to_existing_repos))
+    cfg.git.apply_on_repo_create_clone_copy = bool(
+        git.get("apply_on_repo_create_clone_copy", cfg.git.apply_on_repo_create_clone_copy)
+    )
+    cfg.git.local_fallback_on_global_failure = bool(
+        git.get("local_fallback_on_global_failure", cfg.git.local_fallback_on_global_failure)
+    )
+
     repo_bootstrap = raw.get("repo_bootstrap", {}) or {}
     cfg.repo_bootstrap.agents_template = repo_bootstrap.get(
         "agents_template", cfg.repo_bootstrap.agents_template
@@ -295,6 +326,8 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.files.max_upload_mb = DEFAULT_MAX_UPLOAD_MB
     if not cfg.transport.adapter:
         cfg.transport.adapter = DEFAULT_TRANSPORT_ADAPTER
+    if cfg.git.credential_helper is None:
+        cfg.git.credential_helper = DEFAULT_GIT_CREDENTIAL_HELPER
     if not cfg.state.log_dir and cfg.state.data_dir:
         cfg.state.log_dir = os.path.join(cfg.state.data_dir, "logs")
     if not cfg.repo_bootstrap.spec_prompt:
@@ -306,6 +339,7 @@ def _expand_paths(cfg: Config) -> None:
     cfg.codex.code_root = _expand_path(cfg.codex.code_root)
     cfg.state.data_dir = _expand_path(cfg.state.data_dir)
     cfg.state.log_dir = _expand_path(cfg.state.log_dir)
+    cfg.git.global_config_path = _expand_path(cfg.git.global_config_path)
     cfg.repo_bootstrap.agents_template = _expand_path(cfg.repo_bootstrap.agents_template)
 
 

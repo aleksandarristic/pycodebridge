@@ -52,6 +52,17 @@ audit:
 transport:
   adapter: "discord"
 
+git:
+  enabled: false
+  user_name: ""
+  user_email: ""
+  credential_helper: "!gh auth git-credential"
+  global_config_path: ""
+  apply_on_startup: true
+  apply_to_existing_repos: true
+  apply_on_repo_create_clone_copy: true
+  local_fallback_on_global_failure: true
+
 files:
   max_upload_mb: 200
 

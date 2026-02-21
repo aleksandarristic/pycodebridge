@@ -246,3 +246,49 @@ def test_load_config_codex_network_access_toggle(tmp_path, monkeypatch):
     )
     cfg = cfgmod.load(str(cfg_path))
     assert cfg.codex.network_access is True
+
+
+def test_load_config_git_bootstrap_fields(tmp_path, monkeypatch):
+    code_root = tmp_path / "code"
+    data_dir = tmp_path / "data"
+    code_root.mkdir()
+    data_dir.mkdir()
+
+    monkeypatch.setenv("CODE_ROOT", str(code_root))
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        """
+        discord:
+          guild_id: "123"
+          allowed_user_ids: ["1"]
+        codex:
+          code_root: "$CODE_ROOT"
+        state:
+          data_dir: "%DATA_DIR%"
+          log_dir: "%DATA_DIR%/logs"
+        git:
+          enabled: true
+          user_name: "Dev User"
+          user_email: "dev@example.com"
+          credential_helper: "!gh auth git-credential"
+          global_config_path: "%DATA_DIR%/gitconfig"
+          apply_on_startup: true
+          apply_to_existing_repos: true
+          apply_on_repo_create_clone_copy: true
+          local_fallback_on_global_failure: true
+        """,
+        encoding="utf-8",
+    )
+
+    cfg = cfgmod.load(str(cfg_path))
+    assert cfg.git.enabled is True
+    assert cfg.git.user_name == "Dev User"
+    assert cfg.git.user_email == "dev@example.com"
+    assert cfg.git.credential_helper == "!gh auth git-credential"
+    assert cfg.git.global_config_path == str(data_dir / "gitconfig")
+    assert cfg.git.apply_on_startup is True
+    assert cfg.git.apply_to_existing_repos is True
+    assert cfg.git.apply_on_repo_create_clone_copy is True
+    assert cfg.git.local_fallback_on_global_failure is True

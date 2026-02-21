@@ -107,6 +107,17 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 ### `transport`
 - `adapter` (default `discord`) — transport adapter to use (`discord`/`telegram` supported; `slack` scaffold only).
 
+### `git`
+- `enabled` (default `false`) — enable automatic git bootstrap configuration.
+- `user_name` (default empty) — sets `git config user.name` globally (or local fallback).
+- `user_email` (default empty) — sets `git config user.email` globally (or local fallback).
+- `credential_helper` (default `!gh auth git-credential`) — sets git credential helper for non-interactive pushes.
+- `global_config_path` (default empty) — optional path passed as `GIT_CONFIG_GLOBAL` during bootstrap.
+- `apply_on_startup` (default `true`) — apply bootstrap at app startup.
+- `apply_to_existing_repos` (default `true`) — when global bootstrap fails and local fallback is enabled, apply settings to existing repos.
+- `apply_on_repo_create_clone_copy` (default `true`) — apply local settings automatically after `!c create`, `!c clone`, and `!c copy`.
+- `local_fallback_on_global_failure` (default `true`) — if global config write fails, try repo-local config instead.
+
 ### `repo_bootstrap`
 - `agents_template` (default empty) — optional AGENTS.md template for `!c create`.
 - `spec_prompt` (default template) — prompt used by `!c spec`.

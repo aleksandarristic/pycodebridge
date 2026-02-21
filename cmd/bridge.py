@@ -72,6 +72,7 @@ async def main() -> None:
     )
     coordinator = SessionCoordinator(state_store, cfg)
     router = Router(cfg, state_store, audit_logger, runner, coordinator, logger)
+    await router.bootstrap_git_config()
 
     adapter = (cfg.transport.adapter or "discord").lower()
     if adapter == "discord":
