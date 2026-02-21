@@ -154,6 +154,11 @@ class Router:
             return
         prefix = self._transport_prefix(event)
         content = (event.content or "").strip()
+        shortcut_cmdline = ""
+        lower_content = content.lower()
+        if lower_content == "!stop" or lower_content.startswith("!stop "):
+            tail = content[5:].strip()
+            shortcut_cmdline = ("interrupt " + tail).strip()
         if event.attachments:
             if self._totp_enabled(event):
                 ok, _ = await self.require_totp(event, sink, "upload", content)
@@ -173,7 +178,7 @@ class Router:
                 return
         if await self.handle_pending_upload_response(event, sink, repo_name, pending_content):
             return
-        if not content.startswith(prefix):
+        if not content.startswith(prefix) and not shortcut_cmdline:
             relay_session, ambiguous = await self.pending_input_session(event)
             if ambiguous:
                 await self.reply_forbidden(
@@ -221,7 +226,10 @@ class Router:
             await self.handle_resume(event, sink, repo_name, repo_path, session, prompt)
             return
 
-        cmdline = content[len(prefix) :].strip()
+        if shortcut_cmdline:
+            cmdline = shortcut_cmdline
+        else:
+            cmdline = content[len(prefix) :].strip()
         if not cmdline:
             return
         cmdline = self._normalize_unlock_totp_syntax(cmdline)

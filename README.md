@@ -168,6 +168,7 @@ TOTP required unless the chat is unlocked:
 - `!c interrupt [session]` (alias: `esc`)
 - `!c kill [session]`
 - `!c /quit [session]`
+- Shortcut: `!stop [session]` (maps to `!c interrupt [session]` in mapped repo channels)
 - `!c answer [session] -- <text>` or `!c answer <text>`
 - `!c approve [session]` (sends `yes`)
 - `!c deny [session]` (sends `no`)
@@ -208,6 +209,7 @@ Repo lifecycle:
 
 Run control:
 - `stop`, `interrupt` (alias: `esc`), `kill`, `/quit`, `answer` (alias: `reply`), `approve`, `deny`, `wait` `[unlock/default]`
+- `!stop [session]` is a top-level shortcut for `interrupt` in mapped repo channels.
 
 Repo helpers:
 - `show` (aliases: `showrepo`, `tree`), `changes` (alias: `showchanges`) `[open]`
