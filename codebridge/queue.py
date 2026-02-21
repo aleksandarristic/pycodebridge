@@ -23,6 +23,9 @@ class JobStatus:
     session: str
     status: str
     position: int
+    queued_at: float
+    started_at: float = 0.0
+    ended_at: float = 0.0
 
 
 class Manager:
@@ -47,7 +50,15 @@ class Manager:
             self._counter += 1
             job_id = f"job-{self._counter}"
             fut: asyncio.Future = asyncio.get_running_loop().create_future()
-            pos = await ref.worker.enqueue(_JobRequest(job_id, session, job, fut))
+            pos = await ref.worker.enqueue(
+                _JobRequest(
+                    job_id=job_id,
+                    session=session,
+                    job=job,
+                    future=fut,
+                    queued_at=asyncio.get_running_loop().time(),
+                )
+            )
             self._last_jobs[channel_id] = JobRecord(job=job, session=session)
             return pos, job_id, fut
 
@@ -98,6 +109,9 @@ class _JobRequest:
     session: str
     job: Job
     future: asyncio.Future
+    queued_at: float
+    started_at: float = 0.0
+    ended_at: float = 0.0
     cancelled: bool = False
 
 
@@ -135,6 +149,7 @@ class _Worker:
                 continue
             async with self._lock:
                 self._pending.pop(req.job_id, None)
+                req.started_at = asyncio.get_running_loop().time()
                 self._active = req
             try:
                 if req.cancelled:
@@ -147,6 +162,7 @@ class _Worker:
                     req.future.set_exception(exc)
             finally:
                 async with self._lock:
+                    req.ended_at = asyncio.get_running_loop().time()
                     self._active = None
                 self._queue.task_done()
 
@@ -155,9 +171,29 @@ class _Worker:
         async with self._lock:
             statuses: list[JobStatus] = []
             if self._active:
-                statuses.append(JobStatus(job_id=self._active.job_id, session=self._active.session, status="running", position=0))
+                statuses.append(
+                    JobStatus(
+                        job_id=self._active.job_id,
+                        session=self._active.session,
+                        status="running",
+                        position=0,
+                        queued_at=self._active.queued_at,
+                        started_at=self._active.started_at,
+                        ended_at=self._active.ended_at,
+                    )
+                )
             for idx, req in enumerate(self._pending.values(), start=1):
-                statuses.append(JobStatus(job_id=req.job_id, session=req.session, status="queued", position=idx))
+                statuses.append(
+                    JobStatus(
+                        job_id=req.job_id,
+                        session=req.session,
+                        status="queued",
+                        position=idx,
+                        queued_at=req.queued_at,
+                        started_at=req.started_at,
+                        ended_at=req.ended_at,
+                    )
+                )
             return statuses
 
     async def cancel(self, job_id: str) -> bool:

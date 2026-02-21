@@ -5,6 +5,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 SAFE_SEG_RE = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -70,6 +71,8 @@ class Summary:
     thread_id: str
     request: Dict[str, Any]
     path: str
+    started_at: str
+    ended_at: str
 
 
 class Logger:
@@ -146,7 +149,12 @@ class Logger:
                             with open(path, "r", encoding="utf-8") as f:
                                 req = json.load(f)
                             seq = fname.split(".")[0]
-                            summaries.append(Summary(seq, ch, sess, thread_id, req, thread_dir))
+                            request_ts = str(req.get("timestamp") or "").strip()
+                            started_at = request_ts if request_ts else _mtime_iso(path)
+                            ended_at = _entry_end_iso(thread_dir, seq, started_at)
+                            summaries.append(
+                                Summary(seq, ch, sess, thread_id, req, thread_dir, started_at, ended_at)
+                            )
                         except Exception:
                             continue
 
@@ -232,3 +240,28 @@ def _default_redaction_patterns() -> list[str]:
         r"xapp-[A-Za-z0-9-]{10,}",
         r"(?i)(token|secret|password)\\s*[:=]\\s*[^\\s]+",
     ]
+
+
+def _mtime_iso(path: str) -> str:
+    try:
+        return datetime.fromtimestamp(os.path.getmtime(path), tz=timezone.utc).isoformat()
+    except Exception:
+        return ""
+
+
+def _entry_end_iso(thread_dir: str, seq: str, fallback: str) -> str:
+    candidates = [
+        os.path.join(thread_dir, f"{seq}.codex.jsonl"),
+        os.path.join(thread_dir, f"{seq}.discord_out.txt"),
+        os.path.join(thread_dir, f"{seq}.codex.stderr.txt"),
+        os.path.join(thread_dir, f"{seq}.request.json"),
+    ]
+    mtimes: list[float] = []
+    for p in candidates:
+        try:
+            mtimes.append(os.path.getmtime(p))
+        except Exception:
+            continue
+    if not mtimes:
+        return fallback
+    return datetime.fromtimestamp(max(mtimes), tz=timezone.utc).isoformat()

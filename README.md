@@ -250,6 +250,8 @@ Queue:
 - `!retry` is a top-level shortcut for `rerun` in mapped repo channels.
 - `ps` `[open]`
 - `!ps` is a top-level shortcut for `ps` in mapped repo channels.
+  - `ps` includes per-job timing fields: `queued`, `started`, and `ended` (UTC ISO timestamps).
+  - `logs` includes per-entry `started` and `ended` timestamps.
 
 Passthrough:
 - Any other `!c` text is sent as a prompt to Codex.

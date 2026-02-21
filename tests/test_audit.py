@@ -14,3 +14,5 @@ def test_audit_start_and_summaries(tmp_path):
     assert summaries
     assert summaries[0].channel_id == "chan"
     assert summaries[0].session == "default"
+    assert summaries[0].started_at
+    assert summaries[0].ended_at

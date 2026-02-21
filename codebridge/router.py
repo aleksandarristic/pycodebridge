@@ -1,10 +1,12 @@
 """Codex command router and handlers."""
 
+import asyncio
 import os
 import re
 import subprocess
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
 import json
@@ -527,7 +529,12 @@ class Router:
             return
         lines = []
         for s in summaries:
-            lines.append(f"[{s.seq}] channel:{s.channel_id} session:{s.session} thread:{s.thread_id}")
+            started = s.started_at or "n/a"
+            ended = s.ended_at or "n/a"
+            lines.append(
+                f"[{s.seq}] channel:{s.channel_id} session:{s.session} thread:{s.thread_id} "
+                f"started:{started} ended:{ended}"
+            )
         text = "\n".join(lines)
         for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
             await self.reply(sink, chunk)
@@ -541,8 +548,26 @@ class Router:
         lines = []
         for s in statuses:
             pos = f" pos:{s.position}" if s.position >= 0 else ""
-            lines.append(f"{s.job_id} [{s.status}] session:{s.session or DEFAULT_SESSION}{pos} {s.command}")
+            queued_at = self._format_job_time(s.queued_at)
+            started_at = self._format_job_time(s.started_at)
+            ended_at = self._format_job_time(s.ended_at)
+            lines.append(
+                f"{s.job_id} [{s.status}] session:{s.session or DEFAULT_SESSION}{pos} "
+                f"queued:{queued_at} started:{started_at} ended:{ended_at} {s.command}"
+            )
         await self.reply(sink, "\n".join(lines))
+
+    def _format_job_time(self, value: float) -> str:
+        if not value:
+            return "-"
+        try:
+            epoch = time.time() - (asyncio.get_running_loop().time() - value)
+        except RuntimeError:
+            epoch = time.time()
+        try:
+            return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()
+        except Exception:
+            return "-"
 
     async def handle_cancel(self, sink: ResponseSink, job_id: str) -> None:
         """Cancel a queued job by id."""

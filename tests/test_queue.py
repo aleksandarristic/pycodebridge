@@ -37,8 +37,12 @@ def test_queue_enqueue_and_cancel():
         snapshot = await mgr.snapshot("chan")
         assert len(snapshot) == 2
         assert snapshot[0].status == "running"
+        assert snapshot[0].queued_at > 0
+        assert snapshot[0].started_at > 0
         assert snapshot[1].status == "queued"
         assert snapshot[1].job_id == id2
+        assert snapshot[1].queued_at > 0
+        assert snapshot[1].started_at == 0
 
         ok = await mgr.cancel("chan", id2)
         assert ok is True
