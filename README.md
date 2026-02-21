@@ -55,6 +55,10 @@ Quick start:
    - Preflight only: `./update.sh --check`
    - Update current branch and redeploy: `./update.sh`
    - Update a specific branch and redeploy: `./update.sh main`
+9) Optional health endpoint:
+   - Set `runtime.health_bind` (example: `127.0.0.1:8080`)
+   - Optional path: `runtime.health_path` (default `/healthz`)
+   - Probe: `curl -fsS http://127.0.0.1:8080/healthz`
 
 ## Configuration reference
 Paths support `$VAR`/`%APPDATA%`/`~` expansion.
@@ -103,6 +107,8 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 
 ### `runtime`
 - `log_level` (default `info`) — `debug|info|warn|error`.
+- `health_bind` (default empty) — optional health HTTP bind (`<host>:<port>` or `<port>`).
+- `health_path` (default `/healthz`) — health endpoint path.
 
 ### `audit`
 - `redact` (default `false`) — redact secrets from audit logs before writing.

@@ -14,6 +14,7 @@ from codebridge import logging as logmod
 from codebridge.audit import Logger as AuditLogger
 from codebridge.codex import Runner
 from codebridge.discord_bot import build_client
+from codebridge.health import start_health_server
 from codebridge.telegram_bot import build_application, run_polling
 from codebridge.router import Router
 from codebridge.session_coordinator import SessionCoordinator
@@ -73,41 +74,54 @@ async def main() -> None:
     coordinator = SessionCoordinator(state_store, cfg)
     router = Router(cfg, state_store, audit_logger, runner, coordinator, logger)
     await router.bootstrap_git_config()
+    health_server = None
+    if (cfg.runtime.health_bind or "").strip():
+        health_server = await start_health_server(
+            router,
+            logger,
+            cfg.runtime.health_bind,
+            cfg.runtime.health_path,
+        )
 
     adapter = (cfg.transport.adapter or "discord").lower()
-    if adapter == "discord":
-        token = cfg.discord_token()
-        client = build_client(router)
-        stop_event = asyncio.Event()
-        _install_signal_handlers(stop_event)
+    try:
+        if adapter == "discord":
+            token = cfg.discord_token()
+            client = build_client(router)
+            stop_event = asyncio.Event()
+            _install_signal_handlers(stop_event)
 
-        client_task = asyncio.create_task(client.start(token))
-        stop_task = asyncio.create_task(stop_event.wait())
+            client_task = asyncio.create_task(client.start(token))
+            stop_task = asyncio.create_task(stop_event.wait())
 
-        done, _ = await asyncio.wait({client_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
-        if stop_task in done and not client_task.done():
-            logger.info("shutdown", extra={"reason": "signal"})
-            await client.close()
-            try:
-                await asyncio.wait_for(client_task, timeout=10)
-            except asyncio.TimeoutError:
-                client_task.cancel()
+            done, _ = await asyncio.wait({client_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
+            if stop_task in done and not client_task.done():
+                logger.info("shutdown", extra={"reason": "signal"})
+                await client.close()
+                try:
+                    await asyncio.wait_for(client_task, timeout=10)
+                except asyncio.TimeoutError:
+                    client_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await client_task
+            else:
                 with suppress(asyncio.CancelledError):
                     await client_task
+            stop_task.cancel()
+            return
+        elif adapter == "slack":
+            raise ValueError("Slack adapter scaffolded but not yet wired; use transport.adapter: discord")
+        elif adapter == "telegram":
+            token = cfg.telegram_token()
+            app = build_application(router, token)
+            await run_polling(app, router)
+            return
         else:
-            with suppress(asyncio.CancelledError):
-                await client_task
-        stop_task.cancel()
-        return
-    elif adapter == "slack":
-        raise ValueError("Slack adapter scaffolded but not yet wired; use transport.adapter: discord")
-    elif adapter == "telegram":
-        token = cfg.telegram_token()
-        app = build_application(router, token)
-        await run_polling(app, router)
-        return
-    else:
-        raise ValueError(f"Unsupported transport adapter: {adapter}")
+            raise ValueError(f"Unsupported transport adapter: {adapter}")
+    finally:
+        if health_server is not None:
+            health_server.close()
+            await health_server.wait_closed()
 
 
 if __name__ == "__main__":

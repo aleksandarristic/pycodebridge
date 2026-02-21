@@ -25,6 +25,8 @@ def test_render_config_text_includes_core_fields():
     cfg.discord.totp_max_failures = 4
     cfg.discord.totp_failure_window_seconds = 120
     cfg.discord.totp_cooldown_seconds = 90
+    cfg.runtime.health_bind = "127.0.0.1:8080"
+    cfg.runtime.health_path = "/healthz"
 
     text = render_config_text(cfg)
     assert "code_root: /tmp/code" in text
@@ -48,3 +50,5 @@ def test_render_config_text_includes_core_fields():
     assert "totp_max_failures: 4" in text
     assert "totp_failure_window_seconds: 120" in text
     assert "totp_cooldown_seconds: 90" in text
+    assert "health_bind: 127.0.0.1:8080" in text
+    assert "health_path: /healthz" in text

@@ -44,6 +44,8 @@ state:
 
 runtime:
   log_level: "info"
+  health_bind: ""
+  health_path: "/healthz"
 
 audit:
   redact: false

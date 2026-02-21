@@ -28,5 +28,7 @@ def render_config_text(cfg: Config) -> str:
         f"totp_window: {cfg.discord.totp_window}\n"
         f"totp_max_failures: {cfg.discord.totp_max_failures}\n"
         f"totp_failure_window_seconds: {cfg.discord.totp_failure_window_seconds}\n"
-        f"totp_cooldown_seconds: {cfg.discord.totp_cooldown_seconds}"
+        f"totp_cooldown_seconds: {cfg.discord.totp_cooldown_seconds}\n"
+        f"health_bind: {cfg.runtime.health_bind or '<disabled>'}\n"
+        f"health_path: {cfg.runtime.health_path}"
     )

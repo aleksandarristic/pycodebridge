@@ -99,6 +99,8 @@ class StateConfig:
 class RuntimeConfig:
     """Runtime logging configuration."""
     log_level: str = DEFAULT_LOG_LEVEL
+    health_bind: str = ""
+    health_path: str = "/healthz"
 
 
 @dataclass
@@ -254,6 +256,8 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
 
     runtime = raw.get("runtime", {}) or {}
     cfg.runtime.log_level = runtime.get("log_level", cfg.runtime.log_level)
+    cfg.runtime.health_bind = str(runtime.get("health_bind", cfg.runtime.health_bind) or "")
+    cfg.runtime.health_path = str(runtime.get("health_path", cfg.runtime.health_path) or "")
 
     audit = raw.get("audit", {}) or {}
     cfg.audit.redact = bool(audit.get("redact", cfg.audit.redact))
@@ -331,6 +335,10 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.state.conflict_ttl_seconds = DEFAULT_CONFLICT_TTL_SECONDS
     if not cfg.runtime.log_level:
         cfg.runtime.log_level = DEFAULT_LOG_LEVEL
+    if not cfg.runtime.health_path:
+        cfg.runtime.health_path = "/healthz"
+    if not cfg.runtime.health_path.startswith("/"):
+        cfg.runtime.health_path = "/" + cfg.runtime.health_path
     cfg.audit.redact = bool(cfg.audit.redact)
     if cfg.files.max_upload_mb <= 0:
         cfg.files.max_upload_mb = DEFAULT_MAX_UPLOAD_MB
