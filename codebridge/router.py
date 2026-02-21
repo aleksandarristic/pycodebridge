@@ -159,6 +159,8 @@ class Router:
         if lower_content == "!stop" or lower_content.startswith("!stop "):
             tail = content[5:].strip()
             shortcut_cmdline = ("interrupt " + tail).strip()
+        elif lower_content.startswith("!steer "):
+            shortcut_cmdline = "steer " + content[7:].strip()
         if event.attachments:
             if self._totp_enabled(event):
                 ok, _ = await self.require_totp(event, sink, "upload", content)
@@ -408,6 +410,10 @@ class Router:
     async def handle_answer(self, event: MessageEvent, sink: ResponseSink, session: str, text: str) -> None:
         """Send an approval/input response to an active Codex session."""
         await core_handlers.handle_answer(self, event, sink, session, text)
+
+    async def handle_steer(self, event: MessageEvent, sink: ResponseSink, session: str, text: str) -> None:
+        """Send steering text to an active Codex session."""
+        await core_handlers.handle_steer(self, event, sink, session, text)
 
     async def handle_wait(self, event: MessageEvent, sink: ResponseSink) -> None:
         """Show sessions currently awaiting user input from Codex prompts."""

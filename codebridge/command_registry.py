@@ -219,6 +219,14 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec("kill", "kill [session]", "force kill running process", "Run control", _cmd_kill, AUTH_UNLOCK),
         CommandSpec("/quit", "/quit [session]", "send /quit to Codex", "Run control", _cmd_quit, AUTH_UNLOCK),
         CommandSpec(
+            "steer",
+            "steer [session] -- <text> | steer <text>",
+            "send steering text to active Codex session",
+            "Run control",
+            _cmd_steer,
+            AUTH_UNLOCK,
+        ),
+        CommandSpec(
             "answer",
             "answer [session] -- <text> | answer <text>",
             "send input to active Codex session",
@@ -647,10 +655,17 @@ async def _cmd_quit(router: Any, message: MessageEvent, sink: ResponseSink, repo
     await router.handle_quit(sink, session)
 
 
-async def _parse_answer_args(router: Any, message: MessageEvent, sink: ResponseSink, rest: str) -> tuple[str, str] | None:
+async def _parse_session_text_args(
+    router: Any,
+    message: MessageEvent,
+    sink: ResponseSink,
+    rest: str,
+    usage: str,
+    empty_message: str,
+) -> tuple[str, str] | None:
     rest = (rest or "").strip()
     if not rest:
-        await router.reply_forbidden(sink, "Usage: !c answer [session] -- <text>  or  !c answer <text>")
+        await router.reply_forbidden(sink, usage)
         return None
     session = router.current_session_for_user(message.author_id, message.channel_id)
     text = rest
@@ -663,17 +678,39 @@ async def _parse_answer_args(router: Any, message: MessageEvent, sink: ResponseS
             if not session:
                 return None
     if not text.strip():
-        await router.reply_forbidden(sink, "Answer text required.")
+        await router.reply_forbidden(sink, empty_message)
         return None
     return session, text.strip()
 
 
 async def _cmd_answer(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
-    parsed = await _parse_answer_args(router, message, sink, rest)
+    parsed = await _parse_session_text_args(
+        router,
+        message,
+        sink,
+        rest,
+        "Usage: !c answer [session] -- <text>  or  !c answer <text>",
+        "Answer text required.",
+    )
     if not parsed:
         return
     session, text = parsed
     await router.handle_answer(message, sink, session, text)
+
+
+async def _cmd_steer(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    parsed = await _parse_session_text_args(
+        router,
+        message,
+        sink,
+        rest,
+        "Usage: !c steer [session] -- <text>  or  !c steer <text>",
+        "Steer text required.",
+    )
+    if not parsed:
+        return
+    session, text = parsed
+    await router.handle_steer(message, sink, session, text)
 
 
 async def _cmd_approve(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

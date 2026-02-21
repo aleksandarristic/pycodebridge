@@ -38,6 +38,7 @@ def test_command_registry_help_text():
     assert "Repo helpers:" in text
     assert "git <status|log|branches|show|diff|remote|pull|commit|push|merge> — git helpers [mixed]" in text
     assert "gh <args> — GitHub CLI helper passthrough [unlock/gh]" in text
+    assert "steer [session] -- <text> | steer <text> — send steering text to active Codex session [unlock/default]" in text
     assert "answer [session] -- <text> | answer <text> — send input to active Codex session [unlock/default] (aliases: reply)" in text
     assert "interrupt [session] — send ESC-like interrupt [unlock/default] (aliases: esc)" in text
     assert "wait — show sessions awaiting input [unlock/default]" in text

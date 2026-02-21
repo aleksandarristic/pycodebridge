@@ -361,6 +361,43 @@ async def handle_answer(router: "Router", event: MessageEvent, sink: ResponseSin
     )
 
 
+async def handle_steer(router: "Router", event: MessageEvent, sink: ResponseSink, session: str, text: str) -> None:
+    """Write steering text to stdin of an active Codex session."""
+    try:
+        session = normalize_session(session or DEFAULT_SESSION)
+    except ValueError as exc:
+        await router.reply_forbidden(sink, str(exc))
+        return
+    payload = (text or "").strip()
+    if not payload:
+        await router.reply_forbidden(sink, "Steer text required.")
+        return
+    proc = await router.get_active(sink.channel_id, session)
+    if not proc:
+        await router.reply_forbidden(
+            sink,
+            f"No active Codex process for session '{session}'. Start/resume a session first.",
+        )
+        return
+    try:
+        await proc.write(payload + "\n")
+    except Exception as exc:
+        await router.reply_forbidden(sink, f"send steer failed: {exc}")
+        return
+    await router.reply(sink, f"Sent steer input to session '{session}'.")
+    router.logger.info(
+        "relay.steer",
+        extra={
+            "platform": event.platform,
+            "channel_id": event.channel_id,
+            "repo_channel": event.channel_name,
+            "session": session,
+            "user_id": event.author_id,
+            "chars": len(payload),
+        },
+    )
+
+
 def _session_model_reasoning_from_state(router: "Router", state, channel_id: str, session: str) -> tuple[str, str]:
     """Resolve model/reasoning for a session using one already-loaded state snapshot."""
     default_model = router.cfg.codex.model

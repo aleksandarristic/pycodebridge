@@ -439,6 +439,52 @@ def test_integration_answer_command_relays_to_active_session(tmp_path):
     assert any("Sent response to session 'default'." in msg for msg, _, _ in sink.sent)
 
 
+def test_integration_steer_command_relays_to_active_session(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        for _ in range(50):
+            proc = await router.get_active("chan", "default")
+            if proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        await router.handle_message(_discord_event("!c steer focus on failing tests", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert runner.last_proc is not None
+    assert runner.last_proc.writes[-1] == "focus on failing tests\n"
+    assert any("Sent steer input to session 'default'." in msg for msg, _, _ in sink.sent)
+
+
+def test_integration_bang_steer_relays_to_active_session(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        for _ in range(50):
+            proc = await router.get_active("chan", "default")
+            if proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        await router.handle_message(_discord_event("!steer keep current plan, reduce scope", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert runner.last_proc is not None
+    assert runner.last_proc.writes[-1] == "keep current plan, reduce scope\n"
+    assert any("Sent steer input to session 'default'." in msg for msg, _, _ in sink.sent)
+
+
 def test_integration_auto_relays_plain_reply_when_codex_waits_for_input(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
