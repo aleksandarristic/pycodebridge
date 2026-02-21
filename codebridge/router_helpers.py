@@ -288,12 +288,18 @@ def trim_output(text: str, max_lines: int, max_bytes: int) -> str:
     return joined
 
 
-async def run_limited_command(repo_path: str, args: list[str], timeout: float = HELPER_TIMEOUT) -> Tuple[str, Optional[Exception]]:
+async def run_limited_command(
+    repo_path: str,
+    args: list[str],
+    timeout: float = HELPER_TIMEOUT,
+    env: Optional[dict[str, str]] = None,
+) -> Tuple[str, Optional[Exception]]:
     """Run a helper command with time/output limits."""
     try:
         proc = await asyncio.create_subprocess_exec(
             *args,
             cwd=repo_path,
+            env=env,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )

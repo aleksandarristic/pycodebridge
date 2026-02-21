@@ -6,6 +6,7 @@ import os
 import struct
 import time
 import json
+from types import MethodType
 
 from codebridge import config as cfgmod
 from codebridge.codex import Options
@@ -370,6 +371,29 @@ def test_integration_resume_and_download(tmp_path):
     assert sink.files == [(str(target), "note.txt", None, None)]
 
 
+def test_integration_updates_command_dispatches(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    called: list[str] = []
+
+    async def _fake_handle_updates(self, sink_obj, repo_path: str) -> None:
+        called.append(repo_path)
+        await self.reply(sink_obj, "updates-ok")
+
+    router.handle_updates = MethodType(_fake_handle_updates, router)
+
+    async def run():
+        await router.handle_message(_discord_event("!c updates", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert called == [str(repo)]
+    assert any("updates-ok" in msg for msg, _, _ in sink.sent)
+
+
 def test_integration_answer_command_relays_to_active_session(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -674,6 +698,32 @@ def test_totp_git_status_read_only_without_totp(tmp_path, monkeypatch):
 
     asyncio.run(run())
     assert not any("TOTP required for 'git'" in msg for msg, _, _ in sink.sent)
+
+
+def test_totp_updates_read_only_without_totp(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    called: list[str] = []
+
+    async def _fake_handle_updates(self, sink_obj, repo_path: str) -> None:
+        called.append(repo_path)
+        await self.reply(sink_obj, "updates-ok")
+
+    router.handle_updates = MethodType(_fake_handle_updates, router)
+
+    async def run():
+        await router.handle_message(_discord_event("!c updates", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert called == [str(repo)]
+    assert not any("TOTP required for 'updates'" in msg for msg, _, _ in sink.sent)
 
 
 def test_totp_required_for_config_tests_download_logs_and_upload(tmp_path, monkeypatch):

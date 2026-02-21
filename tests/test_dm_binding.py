@@ -53,6 +53,7 @@ class _FakeRouter:
         self.coordinator = _FakeCoordinator()
         self.last_gh = None
         self.last_answer = None
+        self.last_updates = None
 
     def _transport_prefix(self, event: MessageEvent) -> str:
         if event.platform == "telegram":
@@ -146,6 +147,10 @@ class _FakeRouter:
     async def handle_answer(self, event: MessageEvent, sink, session: str, text: str) -> None:
         _ = (event, sink)
         self.last_answer = {"session": session, "text": text}
+
+    async def handle_updates(self, sink, repo_path: str) -> None:
+        self.last_updates = repo_path
+        await sink.send(f"updates@{repo_path}")
 
 
 class _FakeCoordinator:
@@ -446,6 +451,50 @@ def test_dm_gh_bound_uses_repo_path(tmp_path):
     assert router.last_gh is not None
     assert router.last_gh["repo_path"] == str(repo)
     assert router.last_gh["rest"] == "auth status"
+
+
+def test_dm_updates_uses_bound_repo_path(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.telegram.allowed_user_ids = ["user"]
+    cfg.telegram.prefix = "!c"
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    store = Store(cfg.state.data_dir)
+    router = _FakeRouter(cfg, store)
+    sink = _FakeSink("dm-1")
+    bind_event = MessageEvent(
+        platform="telegram",
+        content="!c bind repo",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+    updates_event = MessageEvent(
+        platform="telegram",
+        content="!c updates",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    async def run():
+        await dm_admin.handle_dm_message(router, bind_event, sink)
+        await dm_admin.handle_dm_message(router, updates_event, sink)
+
+    asyncio.run(run())
+
+    assert router.last_updates == str(repo)
+    assert any(msg.startswith("updates@") for msg in sink.sent)
 
 
 def test_dm_answer_command_relays_without_repo_binding(tmp_path):

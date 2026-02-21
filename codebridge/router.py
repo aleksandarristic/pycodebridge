@@ -22,6 +22,7 @@ from .handlers import dm_admin as dm_admin_handlers
 from .handlers import gh_helpers as gh_handlers
 from .handlers import git_helpers as git_handlers
 from .handlers import repo_helpers as repo_handlers
+from .handlers import system_helpers
 from . import command_registry
 from .file_transfer import FileTransferService
 from .reply_helpers import send_forbidden, send_reply
@@ -53,6 +54,7 @@ _READ_ONLY_COMMANDS = {
     "stats",
     "peek",
     "models",
+    "updates",
     "show",
     "changes",
     "ps",
@@ -433,6 +435,10 @@ class Router:
     async def handle_download(self, sink: ResponseSink, repo_path: str, rel_path: str) -> None:
         """Send a file from the repo to the channel."""
         await self.file_transfers.handle_download(sink, repo_path, rel_path, self.reply_forbidden)
+
+    async def handle_updates(self, sink: ResponseSink, repo_path: str) -> None:
+        """Check installed Codex CLI version against npm latest."""
+        await system_helpers.handle_updates(self, sink, repo_path)
 
     async def handle_logs(self, sink: ResponseSink, session: str, limit: int) -> None:
         """Show recent audit log entries."""

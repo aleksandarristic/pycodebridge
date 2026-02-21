@@ -77,7 +77,7 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
      - while default scope is unlocked, plain chat prompts are accepted even when `allow_plain_prompts` is `false`
    - limiter defaults: `totp_max_failures: 5`, `totp_failure_window_seconds: 300`, `totp_cooldown_seconds: 300`
    - lockout key is per user (`platform:user_id`); set `totp_max_failures: 0` to disable lockout
-   - Channel commands that do NOT require TOTP: `help`, `status`, `stats`, `peek`, `models`, `show`/`showrepo`, `changes`/`showchanges`, `ps`, `unlock [gh|all] status`, `lock [gh|all]`, and read-only git helpers (`git status|log|branches|show|diff`)
+   - Channel commands that do NOT require TOTP: `help`, `status`, `stats`, `peek`, `updates`, `models`, `show`/`showrepo`, `changes`/`showchanges`, `ps`, `unlock [gh|all] status`, `lock [gh|all]`, and read-only git helpers (`git status|log|branches|show|diff`)
    - Channel commands that always require TOTP: `unlock [gh|all] [ttl]`, `create`/`createrepo`/`new`, `clone`/`clonerepo`, `copy`/`copyrepo`/`cp`, and write git helpers (`git pull|commit|push|merge|...`)
    - `gh` requires TOTP unless `unlock gh` (or `unlock all`) is active
    - Channel commands that require TOTP unless the channel is unlocked: `start`, `resume`, `choose`, `use/select`, `model`, `thread`, `spec`, `stop`, `kill`, `/quit`, `answer`, `approve`, `deny`, `cancel`, `rerun`, `config`, `tests`, `download`, `logs`, and plain prompts
@@ -85,7 +85,7 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
    - DM commands that always require TOTP: `unlock [gh|all] [ttl]`, `create`/`createrepo`/`new`, `clone`/`clonerepo`, `copy`/`copyrepo`/`cp`, `deleterepo/delete/del`, `renamerepo/rename/ren`, and DM upload flows
    - `gh` in DMs requires TOTP unless `unlock gh` (or `unlock all`) is active
    - DM commands that require TOTP unless the DM is unlocked: `bind`, `use`, `repo`, `unbind`, `answer`, `approve`, `deny`, and bound non-prefixed prompts
-   - DM commands that do NOT require TOTP: `help`, `repos`, `sessions`, `status`, `config`, `unlock [gh|all] status`, `lock [gh|all]`
+   - DM commands that do NOT require TOTP: `help`, `repos`, `sessions`, `status`, `config`, `updates`, `unlock [gh|all] status`, `lock [gh|all]`
 
 ## Run
 From the repo root:

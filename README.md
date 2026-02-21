@@ -124,6 +124,7 @@ TOTP not required (read-only in channel):
 - `!c status`
 - `!c stats [session]`
 - `!c peek [session]`
+- `!c updates`
 - `!c models [session]`
 - `!c show` (alias: `showrepo`)
 - `!c changes` (alias: `showchanges`)
@@ -177,7 +178,7 @@ Auth tags used by `!c help`:
 
 General:
 - `help` (alias: `commands`) `[open]`
-- `status` (alias: `st`), `stats` (alias: `usage`), `peek` (alias: `pk`) `[open]`
+- `status` (alias: `st`), `stats` (alias: `usage`), `peek` (alias: `pk`), `updates` (aliases: `update`, `version`) `[open]`
 - `config` (alias: `cfg`) `[unlock/default]`
 
 Security:
@@ -219,6 +220,7 @@ Repo names passed to DM commands are normalized to lowercase (for example, `Prob
 - `!c sessions`
 - `!c status`
 - `!c config`
+- `!c updates`
 - `!c create/new <name>` (legacy: `createrepo`)
 - `!c clone <name> <url>` (legacy: `clonerepo`)
 - `!c copy/cp <from> <to>` (legacy: `copyrepo`)
@@ -255,6 +257,7 @@ TOTP is not required in DMs for:
 - `!c sessions`
 - `!c status`
 - `!c config`
+- `!c updates`
 - `!c unlock [gh|all] status`
 - `!c lock [gh|all]`
 

@@ -150,6 +150,15 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec("status", "status", "show repo path and sessions", "General", _cmd_status, AUTH_OPEN, aliases=("st",)),
         CommandSpec("stats", "stats [session]", "show usage totals", "General", _cmd_stats, AUTH_OPEN, aliases=("usage",)),
         CommandSpec("peek", "peek [session]", "show active status and last output time", "General", _cmd_peek, AUTH_OPEN, aliases=("pk",)),
+        CommandSpec(
+            "updates",
+            "updates",
+            "check installed Codex CLI vs latest npm release",
+            "General",
+            _cmd_updates,
+            AUTH_OPEN,
+            aliases=("update", "version"),
+        ),
         CommandSpec("config", "config", "show effective config", "General", _cmd_config, AUTH_UNLOCK, aliases=("cfg",)),
         CommandSpec(
             "unlock",
@@ -347,6 +356,10 @@ async def _cmd_lock(router: Any, message: MessageEvent, sink: ResponseSink, repo
 
 async def _cmd_config(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     await router.reply(sink, router.config_text())
+
+
+async def _cmd_updates(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    await router.handle_updates(sink, repo_path)
 
 
 async def _cmd_start(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

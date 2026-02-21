@@ -73,6 +73,7 @@ def dm_help_text() -> str:
         "status — show queues and running jobs [open]\n"
         "config — show effective config [open]\n"
         "gh <args> — run GitHub CLI in DM context [unlock/gh]\n"
+        "updates — check Codex CLI update status [open]\n"
         "create/new <name> — create repo [totp]\n"
         "clone <name> <url> — clone repo [totp]\n"
         "copy/cp <from> <to> — copy repo [totp]\n"
@@ -91,6 +92,7 @@ def dm_binding_help_text() -> str:
         "use <repo> — alias for bind [unlock/default]\n"
         "repo <repo> <prompt> — run a one-off prompt against a repo [unlock/default]\n"
         "gh <args> — run GitHub CLI (bound repo cwd, or code_root if unbound) [unlock/gh]\n"
+        "updates — check Codex CLI update status [open]\n"
         "unlock/ul [gh|all] [status|ttl] — unlock command scopes for your account [totp; status=open]\n"
         "lock/lk [gh|all] — clear unlock scopes for your account [open]\n"
         "unbind — clear bound repo [unlock/default]\n"
@@ -383,7 +385,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         await dm_reply(router, sink, entry, forbidden_message(detail))
 
     is_admin = event.platform == "discord" and router.cfg.discord.dm_admin_enabled and router._dm_admin_allowed(event.author_id)
-    binding_commands = {"bind", "use", "repo", "unbind", "status", "unlock", "lock"}
+    binding_commands = {"bind", "use", "repo", "unbind", "status", "unlock", "lock", "updates"}
     admin_commands = {
         "help",
         "repos",
@@ -506,6 +508,17 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
                 "dm.status",
                 extra={"platform": event.platform, "user_id": event.author_id, "repo": bound or "", "session": session},
             )
+            return
+        if cmd == "updates":
+            run_path = router.cfg.codex.code_root
+            bound = router.get_dm_binding(event)
+            if bound:
+                try:
+                    run_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, bound)
+                except Exception as exc:
+                    await send_forbidden(f"Repo error: {exc}")
+                    return
+            await router.handle_updates(sink, run_path)
             return
         if cmd in {"bind", "use"}:
             repo_name = rest.strip()
