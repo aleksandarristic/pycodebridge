@@ -284,6 +284,19 @@ async def handle_stop(router: "Router", sink: ResponseSink, session: str) -> Non
     await router.reply(sink, "No running Codex process.")
 
 
+async def handle_interrupt(router: "Router", sink: ResponseSink, session: str) -> None:
+    """Send an interrupt signal (ESC-like) to a running Codex process."""
+    proc = await router.get_active(sink.channel_id, session)
+    if proc is not None:
+        await proc.interrupt()
+        await router.reply(
+            sink,
+            f"Sent interrupt to session '{session or DEFAULT_SESSION}'.{_usage_suffix(router, sink.channel_id, session)}",
+        )
+        return
+    await router.reply(sink, "No running Codex process.")
+
+
 async def handle_kill(router: "Router", sink: ResponseSink, session: str) -> None:
     """Force-kill a running Codex process."""
     proc = await router.get_active(sink.channel_id, session)

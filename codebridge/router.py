@@ -385,6 +385,10 @@ class Router:
         """Send a stop signal to a running Codex process."""
         await core_handlers.handle_stop(self, sink, session)
 
+    async def handle_interrupt(self, sink: ResponseSink, session: str) -> None:
+        """Send an interrupt signal to a running Codex process."""
+        await core_handlers.handle_interrupt(self, sink, session)
+
     async def handle_kill(self, sink: ResponseSink, session: str) -> None:
         """Force-kill a running Codex process."""
         await core_handlers.handle_kill(self, sink, session)

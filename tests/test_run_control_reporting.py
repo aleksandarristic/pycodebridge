@@ -64,6 +64,7 @@ def test_end_commands_include_usage_summary():
         router = _FakeRouter(proc)
 
         await core.handle_stop(router, sink, "default")
+        await core.handle_interrupt(router, sink, "default")
         await core.handle_kill(router, sink, "default")
         await core.handle_quit(router, sink, "default")
 

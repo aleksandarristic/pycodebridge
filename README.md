@@ -6,7 +6,7 @@ Bridge transport channels (`codex-<repo>`) to Codex CLI sessions in local repos 
 - Map `#codex-<repo>` to `<code_root>/<repo>` (must exist, be inside root, and contain `.git`).
   Repo identifiers are canonicalized to lowercase.
 - Stream Codex JSONL output to transports; strip control codes; flag prompts needing user input.
-- Per-channel queue, multi-session support (max 3 per channel), run control (stop/kill/quit).
+- Per-channel queue, multi-session support (max 3 per channel), run control (stop/interrupt/kill/quit).
 - Optional DM admin mode for owner-only repo management (Discord).
 - Transport-agnostic router (`MessageEvent` + `ResponseSink`).
 
@@ -165,6 +165,7 @@ TOTP required unless the chat is unlocked:
 - `!c reset [session]`
 - `!c spec [session]`
 - `!c stop [session]`
+- `!c interrupt [session]` (alias: `esc`)
 - `!c kill [session]`
 - `!c /quit [session]`
 - `!c answer [session] -- <text>` or `!c answer <text>`
@@ -206,7 +207,7 @@ Repo lifecycle:
 - `copy` (aliases: `copyrepo`, `cp`) `[totp]`
 
 Run control:
-- `stop`, `kill`, `/quit`, `answer` (alias: `reply`), `approve`, `deny`, `wait` `[unlock/default]`
+- `stop`, `interrupt` (alias: `esc`), `kill`, `/quit`, `answer` (alias: `reply`), `approve`, `deny`, `wait` `[unlock/default]`
 
 Repo helpers:
 - `show` (aliases: `showrepo`, `tree`), `changes` (alias: `showchanges`) `[open]`

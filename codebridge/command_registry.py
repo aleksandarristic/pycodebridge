@@ -215,6 +215,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             aliases=("copyrepo", "cp"),
         ),
         CommandSpec("stop", "stop [session]", "send ESC then SIGINT", "Run control", _cmd_stop, AUTH_UNLOCK),
+        CommandSpec("interrupt", "interrupt [session]", "send ESC-like interrupt", "Run control", _cmd_interrupt, AUTH_UNLOCK, aliases=("esc",)),
         CommandSpec("kill", "kill [session]", "force kill running process", "Run control", _cmd_kill, AUTH_UNLOCK),
         CommandSpec("/quit", "/quit [session]", "send /quit to Codex", "Run control", _cmd_quit, AUTH_UNLOCK),
         CommandSpec(
@@ -626,6 +627,15 @@ async def _cmd_kill(router: Any, message: MessageEvent, sink: ResponseSink, repo
         if not session:
             return
     await router.handle_kill(sink, session)
+
+
+async def _cmd_interrupt(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    session = rest.strip()
+    if session:
+        session = await _normalize_session_or_reply(router, sink, session)
+        if not session:
+            return
+    await router.handle_interrupt(sink, session)
 
 
 async def _cmd_quit(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
