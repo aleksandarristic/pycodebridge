@@ -25,20 +25,24 @@ def test_command_registry_aliases():
 
 def test_command_registry_help_text():
     _, specs = build_registry()
-    text = render_help(specs)
+    text = render_help(specs, prefix="!c")
     assert "Commands:" in text
     assert "General:" in text
     assert "Auth tags: [open]=no TOTP" in text
-    assert "help — show this help [open] (aliases: commands)" in text
-    assert "unlock [gh|all] [status|ttl] | unlock extend [gh|all] <ttl> — unlock command scopes for your account (status is open; extend requires totp) [totp] (aliases: ul)" in text
-    assert "lock [gh|all] | lock status [gh|all] | lock extend [gh|all] <ttl> — clear unlocks, show unlock status, or extend unlock window [mixed] (aliases: lk)" in text
-    assert "use <session> — set your sticky session [unlock/default] (aliases: select)" in text
-    assert "reset [session] — reset session context [unlock/default]" in text
-    assert "create — create repo in code_root and git init [totp] (aliases: createrepo, new)" in text
+    assert "- **`!c help`**, **`!c commands`** - show this help [open]" in text
+    assert "**`!c unlock [gh|all] [status|ttl]`**" in text
+    assert "**`!c ul [gh|all] [status|ttl]`**" in text
+    assert "**`!unlock ...`**" in text
+    assert "**`!ul ...`**" in text
+    assert "- **`!c lock [gh|all]`**, **`!c lk [gh|all]`**" in text
+    assert "**`!lock ...`**" in text
+    assert "- **`!c use <session>`**, **`!c select <session>`** - set your sticky session [unlock/default]" in text
+    assert "- **`!c reset [session]`** - reset session context [unlock/default]" in text
+    assert "- **`!c create`**, **`!c createrepo`**, **`!c new`** - create repo in code_root and git init [totp]" in text
     assert "Repo helpers:" in text
-    assert "git <status|log|branches|branch|show|diff|remote|pull|commit|push|merge> — git helpers [mixed]" in text
-    assert "gh <args> — GitHub CLI helper passthrough [unlock/gh]" in text
-    assert "steer [session] -- <text> | steer <text> — send steering text to active Codex session [unlock/default]" in text
-    assert "answer [session] -- <text> | answer <text> — send input to active Codex session [unlock/default] (aliases: reply)" in text
-    assert "interrupt [session] — send ESC-like interrupt [unlock/default] (aliases: esc)" in text
-    assert "wait — show sessions awaiting input [unlock/default]" in text
+    assert "**`!git ...`**" in text
+    assert "**`!gh ...`**" in text
+    assert "**`!steer <text>`**" in text
+    assert "**`!a <text>`**" in text
+    assert "**`!stop [session]`**" in text
+    assert "**`!w`**" in text

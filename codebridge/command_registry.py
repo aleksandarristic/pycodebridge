@@ -46,6 +46,24 @@ AUTH_LABELS = {
     AUTH_MIXED: "mixed",
 }
 
+HELP_SHORTCUT_TRIGGERS = {
+    "status": ("!st",),
+    "updates": ("!u",),
+    "wait": ("!w",),
+    "ps": ("!ps",),
+    "rerun": ("!retry",),
+    "approve": ("!y",),
+    "deny": ("!n",),
+    "interrupt": ("!stop [session]", "!pause [session]"),
+    "steer": ("!steer <text>", "!s <text>", "!s:<session> <text>"),
+    "answer": ("!a <text>", "!a:<session> <text>"),
+    "git": ("!git ...",),
+    "gh": ("!gh ...",),
+    "logs": ("!log [n]",),
+    "unlock": ("!unlock ...", "!ul ..."),
+    "lock": ("!lock ...",),
+}
+
 _MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{1,63}$")
 _REASONING_ALIASES = {
     "low": "low",
@@ -287,7 +305,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
     return registry, specs
 
 
-def render_help(specs: Sequence[CommandSpec]) -> str:
+def render_help(specs: Sequence[CommandSpec], prefix: str = "!c") -> str:
     """Render help text for the command registry."""
     grouped = _group_specs(specs)
     lines = [
@@ -298,11 +316,37 @@ def render_help(specs: Sequence[CommandSpec]) -> str:
     for group in _ordered_groups(grouped):
         lines.append(f"{group}:")
         for spec in grouped[group]:
-            alias_text = f" (aliases: {', '.join(spec.aliases)})" if spec.aliases else ""
             auth_text = AUTH_LABELS.get(spec.auth, spec.auth)
-            lines.append(f"{spec.usage} — {spec.description} [{auth_text}]{alias_text}")
+            triggers = ", ".join(f"**`{trig}`**" for trig in _help_triggers(spec, prefix))
+            lines.append(f"- {triggers} - {spec.description} [{auth_text}]")
         lines.append("")
     return "\n".join(lines).strip()
+
+
+def _help_triggers(spec: CommandSpec, prefix: str) -> list[str]:
+    pref = (prefix or "!c").strip()
+    heads = [spec.name] + list(spec.aliases)
+    out: list[str] = []
+    forms = [f.strip() for f in spec.usage.split(" | ") if f.strip()]
+    for form in forms:
+        parts = form.split(maxsplit=1)
+        if not parts:
+            continue
+        head = parts[0]
+        tail = f" {parts[1]}" if len(parts) > 1 else ""
+        if head == spec.name:
+            for alias in heads:
+                out.append(f"{pref} {alias}{tail}".strip())
+        else:
+            out.append(f"{pref} {form}".strip())
+    for shortcut in HELP_SHORTCUT_TRIGGERS.get(spec.name, ()):
+        out.append(shortcut)
+    deduped: list[str] = []
+    for trig in out:
+        t = trig.strip()
+        if t and t not in deduped:
+            deduped.append(t)
+    return deduped
 
 
 async def dispatch(
@@ -342,7 +386,7 @@ def _ordered_groups(grouped: Dict[str, List[CommandSpec]]) -> Iterable[str]:
 
 
 async def _cmd_help(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
-    await router.send_help(sink)
+    await router.send_help(message, sink)
 
 
 async def _cmd_status(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

@@ -871,9 +871,9 @@ class Router:
             return message
         return f"{message}\nRelated: {', '.join(unique)}"
 
-    async def send_help(self, sink: ResponseSink) -> None:
+    async def send_help(self, event: MessageEvent, sink: ResponseSink) -> None:
         """Send help text for supported commands."""
-        await self.reply(sink, command_registry.render_help(self._command_specs))
+        await self.reply(sink, command_registry.render_help(self._command_specs, prefix=self._transport_prefix(event)))
 
     async def startup_summary(self) -> str:
         """Return a concise summary of the current bridge state."""
