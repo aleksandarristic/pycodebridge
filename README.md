@@ -171,19 +171,28 @@ TOTP required unless the chat is unlocked:
 - `!c kill [session]`
 - `!c /quit [session]`
 - Shortcut: `!stop [session]` (maps to `!c interrupt [session]` in mapped repo channels)
+- Shortcut: `!pause [session]` (maps to `!c interrupt [session]` in mapped repo channels)
 - `!c steer [session] -- <text>` or `!c steer <text>`
 - Shortcut: `!steer <text>` (maps to `!c steer <text>` in mapped repo channels)
 - Shortcut: `!s <text>` (maps to `!c steer <text>` in mapped repo channels)
+- Shortcut: `!s:<session> <text>` (maps to `!c steer <session> -- <text>` in mapped repo channels)
 - `!c answer [session] -- <text>` or `!c answer <text>`
+- Shortcut: `!a <text>` (maps to `!c answer <text>` in mapped repo channels)
+- Shortcut: `!a:<session> <text>` (maps to `!c answer <session> -- <text>` in mapped repo channels)
 - `!c approve [session]` (sends `yes`)
+- Shortcut: `!y` (maps to `!c approve`)
 - `!c deny [session]` (sends `no`)
+- Shortcut: `!n` (maps to `!c deny`)
 - `!c wait` (show sessions currently awaiting input)
+- Shortcut: `!w` (maps to `!c wait`)
 - `!c cancel <job-id>`
 - `!c rerun`
+- Shortcut: `!retry` (maps to `!c rerun`)
 - `!c config`
 - `!c tests`
 - `!c download <path>`
 - `!c logs [session] [n]`
+- Shortcut: `!log [n]` (maps to `!c logs [n]`)
 - Any other prompt-style `!c ...` command that is not in the read-only list
 - Plain prompts in mapped channels when `allow_plain_prompts: true`
 
@@ -197,6 +206,7 @@ Auth tags used by `!c help`:
 General:
 - `help` (alias: `commands`) `[open]`
 - `status` (alias: `st`), `stats` (alias: `usage`), `peek` (alias: `pk`), `updates` (aliases: `update`, `version`) `[open]`
+- Top-level shortcuts in mapped repo channels: `!st` -> `!c status`, `!u` -> `!c updates`
 - `config` (alias: `cfg`) `[unlock/default]`
 
 Security:
@@ -215,8 +225,14 @@ Repo lifecycle:
 Run control:
 - `stop`, `interrupt` (alias: `esc`), `kill`, `/quit`, `steer`, `answer` (alias: `reply`), `approve`, `deny`, `wait` `[unlock/default]`
 - `!stop [session]` is a top-level shortcut for `interrupt` in mapped repo channels.
+- `!pause [session]` is a top-level shortcut for `interrupt` in mapped repo channels.
 - `!steer <text>` is a top-level shortcut for `steer` in mapped repo channels.
 - `!s <text>` is a shorthand top-level shortcut for `steer` in mapped repo channels.
+- `!s:<session> <text>` is a shorthand top-level shortcut for `steer <session> -- <text>` in mapped repo channels.
+- `!a <text>` is a top-level shortcut for `answer` in mapped repo channels.
+- `!a:<session> <text>` is a top-level shortcut for `answer <session> -- <text>` in mapped repo channels.
+- `!y`/`!n` are top-level shortcuts for `approve`/`deny` in mapped repo channels.
+- `!w` is a top-level shortcut for `wait` in mapped repo channels.
 
 Repo helpers:
 - `show` (aliases: `showrepo`, `tree`), `changes` (alias: `showchanges`) `[open]`
@@ -226,7 +242,10 @@ Repo helpers:
 
 Queue:
 - `logs` (alias: `log`), `cancel` (alias: `drop`), `rerun` (alias: `retry`) `[unlock/default]`
+- `!log [n]` is a top-level shortcut for `logs [n]` in mapped repo channels.
+- `!retry` is a top-level shortcut for `rerun` in mapped repo channels.
 - `ps` `[open]`
+- `!ps` is a top-level shortcut for `ps` in mapped repo channels.
 
 Passthrough:
 - Any other `!c` text is sent as a prompt to Codex.

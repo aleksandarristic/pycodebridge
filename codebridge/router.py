@@ -154,21 +154,7 @@ class Router:
             return
         prefix = self._transport_prefix(event)
         content = (event.content or "").strip()
-        shortcut_cmdline = ""
-        lower_content = content.lower()
-        if lower_content == "!stop" or lower_content.startswith("!stop "):
-            tail = content[5:].strip()
-            shortcut_cmdline = ("interrupt " + tail).strip()
-        elif lower_content.startswith("!steer "):
-            shortcut_cmdline = "steer " + content[7:].strip()
-        elif lower_content.startswith("!s "):
-            shortcut_cmdline = "steer " + content[3:].strip()
-        elif lower_content == "!git" or lower_content.startswith("!git "):
-            shortcut_cmdline = "git " + content[4:].strip()
-            shortcut_cmdline = shortcut_cmdline.strip()
-        elif lower_content == "!gh" or lower_content.startswith("!gh "):
-            shortcut_cmdline = "gh " + content[3:].strip()
-            shortcut_cmdline = shortcut_cmdline.strip()
+        shortcut_cmdline = self._shortcut_cmdline(content)
         if event.attachments:
             if self._totp_enabled(event):
                 ok, _ = await self.require_totp(event, sink, "upload", content)
@@ -332,6 +318,59 @@ class Router:
     async def handle_dm_message(self, event: MessageEvent, sink: ResponseSink) -> None:
         """Handle an incoming DM admin message."""
         await dm_admin_handlers.handle_dm_message(self, event, sink)
+
+    def _shortcut_cmdline(self, content: str) -> str:
+        """Translate top-level shortcut commands into canonical !c command lines."""
+        raw = (content or "").strip()
+        if not raw.startswith("!"):
+            return ""
+        lower = raw.lower()
+
+        # Session-targeted steering/answer shorthands: !s:<session> <text>, !a:<session> <text>
+        for token, cmd in (("!s:", "steer"), ("!a:", "answer")):
+            if lower.startswith(token):
+                after = raw[len(token) :].strip()
+                if not after:
+                    return cmd
+                parts = after.split(maxsplit=1)
+                session = parts[0].strip()
+                text = parts[1].strip() if len(parts) > 1 else ""
+                if text:
+                    return f"{cmd} {session} -- {text}"
+                return cmd
+
+        mapping = {
+            "!st": "status",
+            "!u": "updates",
+            "!w": "wait",
+            "!ps": "ps",
+            "!retry": "rerun",
+            "!y": "approve",
+            "!n": "deny",
+        }
+        if lower in mapping:
+            return mapping[lower]
+
+        def _tail(prefix: str) -> str:
+            return raw[len(prefix) :].strip()
+
+        if lower == "!stop" or lower.startswith("!stop "):
+            return ("interrupt " + _tail("!stop")).strip()
+        if lower == "!pause" or lower.startswith("!pause "):
+            return ("interrupt " + _tail("!pause")).strip()
+        if lower.startswith("!steer "):
+            return "steer " + _tail("!steer")
+        if lower.startswith("!s "):
+            return "steer " + _tail("!s")
+        if lower.startswith("!a "):
+            return "answer " + _tail("!a")
+        if lower == "!git" or lower.startswith("!git "):
+            return ("git " + _tail("!git")).strip()
+        if lower == "!gh" or lower.startswith("!gh "):
+            return ("gh " + _tail("!gh")).strip()
+        if lower == "!log" or lower.startswith("!log "):
+            return ("logs " + _tail("!log")).strip()
+        return ""
 
     async def handle_start(self, event: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, session: str) -> None:
         """Start a new Codex session for a channel/session."""

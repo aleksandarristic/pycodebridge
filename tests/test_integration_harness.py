@@ -508,6 +508,30 @@ def test_integration_bang_s_shortcut_relays_to_active_session(tmp_path):
     assert any("Sent steer input to session 'default'." in msg for msg, _, _ in sink.sent)
 
 
+def test_integration_session_targeted_steer_and_answer_shortcuts(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        for _ in range(50):
+            proc = await router.get_active("chan", "default")
+            if proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        await router.handle_message(_discord_event("!s:default keep edits minimal", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!a:default yes proceed", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert runner.last_proc is not None
+    assert "keep edits minimal\n" in runner.last_proc.writes
+    assert "yes proceed\n" in runner.last_proc.writes
+
+
 def test_integration_auto_relays_plain_reply_when_codex_waits_for_input(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -568,6 +592,52 @@ def test_integration_wait_command_reports_pending_input(tmp_path):
     asyncio.run(run())
     assert any("No sessions are waiting for input." in msg for msg, _, _ in sink.sent)
     assert any("Waiting for input: default" in msg for msg, _, _ in sink.sent)
+
+
+def test_integration_misc_shortcuts_dispatch(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def _fake_handle_updates(self, sink_obj, repo_path: str) -> None:
+        _ = repo_path
+        await self.reply(sink_obj, "updates-ok")
+
+    router.handle_updates = MethodType(_fake_handle_updates, router)
+
+    async def run():
+        await router.handle_message(_discord_event("!st", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!u", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!w", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!ps", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!log", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!retry", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        for _ in range(50):
+            proc = await router.get_active("chan", "default")
+            if proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        await router.handle_message(_discord_event("!y", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!n", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!a keep going", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!pause", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Repo: repo" in t for t in texts)
+    assert any("updates-ok" in t for t in texts)
+    assert any("No sessions are waiting for input." in t for t in texts)
+    assert any("No jobs queued or running." in t for t in texts)
+    assert any("logs error:" in t for t in texts)
+    assert any("No prior job to rerun." in t for t in texts)
+    assert runner.last_proc is not None
+    assert "yes\n" in runner.last_proc.writes
+    assert "no\n" in runner.last_proc.writes
+    assert "keep going\n" in runner.last_proc.writes
+    assert runner.last_proc.interrupted is True
 
 
 def test_integration_telegram_threaded_reply(tmp_path):
