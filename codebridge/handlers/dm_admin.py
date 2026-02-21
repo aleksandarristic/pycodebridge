@@ -79,6 +79,7 @@ def dm_help_text() -> str:
         "copy/cp <from> <to> — copy repo [totp]\n"
         "deleterepo/del <name> — delete repo [totp]\n"
         "renamerepo/ren <from> <to> — rename repo [totp]\n"
+        "reset all — reset all sessions across channels [totp]\n"
         "unlock/ul [gh|all] [status|ttl] — unlock command scopes for your account [totp; status=open]\n"
         "lock/lk [gh|all] — clear unlock scopes for your account [open]\n"
     )
@@ -391,6 +392,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         "repos",
         "sessions",
         "config",
+        "reset",
         "create",
         "clone",
         "copy",
@@ -402,7 +404,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         if not is_admin:
             await send_forbidden("You are not allowed to use DM admin commands.")
             return
-        if cmd in {"create", "clone", "copy", "deleterepo", "renamerepo"}:
+        if cmd in {"create", "clone", "copy", "deleterepo", "renamerepo", "reset"}:
             ok, cmdline = await router.require_totp(event, sink, cmd, cmdline)
             if not ok:
                 return
@@ -428,6 +430,12 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
             return
         if cmd == "config":
             await send(router.config_text())
+            return
+        if cmd == "reset":
+            if rest.strip().lower() != "all":
+                await send_forbidden("Usage: !c reset all")
+                return
+            await router.handle_reset_all_sessions(sink)
             return
         if cmd == "create":
             name = rest.strip()

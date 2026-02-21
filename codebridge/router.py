@@ -611,6 +611,81 @@ class Router:
             },
         )
 
+    async def handle_reset_all_sessions(self, sink: ResponseSink) -> None:
+        """Reset all sessions across channels, cancelling queued work and killing active processes when possible."""
+        snapshots = await self.coordinator.snapshot_all()
+        status_by_key: dict[tuple[str, str], dict[str, object]] = {}
+        for channel_id, statuses in snapshots.items():
+            for st in statuses:
+                key = (channel_id, st.session or DEFAULT_SESSION)
+                entry = status_by_key.setdefault(key, {"queued_ids": [], "running": False})
+                if st.status == "queued":
+                    queued_ids = entry["queued_ids"]
+                    assert isinstance(queued_ids, list)
+                    queued_ids.append(st.job_id)
+                elif st.status == "running":
+                    entry["running"] = True
+
+        state = self.state.load()
+        targets: set[tuple[str, str]] = set(status_by_key.keys())
+        for channel_id, ch in state.channels.items():
+            for session in ch.sessions.keys():
+                targets.add((channel_id, session or DEFAULT_SESSION))
+
+        if not targets:
+            await self.reply(sink, "Reset all sessions: no sessions, queued jobs, or running jobs were found.")
+            return
+
+        cancelled_jobs = 0
+        killed_processes = 0
+        removed_sessions = 0
+        blocked_running = 0
+        processed_sessions = 0
+
+        for channel_id, session in sorted(targets):
+            session = normalize_session(session or DEFAULT_SESSION)
+            meta = status_by_key.get((channel_id, session), {"queued_ids": [], "running": False})
+            queued_ids = list(meta.get("queued_ids", []))
+            running_job = bool(meta.get("running", False))
+
+            for job_id in queued_ids:
+                if await self.coordinator.cancel(channel_id, job_id):
+                    cancelled_jobs += 1
+
+            proc = await self.get_active(channel_id, session)
+            if proc is not None:
+                await proc.kill()
+                killed_processes += 1
+            elif running_job:
+                blocked_running += 1
+                continue
+
+            removed = await self.coordinator.reset_session(channel_id, session)
+            self.clear_awaiting_input(channel_id, session)
+            processed_sessions += 1
+            if removed:
+                removed_sessions += 1
+
+        details = [
+            f"cleared stored context for {removed_sessions} session(s)",
+            f"killed {killed_processes} active process(es)",
+            f"cancelled {cancelled_jobs} queued job(s)",
+        ]
+        if blocked_running:
+            details.append(f"skipped {blocked_running} non-interruptible running session(s)")
+        await self.reply(sink, "Reset all sessions: " + ", ".join(details) + ".")
+        self.logger.info(
+            "session.reset_all",
+            extra={
+                "targets": len(targets),
+                "processed_sessions": processed_sessions,
+                "removed_sessions": removed_sessions,
+                "killed_processes": killed_processes,
+                "cancelled_jobs": cancelled_jobs,
+                "blocked_running": blocked_running,
+            },
+        )
+
     async def handle_stats(self, sink: ResponseSink, session: str) -> None:
         """Show token usage stats for a session."""
         stats = self._usage.get(sink.channel_id, {}).get(session)

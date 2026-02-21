@@ -54,6 +54,7 @@ class _FakeRouter:
         self.last_gh = None
         self.last_answer = None
         self.last_updates = None
+        self.reset_all_calls = 0
 
     def _transport_prefix(self, event: MessageEvent) -> str:
         if event.platform == "telegram":
@@ -151,6 +152,10 @@ class _FakeRouter:
     async def handle_updates(self, sink, repo_path: str) -> None:
         self.last_updates = repo_path
         await sink.send(f"updates@{repo_path}")
+
+    async def handle_reset_all_sessions(self, sink) -> None:
+        self.reset_all_calls += 1
+        await sink.send("Reset all sessions: cleared stored context for 0 session(s), killed 0 active process(es), cancelled 0 queued job(s).")
 
 
 class _FakeCoordinator:
@@ -525,3 +530,96 @@ def test_dm_answer_command_relays_without_repo_binding(tmp_path):
 
     assert router.last_answer is not None
     assert router.last_answer["text"] == "yes"
+
+
+def test_dm_admin_reset_all_executes_for_discord_admin(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.discord.prefix = "!c"
+    cfg.discord.dm_admin_enabled = True
+    cfg.discord.allowed_user_ids = ["user"]
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+
+    store = Store(cfg.state.data_dir)
+    router = _FakeRouter(cfg, store)
+    sink = _FakeSink("dm-1")
+    event = MessageEvent(
+        platform="discord",
+        content="!c reset all",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    async def run():
+        await dm_admin.handle_dm_message(router, event, sink)
+
+    asyncio.run(run())
+
+    assert router.reset_all_calls == 1
+    assert any("Reset all sessions:" in msg for msg in sink.sent)
+
+
+def test_dm_admin_reset_all_requires_all_keyword(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.discord.prefix = "!c"
+    cfg.discord.dm_admin_enabled = True
+    cfg.discord.allowed_user_ids = ["user"]
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+
+    store = Store(cfg.state.data_dir)
+    router = _FakeRouter(cfg, store)
+    sink = _FakeSink("dm-1")
+    event = MessageEvent(
+        platform="discord",
+        content="!c reset",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    async def run():
+        await dm_admin.handle_dm_message(router, event, sink)
+
+    asyncio.run(run())
+
+    assert router.reset_all_calls == 0
+    assert any("Usage: !c reset all" in msg for msg in sink.sent)
+
+
+def test_dm_admin_reset_all_rejected_for_non_admin(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.discord.prefix = "!c"
+    cfg.discord.dm_admin_enabled = True
+    cfg.discord.allowed_user_ids = ["someone-else"]
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+
+    store = Store(cfg.state.data_dir)
+    router = _FakeRouter(cfg, store)
+    sink = _FakeSink("dm-1")
+    event = MessageEvent(
+        platform="discord",
+        content="!c reset all",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    async def run():
+        await dm_admin.handle_dm_message(router, event, sink)
+
+    asyncio.run(run())
+
+    assert router.reset_all_calls == 0
+    assert any("You are not allowed to use DM admin commands." in msg for msg in sink.sent)
