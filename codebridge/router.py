@@ -549,6 +549,51 @@ class Router:
         self.update_state(sink.channel_id, session, repo_name, repo_path, thread_id, "", "")
         await self.reply(sink, f"Thread id for session '{session}' set to {thread_id}")
 
+    async def handle_reset_session(self, sink: ResponseSink, channel_id: str, session: str) -> None:
+        """Reset a session by clearing persisted context and session-local runtime state."""
+        session = normalize_session(session or DEFAULT_SESSION)
+        statuses = await self.coordinator.snapshot(channel_id)
+        queued_ids = [s.job_id for s in statuses if s.status == "queued" and (s.session or DEFAULT_SESSION) == session]
+        for job_id in queued_ids:
+            await self.coordinator.cancel(channel_id, job_id)
+
+        running_job = any(s.status == "running" and (s.session or DEFAULT_SESSION) == session for s in statuses)
+        proc = await self.get_active(channel_id, session)
+        killed = False
+        if proc is not None:
+            await proc.kill()
+            killed = True
+        elif running_job:
+            await self.reply_forbidden(
+                sink,
+                f"Session '{session}' has a running non-interruptible job. Retry reset after it finishes.",
+            )
+            return
+
+        removed = await self.coordinator.reset_session(channel_id, session)
+        self.clear_awaiting_input(channel_id, session)
+
+        details = []
+        if removed:
+            details.append("cleared stored context")
+        else:
+            details.append("no stored context was found")
+        if killed:
+            details.append("killed active process")
+        if queued_ids:
+            details.append(f"cancelled {len(queued_ids)} queued job(s)")
+        await self.reply(sink, f"Session '{session}' reset: {', '.join(details)}.")
+        self.logger.info(
+            "session.reset",
+            extra={
+                "channel_id": channel_id,
+                "session": session,
+                "removed": removed,
+                "killed": killed,
+                "cancelled_jobs": len(queued_ids),
+            },
+        )
+
     async def handle_stats(self, sink: ResponseSink, session: str) -> None:
         """Show token usage stats for a session."""
         stats = self._usage.get(sink.channel_id, {}).get(session)

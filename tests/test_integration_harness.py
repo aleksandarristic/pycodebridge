@@ -310,6 +310,47 @@ def test_integration_kill(tmp_path):
     assert runner.last_proc.killed is True
 
 
+def test_integration_reset_session_clears_context_and_allows_fresh_start(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        first_proc = None
+        for _ in range(100):
+            first_proc = await router.get_active("chan", "default")
+            if first_proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        assert first_proc is not None
+
+        await router.handle_message(_discord_event("!c reset", "codex-repo"), sink)
+        for _ in range(100):
+            if await router.get_active("chan", "default") is None:
+                break
+            await asyncio.sleep(0.01)
+        assert first_proc.killed is True
+
+        state = router.state.load()
+        ch = state.channels.get("chan")
+        assert ch is not None
+        assert "default" not in ch.sessions
+
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        for _ in range(200):
+            if len(runner.calls) >= 2:
+                break
+            await asyncio.sleep(0.01)
+
+    asyncio.run(run())
+    assert len(runner.calls) >= 2
+    assert not any("already exists" in msg for msg, _, _ in sink.sent)
+
+
 def test_integration_resume_and_download(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()

@@ -51,3 +51,23 @@ def test_session_service_update_state_normalizes_repo_name(tmp_path):
     service.update_state("chan", "default", "ProbablyFine", "/tmp/ProbablyFine", "thread", "", "")
     state = store.load()
     assert state.channels["chan"].sessions["default"].repo_name == "probablyfine"
+
+
+def test_session_service_reset_session_clears_state_and_runtime(tmp_path):
+    store = Store(str(tmp_path))
+    cfg = config.Config()
+    service = SessionService(store, cfg)
+    service.update_state("chan", "default", "repo", "/tmp/repo", "thread-1", "", "")
+
+    async def run():
+        proc = object()
+        await service.set_active("chan", "default", proc)
+        service.update_activity("chan", "default")
+        removed = await service.reset_session("chan", "default")
+        assert removed is True
+        assert await service.get_active("chan", "default") is None
+        assert service.get_activity("chan", "default") is None
+
+    asyncio.run(run())
+    state = store.load()
+    assert "default" not in state.channels["chan"].sessions

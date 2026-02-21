@@ -33,6 +33,7 @@ def test_command_registry_help_text():
     assert "unlock [gh|all] [status|ttl] — unlock command scopes for your account (status is open) [totp] (aliases: ul)" in text
     assert "lock [gh|all] — clear unlock scopes for your account [open] (aliases: lk)" in text
     assert "use <session> — set your sticky session [unlock/default] (aliases: select)" in text
+    assert "reset [session] — reset session context [unlock/default]" in text
     assert "create — create repo in code_root and git init [totp] (aliases: createrepo, new)" in text
     assert "Repo helpers:" in text
     assert "git <status|log|branches|show|diff|pull|commit|push|merge> — git helpers [mixed]" in text

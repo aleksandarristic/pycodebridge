@@ -181,17 +181,23 @@ class Runner:
         sandbox: str,
         base_env: Optional[Dict[str, str]] = None,
         ask_for_approval: str = "",
+        network_access: bool = False,
     ) -> None:
         self.binary = binary or "codex"
         self.sandbox = sandbox or "workspace-write"
         self.base_env = base_env or {}
         self.ask_for_approval = (ask_for_approval or "").strip()
+        self.network_access = bool(network_access)
 
     def _base_exec_args(self, repo_path: str) -> list[str]:
         args: list[str] = []
+        if self.sandbox:
+            args += ["-c", f"sandbox_mode={_toml_string(self.sandbox)}"]
         if self.ask_for_approval:
-            args += ["-a", self.ask_for_approval]
-        args += ["exec", "--json", "--cd", repo_path, "--sandbox", self.sandbox]
+            args += ["-c", f"approval_policy={_toml_string(self.ask_for_approval)}"]
+        if self.network_access and self.sandbox == "workspace-write":
+            args += ["-c", "sandbox_workspace_write.network_access=true"]
+        args += ["exec", "--json", "--cd", repo_path]
         return args
 
     def build_start_args(self, repo_path: str, prompt: str, model: str, reasoning_effort: str) -> list[str]:
@@ -336,6 +342,11 @@ def _merge_env(base: Dict[str, str], extra: Dict[str, str]) -> Dict[str, str]:
     env.update(base or {})
     env.update(extra or {})
     return env
+
+
+def _toml_string(value: str) -> str:
+    """Return a TOML-safe quoted string for --config overrides."""
+    return json.dumps(value or "")
 
 
 def _reasoning_args(reasoning_effort: str) -> list[str]:

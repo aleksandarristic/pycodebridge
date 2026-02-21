@@ -77,6 +77,7 @@ class CodexConfig:
     code_root: str = ""
     sandbox: str = DEFAULT_SANDBOX
     ask_for_approval: str = ""
+    network_access: bool = False
     json: bool = True
     start_prompt: str = DEFAULT_START_PROMPT
     model: str = ""
@@ -219,6 +220,7 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.codex.code_root = codex.get("code_root", cfg.codex.code_root)
     cfg.codex.sandbox = codex.get("sandbox", cfg.codex.sandbox)
     cfg.codex.ask_for_approval = codex.get("ask_for_approval", cfg.codex.ask_for_approval)
+    cfg.codex.network_access = bool(codex.get("network_access", cfg.codex.network_access))
     cfg.codex.json = bool(codex.get("json", cfg.codex.json))
     cfg.codex.start_prompt = codex.get("start_prompt", cfg.codex.start_prompt)
     cfg.codex.model = codex.get("model", cfg.codex.model)
@@ -274,6 +276,7 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.codex.sandbox = DEFAULT_SANDBOX
     if cfg.codex.ask_for_approval is None:
         cfg.codex.ask_for_approval = ""
+    cfg.codex.network_access = bool(cfg.codex.network_access)
     if not cfg.codex.start_prompt:
         cfg.codex.start_prompt = DEFAULT_START_PROMPT
     if cfg.codex.env is None:

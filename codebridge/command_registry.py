@@ -176,6 +176,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec("model", "model [session] <id> [reasoning]", "set session model", "Sessions", _cmd_model, AUTH_UNLOCK, aliases=("mdl",)),
         CommandSpec("models", "models [session]", "list available models via /model", "Sessions", _cmd_models, AUTH_OPEN, aliases=("mdls",)),
         CommandSpec("thread", "thread [session] <id>", "set thread id", "Sessions", _cmd_thread, AUTH_UNLOCK, aliases=("tid",)),
+        CommandSpec("reset", "reset [session]", "reset session context", "Sessions", _cmd_reset, AUTH_UNLOCK),
         CommandSpec("spec", "spec [session]", "capture repo spec and tasks", "Sessions", _cmd_spec, AUTH_UNLOCK, aliases=("plan",)),
         CommandSpec(
             "create",
@@ -543,6 +544,13 @@ async def _cmd_thread(router: Any, message: MessageEvent, sink: ResponseSink, re
         if not session_name:
             return
     await router.handle_thread(sink, session_name, repo_name, repo_path, thread_id)
+
+
+async def _cmd_reset(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    session = await _resolve_session_name(router, message, sink, rest.strip())
+    if not session:
+        return
+    await router.handle_reset_session(sink, message.channel_id, session)
 
 
 async def _cmd_spec(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

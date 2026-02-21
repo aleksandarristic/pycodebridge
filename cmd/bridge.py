@@ -63,7 +63,13 @@ async def main() -> None:
 
         redactor = Redactor(cfg.audit.redact_patterns)
     audit_logger = AuditLogger(cfg.state.log_dir, redactor=redactor)
-    runner = Runner(cfg.codex.binary, cfg.codex.sandbox, cfg.codex.env, cfg.codex.ask_for_approval)
+    runner = Runner(
+        cfg.codex.binary,
+        cfg.codex.sandbox,
+        cfg.codex.env,
+        cfg.codex.ask_for_approval,
+        cfg.codex.network_access,
+    )
     coordinator = SessionCoordinator(state_store, cfg)
     router = Router(cfg, state_store, audit_logger, runner, coordinator, logger)
 

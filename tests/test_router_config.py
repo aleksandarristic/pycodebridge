@@ -7,6 +7,7 @@ def test_render_config_text_includes_core_fields():
     cfg.codex.code_root = "/tmp/code"
     cfg.codex.sandbox = "workspace-write"
     cfg.codex.ask_for_approval = "on-request"
+    cfg.codex.network_access = True
     cfg.codex.model = "gpt-test"
     cfg.codex.model_reasoning_effort = "medium"
     cfg.discord.prefix = "!c"
@@ -25,6 +26,7 @@ def test_render_config_text_includes_core_fields():
     assert "code_root: /tmp/code" in text
     assert "sandbox: workspace-write" in text
     assert "ask_for_approval: on-request" in text
+    assert "network_access: True" in text
     assert "model: gpt-test" in text
     assert "model_reasoning_effort: medium" in text
     assert "prefix: !c" in text

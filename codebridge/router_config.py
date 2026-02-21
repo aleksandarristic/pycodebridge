@@ -11,6 +11,7 @@ def render_config_text(cfg: Config) -> str:
         f"code_root: {cfg.codex.code_root}\n"
         f"sandbox: {cfg.codex.sandbox}\n"
         f"ask_for_approval: {cfg.codex.ask_for_approval}\n"
+        f"network_access: {cfg.codex.network_access}\n"
         f"model: {cfg.codex.model}\n"
         f"model_reasoning_effort: {cfg.codex.model_reasoning_effort}\n"
         f"prefix: {cfg.discord.prefix}\n"

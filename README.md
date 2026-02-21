@@ -85,6 +85,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `code_root` (required) — directory containing git repos.
 - `sandbox` (default `workspace-write`) — Codex sandbox mode.
 - `ask_for_approval` (default empty) — optional Codex approval policy (`untrusted|on-failure|on-request|never`).
+- `network_access` (default `false`) — when `true` and sandbox is `workspace-write`, add `-c sandbox_workspace_write.network_access=true`.
 - `json` (default `true`) — JSONL streaming output (required).
 - `start_prompt` (default template) — prompt used for new sessions.
 - `model` (default empty) — default model; override per session with `!c model`.
@@ -149,6 +150,7 @@ TOTP required unless the chat is unlocked:
 - `!c use <session>` (alias `select`)
 - `!c model [session] <id> [reasoning]`
 - `!c thread [session] <id>`
+- `!c reset [session]`
 - `!c spec [session]`
 - `!c stop [session]`
 - `!c kill [session]`
@@ -184,7 +186,7 @@ Security:
 
 Sessions:
 - `start` (alias: `run`), `resume` (alias: `rs`), `choose` (alias: `pick`) `[unlock/default]`
-- `use` (alias: `select`), `model` (alias: `mdl`), `models` (alias: `mdls`), `thread` (alias: `tid`), `spec` (alias: `plan`) (`models` is `[open]`, others `[unlock/default]`)
+- `use` (alias: `select`), `model` (alias: `mdl`), `models` (alias: `mdls`), `thread` (alias: `tid`), `reset`, `spec` (alias: `plan`) (`models` is `[open]`, others `[unlock/default]`)
 
 Repo lifecycle:
 - `create` (aliases: `createrepo`, `new`) `[totp]`

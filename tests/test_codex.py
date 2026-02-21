@@ -19,7 +19,19 @@ def test_parse_event_error_message():
 def test_runner_build_args_include_approval_policy():
     runner = Runner("codex", "workspace-write", {}, "on-request")
     args = runner.build_start_args("/tmp/repo", "hello", "", "")
-    assert "-a" in args
-    idx = args.index("-a")
-    assert args[idx + 1] == "on-request"
-    assert args[idx + 2] == "exec"
+    assert "-c" in args
+    assert 'sandbox_mode="workspace-write"' in args
+    assert 'approval_policy="on-request"' in args
+    assert "exec" in args
+
+
+def test_runner_build_args_include_workspace_network_override_when_enabled():
+    runner = Runner("codex", "workspace-write", {}, "on-request", network_access=True)
+    args = runner.build_start_args("/tmp/repo", "hello", "", "")
+    assert "sandbox_workspace_write.network_access=true" in args
+
+
+def test_runner_build_args_skip_workspace_network_override_when_not_workspace_write():
+    runner = Runner("codex", "read-only", {}, "on-request", network_access=True)
+    args = runner.build_start_args("/tmp/repo", "hello", "", "")
+    assert "sandbox_workspace_write.network_access=true" not in args

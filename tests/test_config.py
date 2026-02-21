@@ -218,3 +218,31 @@ def test_load_config_codex_approval_policy_validation(tmp_path, monkeypatch):
         assert False, "expected ValueError"
     except ValueError as exc:
         assert "codex.ask_for_approval" in str(exc)
+
+
+def test_load_config_codex_network_access_toggle(tmp_path, monkeypatch):
+    code_root = tmp_path / "code"
+    data_dir = tmp_path / "data"
+    code_root.mkdir()
+    data_dir.mkdir()
+
+    monkeypatch.setenv("CODE_ROOT", str(code_root))
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        """
+        discord:
+          guild_id: "123"
+          allowed_user_ids: ["1"]
+        codex:
+          code_root: "$CODE_ROOT"
+          network_access: true
+        state:
+          data_dir: "%DATA_DIR%"
+          log_dir: "%DATA_DIR%/logs"
+        """,
+        encoding="utf-8",
+    )
+    cfg = cfgmod.load(str(cfg_path))
+    assert cfg.codex.network_access is True

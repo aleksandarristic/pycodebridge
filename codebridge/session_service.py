@@ -84,6 +84,36 @@ class SessionService:
             return None
         return conflict
 
+    async def reset_session(self, channel_id: str, session: str) -> bool:
+        """Reset in-memory and persistent context for a single session."""
+        async with self._lock:
+            active = self._active.get(channel_id)
+            if active is not None:
+                active.pop(session, None)
+                if not active:
+                    self._active.pop(channel_id, None)
+            self._pending.pop(f"{channel_id}:{session}", None)
+            activity = self._activity.get(channel_id)
+            if activity is not None:
+                activity.pop(session, None)
+                if not activity:
+                    self._activity.pop(channel_id, None)
+
+        removed = False
+
+        def mutator(fs):
+            nonlocal removed
+            ch = fs.channels.get(channel_id)
+            if ch is None:
+                return
+            if session in ch.sessions:
+                removed = True
+                del ch.sessions[session]
+            fs.channels[channel_id] = ch
+
+        self._state.update(mutator)
+        return removed
+
     def update_state(
         self,
         channel_id: str,

@@ -64,6 +64,9 @@ class SessionCoordinator:
     async def consume_pending(self, channel_id: str, session: str) -> Optional[PendingConflict]:
         return await self._sessions.consume_pending(channel_id, session)
 
+    async def reset_session(self, channel_id: str, session: str) -> bool:
+        return await self._sessions.reset_session(channel_id, session)
+
     def update_state(
         self,
         channel_id: str,

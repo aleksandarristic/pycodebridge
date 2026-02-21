@@ -59,3 +59,14 @@ def test_coordinator_queue_rerun(tmp_path):
         assert rerun_id != job_id
 
     asyncio.run(run())
+
+
+def test_coordinator_reset_session(tmp_path):
+    coord = _make_coordinator(tmp_path)
+    coord.update_state("chan", "sess", "repo", "/tmp/repo", "thread-1", "", "")
+
+    async def run():
+        removed = await coord.reset_session("chan", "sess")
+        assert removed is True
+
+    asyncio.run(run())
