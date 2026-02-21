@@ -679,6 +679,43 @@ def test_integration_help_command_details(tmp_path):
     assert any("!c git status" in t for t in texts)
 
 
+def test_integration_repo_help_is_chunked_for_discord_limit(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    router.cfg.discord.max_discord_message_chars = 250
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!help", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert len(texts) > 1
+    assert any("Commands:" in t for t in texts)
+
+
+def test_integration_repo_help_chunks_stay_within_limit_with_lock_prefix(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    router.cfg.discord.max_discord_message_chars = 120
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!help", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert len(texts) > 1
+    assert all(len(t) <= 120 for t in texts)
+    assert all(t.startswith("🔒 ") for t in texts if t)
+
+
 def test_integration_dm_shortcuts_and_help_details(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()

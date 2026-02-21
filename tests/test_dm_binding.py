@@ -673,3 +673,17 @@ def test_dm_admin_reset_all_rejected_for_non_admin(tmp_path):
 
     assert router.reset_all_calls == 0
     assert any("You are not allowed to use DM admin commands." in msg for msg in sink.sent)
+
+
+def test_dm_prefixed_sink_chunks_within_limit():
+    sink = _FakeSink("dm-1")
+    prefixed = dm_admin._PrefixedSink(sink, "repo", 20)
+
+    async def run():
+        await prefixed.send("abcdefghijklmnopqrstuvwxyz")
+
+    asyncio.run(run())
+
+    assert len(sink.sent) > 1
+    assert all(msg.startswith("[repo] ") for msg in sink.sent)
+    assert all(len(msg) <= 20 for msg in sink.sent)

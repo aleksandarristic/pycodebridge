@@ -22,6 +22,8 @@ from ..router_helpers import (
 from ..state import utc_now_iso
 from ..transport import Capabilities, MessageEvent, ResponseSink
 from ..util import path as pathutil
+from ..util.ansi import strip_control_codes
+from ..util.chunk import chunk_text
 
 if TYPE_CHECKING:
     from ..router import Router
@@ -47,13 +49,18 @@ _DM_SHORTCUT_COMMANDS = {"gh", "help", "lock", "status", "unlock", "updates"}
 class _PrefixedSink:
     """Response sink wrapper that prefixes messages with a repo name."""
 
-    def __init__(self, sink: ResponseSink, repo_name: str) -> None:
+    def __init__(self, sink: ResponseSink, repo_name: str, max_chars: int) -> None:
         self._sink = sink
         self._repo_name = repo_name
+        self._max_chars = max_chars
         self.channel_id = sink.channel_id
 
     async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
-        await self._sink.send(f"[{self._repo_name}] {content}", thread_id=thread_id, reply_to_id=reply_to_id)
+        prefix = f"[{self._repo_name}] "
+        text = strip_control_codes(content or "")
+        budget = max(self._max_chars - len(prefix), 1)
+        for chunk in chunk_text(text, budget):
+            await self._sink.send(f"{prefix}{chunk}", thread_id=thread_id, reply_to_id=reply_to_id)
 
     def capabilities(self) -> Capabilities:
         return self._sink.capabilities()
@@ -340,7 +347,11 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
     if not content.startswith(prefix):
         relay_session, ambiguous = await router.pending_input_session(event)
         if ambiguous:
-            await sink.send(forbidden_message("Multiple sessions are waiting for input. Use `!c answer <session> -- <text>`."))
+            await send_reply(
+                sink,
+                forbidden_message("Multiple sessions are waiting for input. Use `!c answer <session> -- <text>`."),
+                router.cfg.discord.max_discord_message_chars,
+            )
             return
         if relay_session and not event.attachments:
             relay_text = content.strip()
@@ -353,16 +364,20 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
             await router.handle_answer(event, sink, relay_session, relay_text)
             return
         if not router._transport_user_allowed(event):
-            await sink.send(forbidden_message("You are not allowed to use this bot."))
+            await send_reply(sink, forbidden_message("You are not allowed to use this bot."), router.cfg.discord.max_discord_message_chars)
             return
         bound_repo = router.get_dm_binding(event)
         if not bound_repo:
-            await sink.send("No repo bound. Send `!c repos` to list and then `!c bind <repo>` to bind a repo. Send `!c help` for instructions.")
+            await send_reply(
+                sink,
+                "No repo bound. Send `!c repos` to list and then `!c bind <repo>` to bind a repo. Send `!c help` for instructions.",
+                router.cfg.discord.max_discord_message_chars,
+            )
             return
         try:
             repo_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, bound_repo)
         except Exception as exc:
-            await sink.send(forbidden_message(f"Repo error: {exc}"))
+            await send_reply(sink, forbidden_message(f"Repo error: {exc}"), router.cfg.discord.max_discord_message_chars)
             return
         if event.attachments:
             if router._totp_enabled(event):
@@ -372,7 +387,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
             await router.handle_upload_request(event, sink, bound_repo, repo_path)
             return
         session = router.current_session_for_user(event.author_id, event.channel_id)
-        prefixed_sink = _PrefixedSink(sink, bound_repo)
+        prefixed_sink = _PrefixedSink(sink, bound_repo, router.cfg.discord.max_discord_message_chars)
         if router._totp_enabled(event) and not router._totp_is_unlocked(event):
             ok, content = await router.require_totp(event, sink, "resume", content)
             if not ok:
@@ -592,7 +607,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
                 await send_forbidden(f"Repo error: {exc}")
                 return
             session = router.current_session_for_user(event.author_id, event.channel_id)
-            prefixed_sink = _PrefixedSink(sink, repo_name)
+            prefixed_sink = _PrefixedSink(sink, repo_name, router.cfg.discord.max_discord_message_chars)
             router.logger.info(
                 "dm.repo",
                 extra={"platform": event.platform, "user_id": event.author_id, "repo": repo_name, "session": session},
@@ -678,7 +693,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         await send_forbidden(f"Repo error: {exc}")
         return
     session = router.current_session_for_user(event.author_id, event.channel_id)
-    prefixed_sink = _PrefixedSink(sink, bound_repo)
+    prefixed_sink = _PrefixedSink(sink, bound_repo, router.cfg.discord.max_discord_message_chars)
     if router._totp_enabled(event) and not router._totp_is_unlocked(event):
         ok, cmdline = await router.require_totp(event, sink, "resume", cmdline)
         if not ok:

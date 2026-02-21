@@ -1771,7 +1771,7 @@ class Router:
         if thread_id or reply_to_id:
             wrapped = _ThreadContextSink(wrapped, thread_id, reply_to_id)
         if self._totp_enabled(event):
-            wrapped = _LockStateSink(wrapped, lambda: self._lock_emoji_for_event(event))
+            wrapped = _LockStateSink(wrapped, lambda: self._lock_emoji_for_event(event), self.cfg.discord.max_discord_message_chars)
         return wrapped
 
     def _lock_emoji_for_event(self, event: MessageEvent) -> str:
@@ -2018,17 +2018,22 @@ class _ThreadContextSink:
 class _LockStateSink:
     """Wrap a sink and prefix messages with lock state emoji."""
 
-    def __init__(self, sink: ResponseSink, emoji_fn) -> None:
+    def __init__(self, sink: ResponseSink, emoji_fn, max_chars: int) -> None:
         self._sink = sink
         self._emoji_fn = emoji_fn
+        self._max_chars = max_chars
         self.channel_id = sink.channel_id
 
     async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
         emoji = self._emoji_fn() or ""
         text = content or ""
-        if emoji:
-            text = f"{emoji} {text}" if text else emoji
-        await self._sink.send(text, thread_id=thread_id, reply_to_id=reply_to_id)
+        if not emoji:
+            await self._sink.send(text, thread_id=thread_id, reply_to_id=reply_to_id)
+            return
+        prefix = f"{emoji} "
+        budget = max(self._max_chars - len(prefix), 1)
+        for chunk in chunk_text(text, budget):
+            await self._sink.send(f"{prefix}{chunk}", thread_id=thread_id, reply_to_id=reply_to_id)
 
     def capabilities(self) -> Capabilities:
         return self._sink.capabilities()
