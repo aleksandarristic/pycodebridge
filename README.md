@@ -107,7 +107,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `adapter` (default `discord`) — transport adapter to use (`discord`/`telegram` supported; `slack` scaffold only).
 
 ### `repo_bootstrap`
-- `agents_template` (default empty) — optional AGENTS.md template for `!c createrepo`.
+- `agents_template` (default empty) — optional AGENTS.md template for `!c create`.
 - `spec_prompt` (default template) — prompt used by `!c spec`.
 
 ## Commands
@@ -124,8 +124,8 @@ TOTP not required (read-only in channel):
 - `!c stats [session]`
 - `!c peek [session]`
 - `!c models [session]`
-- `!c showrepo`
-- `!c showchanges`
+- `!c show` (alias: `showrepo`)
+- `!c changes` (alias: `showchanges`)
 - `!c ps`
 - `!c unlock [gh|all] status`
 - `!c lock [gh|all]`
@@ -133,9 +133,9 @@ TOTP not required (read-only in channel):
 
 TOTP always required (high-risk in channel):
 - `!c unlock [gh|all] [ttl]`
-- `!c createrepo`
-- `!c clonerepo <url>`
-- `!c copyrepo <newname>`
+- `!c create` (aliases: `createrepo`, `new`)
+- `!c clone <url>` (alias: `clonerepo`)
+- `!c copy <newname>` (aliases: `copyrepo`, `cp`)
 - `!c git` write commands (`pull`, `commit`, `push`, `merge`, etc.)
 - Upload flows (attachment submit and upload-path response)
 
@@ -166,46 +166,43 @@ TOTP required unless the chat is unlocked:
 - Any other prompt-style `!c ...` command that is not in the read-only list
 - Plain prompts in mapped channels when `allow_plain_prompts: true`
 
+Auth tags used by `!c help`:
+- `[open]` no TOTP needed.
+- `[unlock/default]` requires default unlock (or `--totp`).
+- `[unlock/gh]` requires gh unlock (or `--totp`).
+- `[totp]` always requires `--totp`.
+- `[mixed]` depends on subcommand (for `git`).
+
 General:
-- `!c help`, `!c status`, `!c config`, `!c stats [session]`, `!c peek [session]`
-- `!c unlock [gh|all] [status|ttl]`, `!c lock [gh|all]`
+- `help` (alias: `commands`) `[open]`
+- `status` (alias: `st`), `stats` (alias: `usage`), `peek` (alias: `pk`) `[open]`
+- `config` (alias: `cfg`) `[unlock/default]`
+
+Security:
+- `unlock` (alias: `ul`) `[totp]` (`unlock ... status` is `[open]`)
+- `lock` (alias: `lk`) `[open]`
 
 Sessions:
-- `!c start [session]`
-- `!c resume [session] [prompt]`
-- `!c choose [session] resume|replace|cancel`
-- `!c use <session>` (alias `select`)
-- `!c model [session] <id>`
-- `!c thread [session] <id>`
+- `start` (alias: `run`), `resume` (alias: `rs`), `choose` (alias: `pick`) `[unlock/default]`
+- `use` (alias: `select`), `model` (alias: `mdl`), `models` (alias: `mdls`), `thread` (alias: `tid`), `spec` (alias: `plan`) (`models` is `[open]`, others `[unlock/default]`)
 
-Repo bootstrap:
-- `!c createrepo`
-- `!c clonerepo <url>`
-- `!c copyrepo <newname>`
-- `!c spec [session]`
+Repo lifecycle:
+- `create` (aliases: `createrepo`, `new`) `[totp]`
+- `clone` (alias: `clonerepo`) `[totp]`
+- `copy` (aliases: `copyrepo`, `cp`) `[totp]`
 
 Run control:
-- `!c stop [session]` (ESC then SIGINT)
-- `!c kill [session]`
-- `!c /quit [session]`
-- `!c answer [session] -- <text>` or `!c answer <text>`
-- `!c approve [session]`
-- `!c deny [session]`
-- `!c wait`
+- `stop`, `kill`, `/quit`, `answer` (alias: `reply`), `approve`, `deny`, `wait` `[unlock/default]`
 
 Repo helpers:
-- `!c showrepo`
-- `!c showchanges`
-- `!c tests`
-- `!c git <status|log|branches|show|diff|pull|commit|push|merge> [...]`
-- `!c gh <args>` (example: `!c gh repo sync`)
-- `!c download <path>`
+- `show` (aliases: `showrepo`, `tree`), `changes` (alias: `showchanges`) `[open]`
+- `tests` (alias: `test`), `download` (alias: `dl`) `[unlock/default]`
+- `git` `[mixed]`
+- `gh` `[unlock/gh]` (example: `!c gh repo sync`)
 
 Queue:
-- `!c logs [session] [n]`
-- `!c ps`
-- `!c cancel <job-id>`
-- `!c rerun`
+- `logs` (alias: `log`), `cancel` (alias: `drop`), `rerun` (alias: `retry`) `[unlock/default]`
+- `ps` `[open]`
 
 Passthrough:
 - Any other `!c` text is sent as a prompt to Codex.
@@ -220,19 +217,19 @@ Repo names passed to DM commands are normalized to lowercase (for example, `Prob
 - `!c sessions`
 - `!c status`
 - `!c config`
-- `!c createrepo <name>`
-- `!c clonerepo <name> <url>`
-- `!c copyrepo <from> <to>`
-- `!c deleterepo <name>` (alias: `delete`)
-- `!c renamerepo <from> <to>` (alias: `rename`)
-- `!c unlock [gh|all] [status|ttl]`
-- `!c lock [gh|all]`
+- `!c create/new <name>` (legacy: `createrepo`)
+- `!c clone <name> <url>` (legacy: `clonerepo`)
+- `!c copy/cp <from> <to>` (legacy: `copyrepo`)
+- `!c deleterepo/del <name>`
+- `!c renamerepo/ren <from> <to>`
+- `!c unlock/ul [gh|all] [status|ttl]`
+- `!c lock/lk [gh|all]`
 
 When `discord.totp_enabled: true`, TOTP is always required in DMs for:
 - `!c unlock [gh|all] [ttl]`
-- `!c createrepo <name>`
-- `!c clonerepo <name> <url>`
-- `!c copyrepo <from> <to>`
+- `!c create <name>` / `!c createrepo <name>` / `!c new <name>`
+- `!c clone <name> <url>` / `!c clonerepo <name> <url>`
+- `!c copy <from> <to>` / `!c copyrepo <from> <to>` / `!c cp <from> <to>`
 - `!c deleterepo <name>` / `!c delete <name>`
 - `!c renamerepo <from> <to>` / `!c rename <from> <to>`
 - DM upload flows (attachment submit and upload-path response)

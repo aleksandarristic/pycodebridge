@@ -120,7 +120,7 @@ class FilesConfig:
 
 
 class RepoBootstrapConfig:
-    """Repo bootstrap configuration for createrepo/spec flows."""
+    """Repo bootstrap configuration for create/spec flows."""
     agents_template: str = ""
     spec_prompt: str = DEFAULT_SPEC_PROMPT
 

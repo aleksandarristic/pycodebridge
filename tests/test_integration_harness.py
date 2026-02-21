@@ -595,6 +595,28 @@ def test_totp_unlock_is_global_for_user_across_channels(tmp_path, monkeypatch):
     assert any("TOTP required for 'start'" in msg for msg, _, _ in sink.sent)
 
 
+def test_totp_replies_include_lock_emoji_prefix(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c status", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)}", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c status", "codex-repo"), sink)
+
+    asyncio.run(run())
+    messages = [msg for msg, _, _ in sink.sent]
+    assert any(msg.startswith("🔒 ") for msg in messages)
+    assert any(msg.startswith("🔓 ") for msg in messages)
+
+
 def test_totp_git_status_read_only_without_totp(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()

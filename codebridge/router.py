@@ -53,8 +53,8 @@ _READ_ONLY_COMMANDS = {
     "stats",
     "peek",
     "models",
-    "showrepo",
-    "showchanges",
+    "show",
+    "changes",
     "ps",
 }
 _GIT_READ_ONLY_SUBCOMMANDS = {"status", "log", "branches", "show", "diff"}
@@ -233,6 +233,7 @@ class Router:
         fields = cmdline.split()
         cmd = fields[0].lower()
         rest = cmdline[len(fields[0]) :].strip()
+        canonical_cmd = self._canonical_command(cmd)
         effective_cmd = "/quit" if len(fields) >= 2 and fields[1] == "/quit" else cmd
         if self._totp_enabled(event) and self._totp_required_for_command(event, effective_cmd, rest):
             ok, cmdline = await self.require_totp(event, sink, effective_cmd, cmdline)
@@ -243,6 +244,7 @@ class Router:
                 return
             cmd = fields[0].lower()
             rest = cmdline[len(fields[0]) :].strip()
+            canonical_cmd = self._canonical_command(cmd)
             effective_cmd = "/quit" if len(fields) >= 2 and fields[1] == "/quit" else cmd
         self.logger.info(
             "routing.command",
@@ -255,7 +257,7 @@ class Router:
                 "user_id": event.author_id,
             },
         )
-        if cmd == "createrepo":
+        if canonical_cmd == "create":
             try:
                 repo_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, repo_name)
             except Exception as exc:
@@ -928,8 +930,17 @@ class Router:
     def _totp_enabled(self, event: MessageEvent) -> bool:
         return self.cfg.discord.totp_enabled
 
-    def _totp_required_for_command(self, event: MessageEvent, cmd: str, rest: str) -> bool:
+    def _canonical_command(self, cmd: str) -> str:
         token = (cmd or "").strip().lower()
+        if not token:
+            return token
+        spec = self._command_registry.get(token)
+        if not spec:
+            return token
+        return spec.name
+
+    def _totp_required_for_command(self, event: MessageEvent, cmd: str, rest: str) -> bool:
+        token = self._canonical_command(cmd)
         if token == "lock":
             return False
         if token == "unlock" and self._unlock_status_requested(rest):
@@ -947,7 +958,7 @@ class Router:
         return True
 
     def _totp_command_is_high_risk(self, cmd: str, rest: str) -> bool:
-        if cmd in {"createrepo", "clonerepo", "copyrepo", "deleterepo", "delete", "renamerepo", "rename"}:
+        if cmd in {"create", "clone", "copy", "deleterepo", "delete", "renamerepo", "rename"}:
             return True
         if cmd == "git":
             subcmd = self._git_subcommand(rest)
@@ -1364,13 +1375,21 @@ class Router:
         await sink.update_pinned_status(user_id, session, text)
 
     def _contextual_sink(self, event: MessageEvent, sink: ResponseSink) -> ResponseSink:
+        wrapped: ResponseSink = sink
         thread_id = event.platform_thread_id or ""
         reply_to_id = ""
-        if not thread_id and sink.capabilities().replies:
+        if not thread_id and wrapped.capabilities().replies:
             reply_to_id = event.message_id or ""
-        if not thread_id and not reply_to_id:
-            return sink
-        return _ThreadContextSink(sink, thread_id, reply_to_id)
+        if thread_id or reply_to_id:
+            wrapped = _ThreadContextSink(wrapped, thread_id, reply_to_id)
+        if self._totp_enabled(event):
+            wrapped = _LockStateSink(wrapped, lambda: self._lock_emoji_for_event(event))
+        return wrapped
+
+    def _lock_emoji_for_event(self, event: MessageEvent) -> str:
+        if self._totp_is_unlocked(event, _UNLOCK_SCOPE_DEFAULT):
+            return "🔓"
+        return "🔒"
 
     def seed_agents_template(self, repo_path: str) -> None:
         """Seed AGENTS.md from a template when configured."""
@@ -1606,3 +1625,31 @@ class _ThreadContextSink:
         if not caps.replies:
             use_reply = None
         await self._sink.send_file(path, filename, thread_id=use_thread, reply_to_id=use_reply)
+
+
+class _LockStateSink:
+    """Wrap a sink and prefix messages with lock state emoji."""
+
+    def __init__(self, sink: ResponseSink, emoji_fn) -> None:
+        self._sink = sink
+        self._emoji_fn = emoji_fn
+        self.channel_id = sink.channel_id
+
+    async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
+        emoji = self._emoji_fn() or ""
+        text = content or ""
+        if emoji:
+            text = f"{emoji} {text}" if text else emoji
+        await self._sink.send(text, thread_id=thread_id, reply_to_id=reply_to_id)
+
+    def capabilities(self) -> Capabilities:
+        return self._sink.capabilities()
+
+    def typing(self):  # type: ignore[override]
+        return self._sink.typing()
+
+    async def update_pinned_status(self, user_id: str, session: str, text: str) -> None:
+        await self._sink.update_pinned_status(user_id, session, text)
+
+    async def send_file(self, path: str, filename: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
+        await self._sink.send_file(path, filename, thread_id=thread_id, reply_to_id=reply_to_id)

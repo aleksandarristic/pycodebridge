@@ -25,12 +25,26 @@ CommandHandler = Callable[[Any, MessageEvent, ResponseSink, str, str, str], Awai
 
 GROUP_ORDER = (
     "General",
+    "Security",
     "Sessions",
-    "Repo bootstrap",
+    "Repo lifecycle",
     "Run control",
     "Repo helpers",
     "Queue",
 )
+
+AUTH_OPEN = "open"
+AUTH_UNLOCK = "unlock"
+AUTH_UNLOCK_GH = "unlock-gh"
+AUTH_TOTP = "totp"
+AUTH_MIXED = "mixed"
+AUTH_LABELS = {
+    AUTH_OPEN: "open",
+    AUTH_UNLOCK: "unlock/default",
+    AUTH_UNLOCK_GH: "unlock/gh",
+    AUTH_TOTP: "totp",
+    AUTH_MIXED: "mixed",
+}
 
 _MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{1,63}$")
 _REASONING_ALIASES = {
@@ -125,64 +139,104 @@ class CommandSpec:
     description: str
     group: str
     handler: CommandHandler
+    auth: str
     aliases: Tuple[str, ...] = ()
 
 
 def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
     """Return a command registry and ordered spec list."""
     specs = [
-        CommandSpec("help", "help", "show this help", "General", _cmd_help),
-        CommandSpec("status", "status", "show repo path and sessions", "General", _cmd_status),
-        CommandSpec("stats", "stats [session]", "show usage totals", "General", _cmd_stats),
-        CommandSpec("peek", "peek [session]", "show active status and last output time", "General", _cmd_peek),
-        CommandSpec("unlock", "unlock [gh|all] [status|ttl]", "unlock command scopes for your account", "General", _cmd_unlock),
-        CommandSpec("lock", "lock [gh|all]", "clear unlock scopes for your account", "General", _cmd_lock),
-        CommandSpec("config", "config", "show effective config", "General", _cmd_config),
-        CommandSpec("start", "start [session]", "start a new Codex session", "Sessions", _cmd_start),
-        CommandSpec("resume", "resume [session] <prompt>", "resume with prompt", "Sessions", _cmd_resume),
+        CommandSpec("help", "help", "show this help", "General", _cmd_help, AUTH_OPEN, aliases=("commands",)),
+        CommandSpec("status", "status", "show repo path and sessions", "General", _cmd_status, AUTH_OPEN, aliases=("st",)),
+        CommandSpec("stats", "stats [session]", "show usage totals", "General", _cmd_stats, AUTH_OPEN, aliases=("usage",)),
+        CommandSpec("peek", "peek [session]", "show active status and last output time", "General", _cmd_peek, AUTH_OPEN, aliases=("pk",)),
+        CommandSpec("config", "config", "show effective config", "General", _cmd_config, AUTH_UNLOCK, aliases=("cfg",)),
+        CommandSpec(
+            "unlock",
+            "unlock [gh|all] [status|ttl]",
+            "unlock command scopes for your account (status is open)",
+            "Security",
+            _cmd_unlock,
+            AUTH_TOTP,
+            aliases=("ul",),
+        ),
+        CommandSpec("lock", "lock [gh|all]", "clear unlock scopes for your account", "Security", _cmd_lock, AUTH_OPEN, aliases=("lk",)),
+        CommandSpec("start", "start [session]", "start a new Codex session", "Sessions", _cmd_start, AUTH_UNLOCK, aliases=("run",)),
+        CommandSpec("resume", "resume [session] <prompt>", "resume with prompt", "Sessions", _cmd_resume, AUTH_UNLOCK, aliases=("rs",)),
         CommandSpec(
             "choose",
             "choose [session] resume|replace|cancel",
             "resolve start conflict",
             "Sessions",
             _cmd_choose,
+            AUTH_UNLOCK,
+            aliases=("pick",),
         ),
-        CommandSpec("use", "use/select <session>", "set your sticky session", "Sessions", _cmd_use, aliases=("select",)),
-        CommandSpec("model", "model [session] <id> [reasoning]", "set session model", "Sessions", _cmd_model),
-        CommandSpec("models", "models [session]", "list available models via /model", "Sessions", _cmd_models),
-        CommandSpec("thread", "thread [session] <id>", "set thread id", "Sessions", _cmd_thread),
-        CommandSpec("spec", "spec [session]", "capture repo spec and tasks", "Repo bootstrap", _cmd_spec),
-        CommandSpec("createrepo", "createrepo", "create repo in code_root and git init", "Repo bootstrap", _cmd_createrepo),
-        CommandSpec("clonerepo", "clonerepo <url>", "clone GitHub repo into code_root", "Repo bootstrap", _cmd_clonerepo),
+        CommandSpec("use", "use <session>", "set your sticky session", "Sessions", _cmd_use, AUTH_UNLOCK, aliases=("select",)),
+        CommandSpec("model", "model [session] <id> [reasoning]", "set session model", "Sessions", _cmd_model, AUTH_UNLOCK, aliases=("mdl",)),
+        CommandSpec("models", "models [session]", "list available models via /model", "Sessions", _cmd_models, AUTH_OPEN, aliases=("mdls",)),
+        CommandSpec("thread", "thread [session] <id>", "set thread id", "Sessions", _cmd_thread, AUTH_UNLOCK, aliases=("tid",)),
+        CommandSpec("spec", "spec [session]", "capture repo spec and tasks", "Sessions", _cmd_spec, AUTH_UNLOCK, aliases=("plan",)),
         CommandSpec(
-            "copyrepo",
-            "copyrepo <newname>",
-            "copy repo without .git and init new repo",
-            "Repo bootstrap",
-            _cmd_copyrepo,
+            "create",
+            "create",
+            "create repo in code_root and git init",
+            "Repo lifecycle",
+            _cmd_createrepo,
+            AUTH_TOTP,
+            aliases=("createrepo", "new"),
         ),
-        CommandSpec("stop", "stop [session]", "send ESC then SIGINT", "Run control", _cmd_stop),
-        CommandSpec("kill", "kill [session]", "force kill running process", "Run control", _cmd_kill),
-        CommandSpec("/quit", "/quit [session]", "send /quit to Codex", "Run control", _cmd_quit),
+        CommandSpec(
+            "clone",
+            "clone <url>",
+            "clone GitHub repo into code_root",
+            "Repo lifecycle",
+            _cmd_clonerepo,
+            AUTH_TOTP,
+            aliases=("clonerepo",),
+        ),
+        CommandSpec(
+            "copy",
+            "copy <newname>",
+            "copy repo without .git and init new repo",
+            "Repo lifecycle",
+            _cmd_copyrepo,
+            AUTH_TOTP,
+            aliases=("copyrepo", "cp"),
+        ),
+        CommandSpec("stop", "stop [session]", "send ESC then SIGINT", "Run control", _cmd_stop, AUTH_UNLOCK),
+        CommandSpec("kill", "kill [session]", "force kill running process", "Run control", _cmd_kill, AUTH_UNLOCK),
+        CommandSpec("/quit", "/quit [session]", "send /quit to Codex", "Run control", _cmd_quit, AUTH_UNLOCK),
         CommandSpec(
             "answer",
             "answer [session] -- <text> | answer <text>",
             "send input to active Codex session",
             "Run control",
             _cmd_answer,
+            AUTH_UNLOCK,
+            aliases=("reply",),
         ),
-        CommandSpec("approve", "approve [session]", "send 'yes' to active session", "Run control", _cmd_approve),
-        CommandSpec("deny", "deny [session]", "send 'no' to active session", "Run control", _cmd_deny),
-        CommandSpec("wait", "wait", "show sessions awaiting input", "Run control", _cmd_wait),
-        CommandSpec("showrepo", "showrepo", "list repo tree", "Repo helpers", _cmd_showrepo),
-        CommandSpec("showchanges", "showchanges", "git status + diffstat", "Repo helpers", _cmd_showchanges),
-        CommandSpec("tests", "tests", "run pytest -q", "Repo helpers", _cmd_tests),
+        CommandSpec("approve", "approve [session]", "send 'yes' to active session", "Run control", _cmd_approve, AUTH_UNLOCK),
+        CommandSpec("deny", "deny [session]", "send 'no' to active session", "Run control", _cmd_deny, AUTH_UNLOCK),
+        CommandSpec("wait", "wait", "show sessions awaiting input", "Run control", _cmd_wait, AUTH_UNLOCK),
+        CommandSpec("show", "show", "list repo tree", "Repo helpers", _cmd_showrepo, AUTH_OPEN, aliases=("showrepo", "tree")),
+        CommandSpec(
+            "changes",
+            "changes",
+            "git status + diffstat",
+            "Repo helpers",
+            _cmd_showchanges,
+            AUTH_OPEN,
+            aliases=("showchanges",),
+        ),
+        CommandSpec("tests", "tests", "run pytest -q", "Repo helpers", _cmd_tests, AUTH_UNLOCK, aliases=("test",)),
         CommandSpec(
             "git",
             "git <status|log|branches|show|diff|pull|commit|push|merge>",
             "git helpers",
             "Repo helpers",
             _cmd_git,
+            AUTH_MIXED,
         ),
         CommandSpec(
             "gh",
@@ -190,12 +244,13 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             "GitHub CLI helper passthrough",
             "Repo helpers",
             _cmd_gh,
+            AUTH_UNLOCK_GH,
         ),
-        CommandSpec("download", "download <path>", "download a file from repo", "Repo helpers", _cmd_download),
-        CommandSpec("logs", "logs [session] [n]", "show recent audit entries", "Queue", _cmd_logs),
-        CommandSpec("ps", "ps", "list queued/running jobs", "Queue", _cmd_ps),
-        CommandSpec("cancel", "cancel <job-id>", "cancel queued job", "Queue", _cmd_cancel),
-        CommandSpec("rerun", "rerun", "requeue last job", "Queue", _cmd_rerun),
+        CommandSpec("download", "download <path>", "download a file from repo", "Repo helpers", _cmd_download, AUTH_UNLOCK, aliases=("dl",)),
+        CommandSpec("logs", "logs [session] [n]", "show recent audit entries", "Queue", _cmd_logs, AUTH_UNLOCK, aliases=("log",)),
+        CommandSpec("ps", "ps", "list queued/running jobs", "Queue", _cmd_ps, AUTH_OPEN),
+        CommandSpec("cancel", "cancel <job-id>", "cancel queued job", "Queue", _cmd_cancel, AUTH_UNLOCK, aliases=("drop",)),
+        CommandSpec("rerun", "rerun", "requeue last job", "Queue", _cmd_rerun, AUTH_UNLOCK, aliases=("retry",)),
     ]
     registry: Dict[str, CommandSpec] = {}
     for spec in specs:
@@ -208,11 +263,17 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
 def render_help(specs: Sequence[CommandSpec]) -> str:
     """Render help text for the command registry."""
     grouped = _group_specs(specs)
-    lines = ["Commands:"]
+    lines = [
+        "Commands:",
+        "Auth tags: [open]=no TOTP, [unlock/default]=default unlock or --totp, [unlock/gh]=gh unlock or --totp, [totp]=always --totp, [mixed]=depends on subcommand",
+        "",
+    ]
     for group in _ordered_groups(grouped):
         lines.append(f"{group}:")
         for spec in grouped[group]:
-            lines.append(f"{spec.usage} — {spec.description}")
+            alias_text = f" (aliases: {', '.join(spec.aliases)})" if spec.aliases else ""
+            auth_text = AUTH_LABELS.get(spec.auth, spec.auth)
+            lines.append(f"{spec.usage} — {spec.description} [{auth_text}]{alias_text}")
         lines.append("")
     return "\n".join(lines).strip()
 
@@ -503,7 +564,7 @@ async def _cmd_createrepo(router: Any, message: MessageEvent, sink: ResponseSink
 async def _cmd_clonerepo(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     url = rest.strip()
     if not url:
-        await router.reply_forbidden(sink, "Usage: !c clonerepo <github-url>")
+        await router.reply_forbidden(sink, "Usage: !c clone <github-url>")
         return
     try:
         target_path = pathutil.resolve_repo_path_for_create(router.cfg.codex.code_root, repo_name)
@@ -517,7 +578,7 @@ async def _cmd_copyrepo(router: Any, message: MessageEvent, sink: ResponseSink, 
     raw_new_name = rest.strip()
     new_name = raw_new_name
     if not new_name:
-        await router.reply_forbidden(sink, "Usage: !c copyrepo <new-repo-name>")
+        await router.reply_forbidden(sink, "Usage: !c copy <new-repo-name>")
         return
     try:
         new_name = pathutil.normalize_repo_name(raw_new_name)

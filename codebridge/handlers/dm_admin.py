@@ -24,6 +24,20 @@ from ..util import path as pathutil
 if TYPE_CHECKING:
     from ..router import Router
 
+_DM_COMMAND_ALIASES = {
+    "ul": "unlock",
+    "lk": "lock",
+    "createrepo": "create",
+    "new": "create",
+    "clonerepo": "clone",
+    "copyrepo": "copy",
+    "cp": "copy",
+    "del": "deleterepo",
+    "delete": "deleterepo",
+    "ren": "renamerepo",
+    "rename": "renamerepo",
+}
+
 
 class _PrefixedSink:
     """Response sink wrapper that prefixes messages with a repo name."""
@@ -53,19 +67,19 @@ def dm_help_text() -> str:
     """Return DM admin help text."""
     return (
         "DM Admin:\n"
-        "help — show this help\n"
-        "repos — list repos under code_root\n"
-        "sessions — list sessions across channels\n"
-        "status — show queues and running jobs\n"
-        "config — show effective config\n"
-        "gh <args> — run GitHub CLI in DM context\n"
-        "createrepo <name> — create repo\n"
-        "clonerepo <name> <url> — clone repo\n"
-        "copyrepo <from> <to> — copy repo\n"
-        "deleterepo <name> — delete repo\n"
-        "renamerepo <from> <to> — rename repo\n"
-        "unlock [gh|all] [status|ttl] — unlock command scopes for your account\n"
-        "lock [gh|all] — clear unlock scopes for your account\n"
+        "help — show this help [open]\n"
+        "repos — list repos under code_root [open]\n"
+        "sessions — list sessions across channels [open]\n"
+        "status — show queues and running jobs [open]\n"
+        "config — show effective config [open]\n"
+        "gh <args> — run GitHub CLI in DM context [unlock/gh]\n"
+        "create/new <name> — create repo [totp]\n"
+        "clone <name> <url> — clone repo [totp]\n"
+        "copy/cp <from> <to> — copy repo [totp]\n"
+        "deleterepo/del <name> — delete repo [totp]\n"
+        "renamerepo/ren <from> <to> — rename repo [totp]\n"
+        "unlock/ul [gh|all] [status|ttl] — unlock command scopes for your account [totp; status=open]\n"
+        "lock/lk [gh|all] — clear unlock scopes for your account [open]\n"
     )
 
 
@@ -73,14 +87,14 @@ def dm_binding_help_text() -> str:
     """Return DM repo binding help text."""
     return (
         "DM Repo Binding:\n"
-        "bind <repo> — bind this DM to a repo\n"
-        "use <repo> — alias for bind\n"
-        "repo <repo> <prompt> — run a one-off prompt against a repo\n"
-        "gh <args> — run GitHub CLI (bound repo cwd, or code_root if unbound)\n"
-        "unlock [gh|all] [status|ttl] — unlock command scopes for your account\n"
-        "lock [gh|all] — clear unlock scopes for your account\n"
-        "unbind — clear bound repo\n"
-        "status — show current bound repo and session\n"
+        "bind <repo> — bind this DM to a repo [unlock/default]\n"
+        "use <repo> — alias for bind [unlock/default]\n"
+        "repo <repo> <prompt> — run a one-off prompt against a repo [unlock/default]\n"
+        "gh <args> — run GitHub CLI (bound repo cwd, or code_root if unbound) [unlock/gh]\n"
+        "unlock/ul [gh|all] [status|ttl] — unlock command scopes for your account [totp; status=open]\n"
+        "lock/lk [gh|all] — clear unlock scopes for your account [open]\n"
+        "unbind — clear bound repo [unlock/default]\n"
+        "status — show current bound repo and session [open]\n"
     )
 
 
@@ -357,7 +371,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         return
     cmdline = router._normalize_unlock_totp_syntax(cmdline)
     fields = cmdline.split()
-    cmd = fields[0].lower()
+    cmd = _DM_COMMAND_ALIASES.get(fields[0].lower(), fields[0].lower())
     rest = cmdline[len(fields[0]) :].strip()
 
     entry = dm_audit_start(router, event, cmd, rest)
@@ -375,27 +389,25 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         "repos",
         "sessions",
         "config",
-        "createrepo",
-        "clonerepo",
-        "copyrepo",
+        "create",
+        "clone",
+        "copy",
         "deleterepo",
-        "delete",
         "renamerepo",
-        "rename",
     }
 
     if cmd in admin_commands:
         if not is_admin:
             await send_forbidden("You are not allowed to use DM admin commands.")
             return
-        if cmd in {"createrepo", "clonerepo", "copyrepo", "deleterepo", "delete", "renamerepo", "rename"}:
+        if cmd in {"create", "clone", "copy", "deleterepo", "renamerepo"}:
             ok, cmdline = await router.require_totp(event, sink, cmd, cmdline)
             if not ok:
                 return
             fields = cmdline.split()
             if not fields:
                 return
-            cmd = fields[0].lower()
+            cmd = _DM_COMMAND_ALIASES.get(fields[0].lower(), fields[0].lower())
             rest = cmdline[len(fields[0]) :].strip()
         router.logger.info(
             "dm.admin",
@@ -415,34 +427,34 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         if cmd == "config":
             await send(router.config_text())
             return
-        if cmd == "createrepo":
+        if cmd == "create":
             name = rest.strip()
             if not name:
-                await send_forbidden("Usage: !c createrepo <name>")
+                await send_forbidden("Usage: !c create <name>")
                 return
             err = await dm_create_repo(router, event, sink, name, entry)
             if err:
                 await send_forbidden(str(err))
             return
-        if cmd == "clonerepo":
+        if cmd == "clone":
             parts = rest.split(maxsplit=1)
             if len(parts) < 2:
-                await send_forbidden("Usage: !c clonerepo <name> <url>")
+                await send_forbidden("Usage: !c clone <name> <url>")
                 return
             err = await dm_clone_repo(router, event, sink, parts[0], parts[1], entry)
             if err:
                 await send_forbidden(str(err))
             return
-        if cmd == "copyrepo":
+        if cmd == "copy":
             parts = rest.split(maxsplit=1)
             if len(parts) < 2:
-                await send_forbidden("Usage: !c copyrepo <from> <to>")
+                await send_forbidden("Usage: !c copy <from> <to>")
                 return
             err = await dm_copy_repo(router, event, sink, parts[0], parts[1], entry)
             if err:
                 await send_forbidden(str(err))
             return
-        if cmd in {"deleterepo", "delete"}:
+        if cmd == "deleterepo":
             name = rest.strip()
             if not name:
                 await send_forbidden("Usage: !c deleterepo <name>")
@@ -451,7 +463,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
             if err:
                 await send_forbidden(str(err))
             return
-        if cmd in {"renamerepo", "rename"}:
+        if cmd == "renamerepo":
             parts = rest.split(maxsplit=1)
             if len(parts) < 2:
                 await send_forbidden("Usage: !c renamerepo <from> <to>")
@@ -473,7 +485,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
             fields = cmdline.split()
             if not fields:
                 return
-            cmd = fields[0].lower()
+            cmd = _DM_COMMAND_ALIASES.get(fields[0].lower(), fields[0].lower())
             rest = cmdline[len(fields[0]) :].strip()
         if cmd == "unlock":
             await router.handle_unlock(event, sink, rest)

@@ -6,6 +6,19 @@ def test_command_registry_aliases():
     assert "use" in registry
     assert "select" in registry
     assert registry["use"] is registry["select"]
+    assert "new" in registry
+    assert registry["new"] is registry["create"]
+    assert "copy" in registry
+    assert "cp" in registry
+    assert registry["cp"] is registry["copy"]
+    assert "cfg" in registry
+    assert registry["cfg"] is registry["config"]
+    assert "show" in registry
+    assert "showrepo" in registry
+    assert registry["showrepo"] is registry["show"]
+    assert "changes" in registry
+    assert "showchanges" in registry
+    assert registry["showchanges"] is registry["changes"]
     assert "/quit" in registry
     assert specs
 
@@ -15,12 +28,14 @@ def test_command_registry_help_text():
     text = render_help(specs)
     assert "Commands:" in text
     assert "General:" in text
-    assert "help — show this help" in text
-    assert "unlock [gh|all] [status|ttl] — unlock command scopes for your account" in text
-    assert "lock [gh|all] — clear unlock scopes for your account" in text
-    assert "use/select <session> — set your sticky session" in text
+    assert "Auth tags: [open]=no TOTP" in text
+    assert "help — show this help [open] (aliases: commands)" in text
+    assert "unlock [gh|all] [status|ttl] — unlock command scopes for your account (status is open) [totp] (aliases: ul)" in text
+    assert "lock [gh|all] — clear unlock scopes for your account [open] (aliases: lk)" in text
+    assert "use <session> — set your sticky session [unlock/default] (aliases: select)" in text
+    assert "create — create repo in code_root and git init [totp] (aliases: createrepo, new)" in text
     assert "Repo helpers:" in text
-    assert "git <status|log|branches|show|diff|pull|commit|push|merge> — git helpers" in text
-    assert "gh <args> — GitHub CLI helper passthrough" in text
-    assert "answer [session] -- <text> | answer <text> — send input to active Codex session" in text
-    assert "wait — show sessions awaiting input" in text
+    assert "git <status|log|branches|show|diff|pull|commit|push|merge> — git helpers [mixed]" in text
+    assert "gh <args> — GitHub CLI helper passthrough [unlock/gh]" in text
+    assert "answer [session] -- <text> | answer <text> — send input to active Codex session [unlock/default] (aliases: reply)" in text
+    assert "wait — show sessions awaiting input [unlock/default]" in text
