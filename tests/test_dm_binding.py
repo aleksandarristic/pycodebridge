@@ -413,6 +413,37 @@ def test_dm_gh_unbound_uses_code_root(tmp_path):
     assert router.last_gh["rest"] == "repo list --visibility private --limit 5"
 
 
+def test_dm_bang_gh_unbound_uses_code_root(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.telegram.allowed_user_ids = ["user"]
+    cfg.telegram.prefix = "!c"
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+
+    store = Store(cfg.state.data_dir)
+    router = _FakeRouter(cfg, store)
+    sink = _FakeSink("dm-1")
+    event = MessageEvent(
+        platform="telegram",
+        content="!gh repo list --limit 3",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    async def run():
+        await dm_admin.handle_dm_message(router, event, sink)
+
+    asyncio.run(run())
+
+    assert router.last_gh is not None
+    assert router.last_gh["repo_path"] == str(tmp_path)
+    assert router.last_gh["rest"] == "repo list --limit 3"
+
+
 def test_dm_gh_bound_uses_repo_path(tmp_path):
     cfg = cfgmod.Config()
     cfg.telegram.allowed_user_ids = ["user"]

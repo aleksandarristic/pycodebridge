@@ -143,6 +143,7 @@ TOTP not required (read-only in channel):
 - `!c unlock [gh|all] status`
 - `!c lock [gh|all]`
 - `!c git status|log|branches|show|diff|remote`
+- `!git ...` (shortcut for `!c git ...`)
 
 TOTP always required (high-risk in channel):
 - `!c unlock [gh|all] [ttl]`
@@ -154,6 +155,7 @@ TOTP always required (high-risk in channel):
 
 TOTP required for GitHub CLI unless gh scope is unlocked:
 - `!c gh <args>`
+- `!gh <args>` (shortcut for `!c gh <args>`)
 
 TOTP required unless the chat is unlocked:
 - `!c start [session]`
@@ -220,7 +222,7 @@ Repo helpers:
 - `show` (aliases: `showrepo`, `tree`), `changes` (alias: `showchanges`) `[open]`
 - `tests` (alias: `test`), `download` (alias: `dl`) `[unlock/default]`
 - `git` `[mixed]`
-- `gh` `[unlock/gh]` (example: `!c gh repo sync`)
+- `gh` `[unlock/gh]` (examples: `!c gh repo sync` or `!gh repo sync`)
 
 Queue:
 - `logs` (alias: `log`), `cancel` (alias: `drop`), `rerun` (alias: `retry`) `[unlock/default]`
@@ -259,6 +261,7 @@ When `discord.totp_enabled: true`, TOTP is always required in DMs for:
 
 TOTP is required in DMs for GitHub CLI unless gh scope is unlocked:
 - `!c gh <args>`
+- `!gh <args>` (shortcut form also works in DMs)
 
 TOTP is required in DMs unless the DM is unlocked for:
 - `!c bind <repo>`

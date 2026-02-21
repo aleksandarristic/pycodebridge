@@ -163,6 +163,12 @@ class Router:
             shortcut_cmdline = "steer " + content[7:].strip()
         elif lower_content.startswith("!s "):
             shortcut_cmdline = "steer " + content[3:].strip()
+        elif lower_content == "!git" or lower_content.startswith("!git "):
+            shortcut_cmdline = "git " + content[4:].strip()
+            shortcut_cmdline = shortcut_cmdline.strip()
+        elif lower_content == "!gh" or lower_content.startswith("!gh "):
+            shortcut_cmdline = "gh " + content[3:].strip()
+            shortcut_cmdline = shortcut_cmdline.strip()
         if event.attachments:
             if self._totp_enabled(event):
                 ok, _ = await self.require_totp(event, sink, "upload", content)

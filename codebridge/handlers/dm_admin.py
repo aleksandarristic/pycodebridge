@@ -315,6 +315,9 @@ async def dm_rename_repo(
 async def handle_dm_message(router: "Router", event: MessageEvent, sink: ResponseSink) -> None:
     """Handle an incoming DM admin message."""
     content = (event.content or "").strip()
+    lower_content = content.lower()
+    if lower_content == "!gh" or lower_content.startswith("!gh "):
+        content = f"{router._transport_prefix(event)} gh {content[3:].strip()}".strip()
     prefix = router._transport_prefix(event)
     pending_upload = False
     file_transfers = getattr(router, "file_transfers", None)
