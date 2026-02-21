@@ -171,6 +171,7 @@ TOTP required unless the chat is unlocked:
 - Shortcut: `!stop [session]` (maps to `!c interrupt [session]` in mapped repo channels)
 - `!c steer [session] -- <text>` or `!c steer <text>`
 - Shortcut: `!steer <text>` (maps to `!c steer <text>` in mapped repo channels)
+- Shortcut: `!s <text>` (maps to `!c steer <text>` in mapped repo channels)
 - `!c answer [session] -- <text>` or `!c answer <text>`
 - `!c approve [session]` (sends `yes`)
 - `!c deny [session]` (sends `no`)
@@ -213,6 +214,7 @@ Run control:
 - `stop`, `interrupt` (alias: `esc`), `kill`, `/quit`, `steer`, `answer` (alias: `reply`), `approve`, `deny`, `wait` `[unlock/default]`
 - `!stop [session]` is a top-level shortcut for `interrupt` in mapped repo channels.
 - `!steer <text>` is a top-level shortcut for `steer` in mapped repo channels.
+- `!s <text>` is a shorthand top-level shortcut for `steer` in mapped repo channels.
 
 Repo helpers:
 - `show` (aliases: `showrepo`, `tree`), `changes` (alias: `showchanges`) `[open]`

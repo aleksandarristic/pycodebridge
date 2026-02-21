@@ -161,6 +161,8 @@ class Router:
             shortcut_cmdline = ("interrupt " + tail).strip()
         elif lower_content.startswith("!steer "):
             shortcut_cmdline = "steer " + content[7:].strip()
+        elif lower_content.startswith("!s "):
+            shortcut_cmdline = "steer " + content[3:].strip()
         if event.attachments:
             if self._totp_enabled(event):
                 ok, _ = await self.require_totp(event, sink, "upload", content)
