@@ -211,6 +211,7 @@ General:
 - `help` (alias: `commands`) `[open]`
 - `status` (alias: `st`), `stats` (alias: `usage`), `peek` (alias: `pk`), `updates` (aliases: `update`, `version`) `[open]`
 - Top-level shortcuts in mapped repo channels: `!st` -> `!c status`, `!u` -> `!c updates`
+  - `status` includes contextual `Related:` hints (for example `!c start`, `!ps`, `!w`) when relevant.
 - `config` (alias: `cfg`) `[unlock/default]`
 
 Security:
@@ -237,6 +238,7 @@ Run control:
 - `!a:<session> <text>` is a top-level shortcut for `answer <session> -- <text>` in mapped repo channels.
 - `!y`/`!n` are top-level shortcuts for `approve`/`deny` in mapped repo channels.
 - `!w` is a top-level shortcut for `wait` in mapped repo channels.
+  - `wait` responses include `Related:` hints for quick follow-up (`!c answer`, `!a <text>`, `!ps`, `!c status`).
 
 Repo helpers:
 - `show` (aliases: `showrepo`, `tree`), `changes` (alias: `showchanges`) `[open]`

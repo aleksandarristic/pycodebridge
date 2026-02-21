@@ -468,16 +468,16 @@ class Router:
         """Show sessions currently awaiting user input from Codex prompts."""
         pending = self._prune_awaiting_input(event.channel_id)
         if not pending:
-            await self.reply(sink, "No sessions are waiting for input.")
+            await self.reply(sink, self._with_related("No sessions are waiting for input.", "!ps", "!c status"))
             return
         active: list[str] = []
         for session in sorted(pending.keys()):
             if await self.get_active(event.channel_id, session):
                 active.append(session)
         if not active:
-            await self.reply(sink, "No active sessions are waiting for input.")
+            await self.reply(sink, self._with_related("No active sessions are waiting for input.", "!ps", "!c status"))
             return
-        await self.reply(sink, "Waiting for input: " + ", ".join(active))
+        await self.reply(sink, self._with_related("Waiting for input: " + ", ".join(active), "!c answer", "!a <text>"))
 
     async def handle_showrepo(self, sink: ResponseSink, repo_path: str) -> None:
         """Show a pruned repo tree for orientation."""
@@ -798,6 +798,13 @@ class Router:
     async def send_status(self, sink: ResponseSink, repo_name: str, repo_path: str) -> None:
         """Send status summary for the channel and sessions."""
         state = self.state.load()
+        queue_statuses = await self.coordinator.snapshot(sink.channel_id)
+        waiting = self._prune_awaiting_input(sink.channel_id)
+        related: list[str] = []
+        if queue_statuses:
+            related.append("!ps")
+        if waiting:
+            related.append("!w")
         ch = state.channels.get(sink.channel_id)
         if ch and ch.sessions:
             lines = [
@@ -821,9 +828,22 @@ class Router:
                 current_model = self.session_model(sink.channel_id, current)
                 current_reasoning = self.session_reasoning_effort(sink.channel_id, current)
                 lines.append(format_current_selection_line(current, current_model, current_reasoning))
-            await self.reply(sink, "\n".join(lines))
+            await self.reply(sink, self._with_related("\n".join(lines), *related))
             return
-        await self.reply(sink, f"Repo: {repo_name}\nPath: {repo_path}\nNo session attached.")
+        await self.reply(
+            sink,
+            self._with_related(f"Repo: {repo_name}\nPath: {repo_path}\nNo session attached.", "!c start", *related),
+        )
+
+    def _with_related(self, message: str, *commands: str) -> str:
+        unique: list[str] = []
+        for cmd in commands:
+            token = (cmd or "").strip()
+            if token and token not in unique:
+                unique.append(token)
+        if not unique:
+            return message
+        return f"{message}\nRelated: {', '.join(unique)}"
 
     async def send_help(self, sink: ResponseSink) -> None:
         """Send help text for supported commands."""

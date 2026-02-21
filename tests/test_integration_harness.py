@@ -591,7 +591,9 @@ def test_integration_wait_command_reports_pending_input(tmp_path):
 
     asyncio.run(run())
     assert any("No sessions are waiting for input." in msg for msg, _, _ in sink.sent)
+    assert any("Related: !ps, !c status" in msg for msg, _, _ in sink.sent)
     assert any("Waiting for input: default" in msg for msg, _, _ in sink.sent)
+    assert any("Related: !c answer, !a <text>" in msg for msg, _, _ in sink.sent)
 
 
 def test_integration_misc_shortcuts_dispatch(tmp_path):
@@ -628,6 +630,7 @@ def test_integration_misc_shortcuts_dispatch(tmp_path):
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
     assert any("Repo: repo" in t for t in texts)
+    assert any("Related: !c start" in t for t in texts)
     assert any("updates-ok" in t for t in texts)
     assert any("No sessions are waiting for input." in t for t in texts)
     assert any("No jobs queued or running." in t for t in texts)
