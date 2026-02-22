@@ -9,6 +9,19 @@ TODO (Near-term):
 
 Backlog:
 
+- Multi-room sessions per repo (room mapping redesign, open question).
+  - Goal: support multiple chat rooms working on the same repo concurrently, with one default room plus additional dedicated spin-off rooms.
+  - Desired UX:
+    - Keep a canonical/default room per repo.
+    - Allow creating a new room for a new session on the same repo using a similar room name pattern.
+    - Allow parallel workstreams in different rooms while targeting the same repo safely.
+  - Open question:
+    - How should room-to-repo/session mapping evolve (naming convention, metadata binding, lifecycle/cleanup, and conflict handling)?
+  - Initial considerations:
+    - Avoid collisions with existing `codex-<repo>` mapping.
+    - Preserve auth/permissions and command behavior across default vs spin-off rooms.
+    - Define how room creation/binding commands should work in Discord and Telegram.
+
 - Compose + global skill defaults for cross-repo persistence (deferred).
   - Goal: define and document a non-`AGENTS.md` channel for durable operator defaults across repos/sessions.
   - Approach:
