@@ -9,6 +9,7 @@ import json
 from types import MethodType
 
 from codebridge import config as cfgmod
+from codebridge import router as router_mod
 from codebridge.codex import Options
 from codebridge.router import Router
 from codebridge.session_coordinator import SessionCoordinator
@@ -606,6 +607,47 @@ def test_integration_wait_command_reports_pending_input(tmp_path):
     assert any("Related: !ps, !c status" in msg for msg, _, _ in sink.sent)
     assert any("Waiting for input: default" in msg for msg, _, _ in sink.sent)
     assert any("Related: !c answer, !a <text>" in msg for msg, _, _ in sink.sent)
+
+
+def test_integration_run_completion_summary(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        for _ in range(50):
+            proc = await router.get_active("chan", "default")
+            if proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        await router.handle_message(_discord_event("!c stop", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Run complete for session 'default'" in t for t in texts)
+
+
+def test_integration_run_heartbeat_message(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    monkeypatch.setattr(router_mod, "_RUN_HEARTBEAT_SECONDS", 0.05)
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await asyncio.sleep(0.12)
+        await router.handle_message(_discord_event("!c kill", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Still running in session 'default'" in t for t in texts)
 
 
 def test_integration_misc_shortcuts_dispatch(tmp_path):

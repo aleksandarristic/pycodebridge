@@ -1,6 +1,7 @@
 """Codex command router and handlers."""
 
 import asyncio
+import contextlib
 import os
 import re
 import subprocess
@@ -66,6 +67,8 @@ _READ_ONLY_COMMANDS = {
     "ps",
 }
 _GIT_READ_ONLY_SUBCOMMANDS = {"status", "log", "branches", "show", "diff", "remote"}
+_RUN_HEARTBEAT_SECONDS = 45
+_RUN_KEY_RESULT_MAX = 180
 
 
 def _git_commit_hash() -> str:
@@ -1000,6 +1003,19 @@ class Router:
     ) -> None:
         """Run Codex with streaming callbacks and audit logging."""
         channel_id = event.channel_id
+        started_at = time.monotonic()
+        last_output = ""
+        output_events = 0
+
+        async def _capture_output(text: str) -> None:
+            nonlocal last_output, output_events
+            clean = strip_control_codes((text or "").strip())
+            if clean:
+                output_events += 1
+                last_output = clean
+            if on_output:
+                await on_output(text)
+
         original_args = list(args)
         meta = {
             "repo_name": repo_name,
@@ -1037,7 +1053,7 @@ class Router:
                             on_thread=lambda tid: self.on_thread(
                                 channel_id, session, repo_name, repo_path, model, reasoning_effort, entry, tid
                             ),
-                            on_output=on_output,
+                            on_output=_capture_output,
                             on_stderr=_on_stderr,
                             on_exit=lambda err, rc: self.on_exit(channel_id, session, repo_name, err, rc),
                         )
@@ -1058,12 +1074,28 @@ class Router:
                     return
 
                 await self.set_active(channel_id, session, proc)
+                heartbeat_task: asyncio.Task | None = None
+                if relay_output:
+                    heartbeat_task = asyncio.create_task(self._run_heartbeat(sink, session, started_at))
                 try:
                     rc = await proc.wait()
                 finally:
+                    if heartbeat_task:
+                        heartbeat_task.cancel()
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await heartbeat_task
                     await self.clear_active(channel_id, session)
 
                 if rc == 0:
+                    if relay_output:
+                        await self._send_run_completion_summary(
+                            sink,
+                            channel_id,
+                            session,
+                            started_at,
+                            output_events,
+                            last_output,
+                        )
                     break
 
                 self.logger.warning("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "code": rc})
@@ -1109,6 +1141,39 @@ class Router:
                 await self.reply_forbidden(sink, detail)
                 break
             self._audit_helper.close(entry)
+
+    async def _run_heartbeat(self, sink: ResponseSink, session: str, started_at: float) -> None:
+        """Emit periodic run heartbeat messages while a job is active."""
+        while True:
+            await asyncio.sleep(_RUN_HEARTBEAT_SECONDS)
+            elapsed = int(max(1.0, time.monotonic() - started_at))
+            await self.reply(sink, f"Still running in session '{session}' ({self._format_duration(elapsed)} elapsed).")
+
+    async def _send_run_completion_summary(
+        self,
+        sink: ResponseSink,
+        channel_id: str,
+        session: str,
+        started_at: float,
+        output_events: int,
+        last_output: str,
+    ) -> None:
+        """Send concise completion details for a successful run."""
+        elapsed = int(max(1.0, time.monotonic() - started_at))
+        parts = [f"Run complete for session '{session}' in {self._format_duration(elapsed)}."]
+        usage = self.get_usage(channel_id, session)
+        if usage and usage.total_tokens:
+            parts.append(
+                f"Tokens in/out/total: {usage.input_tokens}/{usage.output_tokens}/{usage.total_tokens}."
+            )
+        if output_events:
+            parts.append(f"Output events: {output_events}.")
+        if last_output:
+            clipped = last_output[:_RUN_KEY_RESULT_MAX]
+            if len(last_output) > _RUN_KEY_RESULT_MAX:
+                clipped += "..."
+            parts.append(f"Key result: {clipped}")
+        await self.reply(sink, " ".join(parts))
 
     async def on_jsonl(
         self,

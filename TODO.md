@@ -4,8 +4,6 @@ Current status:
 
 TODO (Near-term):
 
-- Improve long-run job UX in Discord.
-  - Add periodic progress heartbeat and concise completion summary (files touched, tests run, key result).
 - Add session lifecycle controls.
   - Support idle session expiry, archive/summary output, and easy restore/start-from-summary flow.
 - Add usage budget visibility and controls.
