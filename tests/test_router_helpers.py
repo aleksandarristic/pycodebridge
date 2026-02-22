@@ -1,7 +1,7 @@
 import pytest
 
-from codebridge.router_helpers import normalize_session, parse_github_clone_url, prune_state_for_repo, rename_state_repo
-from codebridge.state import ChannelState, FileState, SessionState
+from codebridge.routing.helpers import normalize_session, parse_github_clone_url, prune_state_for_repo, rename_state_repo
+from codebridge.sessions.state import ChannelState, FileState, SessionState
 
 
 def test_normalize_session():

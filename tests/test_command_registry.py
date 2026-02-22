@@ -1,4 +1,4 @@
-from codebridge.command_registry import build_registry, render_help
+from codebridge.commands.registry import build_registry, render_help
 
 
 def test_command_registry_aliases():
@@ -63,7 +63,7 @@ def test_command_registry_help_text():
 
 def test_command_registry_detailed_help_uses_examples():
     registry, _ = build_registry()
-    from codebridge.help_renderer import render_help_command
+    from codebridge.commands.help import render_help_command
 
     text = render_help_command(registry["git"], prefix="!c")
     assert "**Help: `git`**" in text
@@ -73,7 +73,7 @@ def test_command_registry_detailed_help_uses_examples():
 
 def test_help_not_found_has_suggestions():
     registry, _ = build_registry()
-    from codebridge.help_renderer import help_not_found
+    from codebridge.commands.help import help_not_found
 
     text = help_not_found("gti", registry, prefix="!c")
     assert "Unknown command `gti`." in text

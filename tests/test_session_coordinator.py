@@ -2,9 +2,9 @@ import asyncio
 import time
 
 from codebridge import config as cfgmod
-from codebridge.router_helpers import PendingConflict
-from codebridge.session_coordinator import SessionCoordinator
-from codebridge.state import Store
+from codebridge.routing.helpers import PendingConflict
+from codebridge.sessions.coordinator import SessionCoordinator
+from codebridge.sessions.state import Store
 
 
 def _make_coordinator(tmp_path):

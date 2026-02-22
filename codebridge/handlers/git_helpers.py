@@ -5,14 +5,14 @@ from __future__ import annotations
 import shlex
 from typing import TYPE_CHECKING
 
-from ..command_parse import parse_log_count
-from ..router_helpers import find_unsafe_git_flag, has_forbidden_flags, run_limited_command, trim_output
+from ..commands.parse import parse_log_count
+from ..routing.helpers import find_unsafe_git_flag, has_forbidden_flags, run_limited_command, trim_output
 from ..transport import ResponseSink
 from ..util.ansi import strip_control_codes
 from ..util.chunk import chunk_text
 
 if TYPE_CHECKING:
-    from ..router import Router
+    from ..routing.router import Router
 
 
 async def handle_git(router: "Router", sink: ResponseSink, repo_path: str, rest: str) -> None:

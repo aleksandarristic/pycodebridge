@@ -1,4 +1,4 @@
-from codebridge.command_parse import parse_session_quit_alias, parse_session_slash_prompt
+from codebridge.commands.parse import parse_session_quit_alias, parse_session_slash_prompt
 
 
 def test_parse_session_quit_alias():

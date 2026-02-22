@@ -2,7 +2,7 @@ import asyncio
 from dataclasses import dataclass
 
 from codebridge import config as cfgmod
-from codebridge.file_transfer import FileTransferService
+from codebridge.services.file_transfer import FileTransferService
 from codebridge.transport import Attachment, Capabilities, MessageEvent
 
 

@@ -2,7 +2,7 @@ import asyncio
 
 from codebridge import config as cfgmod
 from codebridge.handlers import dm_admin
-from codebridge.state import Store
+from codebridge.sessions.state import Store
 from codebridge.transport import Capabilities, MessageEvent
 
 

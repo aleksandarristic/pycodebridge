@@ -1,6 +1,6 @@
 import json
 
-from codebridge.state import Store, utc_now_iso
+from codebridge.sessions.state import Store, utc_now_iso
 
 
 def test_state_save_load(tmp_path):
@@ -9,7 +9,7 @@ def test_state_save_load(tmp_path):
     assert state.version >= 1
 
     def mutator(fs):
-        from codebridge.state import ChannelState, SessionState
+        from codebridge.sessions.state import ChannelState, SessionState
 
         ch = fs.channels.setdefault("chan", ChannelState())
         ch.sessions["default"] = SessionState(

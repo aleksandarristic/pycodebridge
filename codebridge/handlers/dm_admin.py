@@ -6,9 +6,10 @@ import os
 import time
 from typing import TYPE_CHECKING, Optional
 
-from .. import command_registry, help_renderer
+from ..commands import registry as command_registry
+from ..commands import help as help_renderer
 from ..audit import Entry
-from ..router_helpers import (
+from ..routing.helpers import (
     DEFAULT_SESSION,
     HELPER_TIMEOUT,
     copy_dir_excluding_git,
@@ -18,12 +19,12 @@ from ..router_helpers import (
     rename_state_repo,
     run_limited_command,
 )
-from ..state import utc_now_iso
+from ..sessions.state import utc_now_iso
 from ..transport import Capabilities, MessageEvent, ResponseSink
 from ..util import path as pathutil
 
 if TYPE_CHECKING:
-    from ..router import Router
+    from ..routing.router import Router
 
 _DM_COMMAND_ALIASES = {
     "commands": "help",

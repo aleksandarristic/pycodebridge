@@ -1,5 +1,5 @@
-from codebridge.router_status import format_current_selection_line, format_session_line
-from codebridge.state import SessionState
+from codebridge.routing.status import format_current_selection_line, format_session_line
+from codebridge.sessions.state import SessionState
 
 
 def _make_session(model: str = "", reasoning: str = "", thread_id: str = "thread-1", last_used: str = "now") -> SessionState:

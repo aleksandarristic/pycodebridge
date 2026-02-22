@@ -2,10 +2,10 @@ import asyncio
 
 from codebridge import config as cfgmod
 from codebridge.audit import Logger as AuditLogger
-from codebridge.queue import Manager
-from codebridge.router import Router
-from codebridge.session_coordinator import SessionCoordinator
-from codebridge.state import Store
+from codebridge.sessions.queue import Manager
+from codebridge.routing.router import Router
+from codebridge.sessions.coordinator import SessionCoordinator
+from codebridge.sessions.state import Store
 from codebridge.transport import Capabilities, MessageEvent, ResponseSink
 
 

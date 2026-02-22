@@ -7,7 +7,7 @@ import os
 import time
 from typing import TYPE_CHECKING
 
-from ..router_helpers import (
+from ..routing.helpers import (
     DEFAULT_SESSION,
     HELPER_TIMEOUT,
     MAX_SESSIONS_PER_CHANNEL,
@@ -23,7 +23,7 @@ from ..router_helpers import (
 from ..transport import MessageEvent, ResponseSink
 
 if TYPE_CHECKING:
-    from ..router import Router
+    from ..routing.router import Router
 
 
 async def handle_start(

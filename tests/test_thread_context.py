@@ -1,4 +1,4 @@
-from codebridge.router import _ThreadContextSink
+from codebridge.routing.router import _ThreadContextSink
 from codebridge.transport import Capabilities
 
 

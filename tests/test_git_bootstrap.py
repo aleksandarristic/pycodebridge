@@ -2,7 +2,7 @@ import asyncio
 import subprocess
 
 from codebridge.config import Config
-from codebridge import git_bootstrap
+from codebridge.services import git_bootstrap
 
 
 class _FakeLogger:

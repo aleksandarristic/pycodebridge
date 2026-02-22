@@ -3,7 +3,7 @@ import json
 import time
 from dataclasses import dataclass
 
-from codebridge.health import collect_health_payload, parse_health_bind, start_health_server
+from codebridge.services.health import collect_health_payload, parse_health_bind, start_health_server
 
 
 @dataclass

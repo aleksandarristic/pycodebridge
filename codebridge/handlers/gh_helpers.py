@@ -5,14 +5,14 @@ from __future__ import annotations
 import shlex
 from typing import TYPE_CHECKING
 
-from ..router_helpers import run_limited_command, trim_output
+from ..routing.helpers import run_limited_command, trim_output
 from ..transport import ResponseSink
 from ..util.ansi import strip_control_codes
 from ..util.chunk import chunk_text
 from ..util import path as pathutil
 
 if TYPE_CHECKING:
-    from ..router import Router
+    from ..routing.router import Router
 
 
 async def handle_gh(router: "Router", sink: ResponseSink, repo_path: str, rest: str) -> None:

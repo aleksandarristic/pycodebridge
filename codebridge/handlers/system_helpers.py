@@ -8,11 +8,11 @@ import re
 import shutil
 from typing import TYPE_CHECKING
 
-from ..router_helpers import HELPER_TIMEOUT, run_limited_command
+from ..routing.helpers import HELPER_TIMEOUT, run_limited_command
 from ..transport import ResponseSink
 
 if TYPE_CHECKING:
-    from ..router import Router
+    from ..routing.router import Router
 
 _SEMVER_RE = re.compile(r"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?")
 _SEMVER_LINE_RE = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")

@@ -1,6 +1,6 @@
 import asyncio
 
-from codebridge.queue import Manager
+from codebridge.sessions.queue import Manager
 
 
 def test_queue_enqueue_and_cancel():

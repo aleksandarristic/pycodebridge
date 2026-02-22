@@ -1,4 +1,4 @@
-from codebridge.reply_helpers import send_forbidden, send_reply
+from codebridge.routing.reply import send_forbidden, send_reply
 from codebridge.transport import Capabilities, ResponseSink
 
 

@@ -5,13 +5,13 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from ..router_helpers import TESTS_TIMEOUT, build_tree, run_limited_command, trim_output
+from ..routing.helpers import TESTS_TIMEOUT, build_tree, run_limited_command, trim_output
 from ..transport import ResponseSink
 from ..util.ansi import strip_control_codes
 from ..util.chunk import chunk_text
 
 if TYPE_CHECKING:
-    from ..router import Router
+    from ..routing.router import Router
 
 
 async def handle_showrepo(router: "Router", sink: ResponseSink, repo_path: str) -> None:

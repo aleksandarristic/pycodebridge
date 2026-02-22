@@ -2,9 +2,9 @@ import asyncio
 import time
 
 from codebridge import config
-from codebridge.router_helpers import PendingConflict
-from codebridge.session_service import SessionService
-from codebridge.state import Store
+from codebridge.routing.helpers import PendingConflict
+from codebridge.sessions.service import SessionService
+from codebridge.sessions.state import Store
 
 
 def test_session_service_pending_conflict_expired(tmp_path):

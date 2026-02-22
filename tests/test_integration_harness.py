@@ -12,9 +12,9 @@ from types import SimpleNamespace
 
 from codebridge import config as cfgmod
 from codebridge.codex import Options
-from codebridge.router import Router
-from codebridge.session_coordinator import SessionCoordinator
-from codebridge.state import Store
+from codebridge.routing.router import Router
+from codebridge.sessions.coordinator import SessionCoordinator
+from codebridge.sessions.state import Store
 from codebridge.totp import TotpAttemptLimiter
 from codebridge.transport import Attachment, Capabilities, MessageEvent
 
@@ -905,7 +905,7 @@ def test_integration_session_prune_removes_idle_sessions(tmp_path):
     new_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     def _seed(fs):
-        from codebridge.state import ChannelState, SessionState
+        from codebridge.sessions.state import ChannelState, SessionState
 
         ch = fs.channels.get("chan") or ChannelState()
         ch.sessions["old"] = SessionState(repo_name="repo", repo_path=str(repo), thread_id="", last_used_at=old_ts)

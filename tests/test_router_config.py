@@ -1,5 +1,5 @@
 from codebridge.config import Config
-from codebridge.router_config import render_config_text
+from codebridge.routing.config import render_config_text
 
 
 def test_render_config_text_includes_core_fields():
