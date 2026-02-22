@@ -2727,6 +2727,10 @@ class Router:
         """Return True if any session is active in a channel."""
         return await self.coordinator.has_active(channel_id)
 
+    async def active_sessions(self, channel_id: str) -> list[str]:
+        """Return active session names for a channel."""
+        return await self.coordinator.active_sessions(channel_id)
+
     async def consume_pending(self, channel_id: str, session: str) -> Optional[PendingConflict]:
         """Consume a pending conflict if present and not expired."""
         return await self.coordinator.consume_pending(channel_id, session)

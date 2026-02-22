@@ -48,6 +48,13 @@ class SessionService:
                 return any(self._active[channel_id].values())
         return False
 
+    async def active_sessions(self, channel_id: str) -> list[str]:
+        """Return active session names for a channel."""
+        async with self._lock:
+            active = self._active.get(channel_id, {})
+            names = [name for name, proc in active.items() if proc is not None]
+        return sorted(names)
+
     def update_activity(self, channel_id: str, session: str) -> None:
         """Record last output time for a session."""
         if channel_id not in self._activity:

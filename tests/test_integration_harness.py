@@ -473,7 +473,7 @@ def test_integration_steer_command_relays_to_active_session(tmp_path):
     asyncio.run(run())
     assert runner.last_proc is not None
     assert runner.last_proc.writes[-1] == "focus on failing tests\n"
-    assert any("Sent steer input to session 'default'." in msg for msg, _, _ in sink.sent)
+    assert any("Steer delivered to session 'default'." in msg for msg, _, _ in sink.sent)
 
 
 def test_integration_bang_steer_relays_to_active_session(tmp_path):
@@ -496,7 +496,7 @@ def test_integration_bang_steer_relays_to_active_session(tmp_path):
     asyncio.run(run())
     assert runner.last_proc is not None
     assert runner.last_proc.writes[-1] == "keep current plan, reduce scope\n"
-    assert any("Sent steer input to session 'default'." in msg for msg, _, _ in sink.sent)
+    assert any("Steer delivered to session 'default'." in msg for msg, _, _ in sink.sent)
 
 
 def test_integration_bang_s_shortcut_relays_to_active_session(tmp_path):
@@ -519,7 +519,7 @@ def test_integration_bang_s_shortcut_relays_to_active_session(tmp_path):
     asyncio.run(run())
     assert runner.last_proc is not None
     assert runner.last_proc.writes[-1] == "tighten scope\n"
-    assert any("Sent steer input to session 'default'." in msg for msg, _, _ in sink.sent)
+    assert any("Steer delivered to session 'default'." in msg for msg, _, _ in sink.sent)
 
 
 def test_integration_bang_s_shortcut_with_non_space_whitespace_relays(tmp_path):
@@ -544,7 +544,7 @@ def test_integration_bang_s_shortcut_with_non_space_whitespace_relays(tmp_path):
     assert runner.last_proc is not None
     assert "trim scope\n" in runner.last_proc.writes
     assert "keep only tests\n" in runner.last_proc.writes
-    assert any("Sent steer input to session 'default'." in msg for msg, _, _ in sink.sent)
+    assert any("Steer delivered to session 'default'." in msg for msg, _, _ in sink.sent)
 
 
 def test_integration_bare_s_and_a_shortcuts_show_validation_errors(tmp_path):
@@ -563,6 +563,40 @@ def test_integration_bare_s_and_a_shortcuts_show_validation_errors(tmp_path):
     texts = [msg for msg, _, _ in sink.sent]
     assert any("Usage: !c steer [session] -- <text>  or  !c steer <text>" in msg for msg in texts)
     assert any("Usage: !c answer [session] -- <text>  or  !c answer <text>" in msg for msg in texts)
+
+
+def test_integration_steer_fails_loudly_when_no_active_session(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!s tighten scope", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Cannot steer: no active session in this channel." in msg for msg in texts)
+
+
+def test_integration_steer_fails_loudly_when_multiple_active_sessions(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.set_active("chan", "default", _FakeProc())
+        await router.set_active("chan", "alpha", _FakeProc())
+        await router.handle_message(_discord_event("!s tighten scope", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Cannot steer: multiple active sessions (alpha, default)." in msg for msg in texts)
 
 
 def test_integration_session_targeted_steer_and_answer_shortcuts(tmp_path):

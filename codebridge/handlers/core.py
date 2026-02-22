@@ -370,21 +370,27 @@ async def handle_steer(router: "Router", event: MessageEvent, sink: ResponseSink
         return
     payload = (text or "").strip()
     if not payload:
-        await router.reply_forbidden(sink, "Steer text required.")
+        await router.reply_forbidden(
+            sink,
+            "Cannot steer: text is required. Usage: !c steer [session] -- <text>  or  !c steer <text>",
+        )
         return
     proc = await router.get_active(sink.channel_id, session)
     if not proc:
         await router.reply_forbidden(
             sink,
-            f"No active Codex process for session '{session}'. Start/resume a session first.",
+            f"Cannot steer: no active session '{session}' in this channel. Use `!c start` or `!c resume` first.",
         )
         return
     try:
         await proc.write(payload + "\n")
     except Exception as exc:
-        await router.reply_forbidden(sink, f"send steer failed: {exc}")
+        await router.reply_forbidden(
+            sink,
+            f"Steer failed: session process is not accepting input (ended/interrupted). Details: {exc}",
+        )
         return
-    await router.reply(sink, f"Sent steer input to session '{session}'.")
+    await router.reply(sink, f"Steer delivered to session '{session}'.")
     router.logger.info(
         "relay.steer",
         extra={

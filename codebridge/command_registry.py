@@ -829,18 +829,52 @@ async def _cmd_answer(router: Any, message: MessageEvent, sink: ResponseSink, re
 
 
 async def _cmd_steer(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
-    parsed = await _parse_session_text_args(
-        router,
-        message,
-        sink,
-        rest,
-        "Usage: !c steer [session] -- <text>  or  !c steer <text>",
-        "Steer text required.",
-    )
+    parsed = await _parse_steer_args(router, message, sink, rest)
     if not parsed:
         return
     session, text = parsed
     await router.handle_steer(message, sink, session, text)
+
+
+async def _parse_steer_args(router: Any, message: MessageEvent, sink: ResponseSink, rest: str) -> tuple[str, str] | None:
+    rest = (rest or "").strip()
+    usage = "Usage: !c steer [session] -- <text>  or  !c steer <text>"
+    if not rest:
+        await router.reply_forbidden(sink, usage)
+        return None
+
+    explicit_session = ""
+    text = rest
+    if "--" in rest:
+        left, right = rest.split("--", 1)
+        text = right.strip()
+        left = left.strip()
+        if left:
+            resolved = await _normalize_session_or_reply(router, sink, left)
+            if not resolved:
+                return None
+            explicit_session = resolved
+    if not text.strip():
+        await router.reply_forbidden(sink, "Cannot steer: text is required.\n" + usage)
+        return None
+
+    if explicit_session:
+        return explicit_session, text.strip()
+
+    active_sessions = await router.active_sessions(message.channel_id)
+    if not active_sessions:
+        await router.reply_forbidden(
+            sink,
+            "Cannot steer: no active session in this channel. Use `!c start` or `!c resume` first.",
+        )
+        return None
+    if len(active_sessions) > 1:
+        await router.reply_forbidden(
+            sink,
+            "Cannot steer: multiple active sessions (" + ", ".join(active_sessions) + "). Use `!s:<session> <text>`.",
+        )
+        return None
+    return active_sessions[0], text.strip()
 
 
 async def _cmd_approve(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

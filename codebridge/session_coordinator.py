@@ -58,6 +58,9 @@ class SessionCoordinator:
     async def has_active(self, channel_id: str) -> bool:
         return await self._sessions.has_active(channel_id)
 
+    async def active_sessions(self, channel_id: str) -> list[str]:
+        return await self._sessions.active_sessions(channel_id)
+
     async def set_pending_conflict(self, channel_id: str, session: str, conflict: PendingConflict) -> None:
         await self._sessions.set_pending_conflict(channel_id, session, conflict)
 
