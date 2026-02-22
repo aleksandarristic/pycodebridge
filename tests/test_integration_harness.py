@@ -611,13 +611,38 @@ def test_integration_wait_command_reports_pending_input(tmp_path):
     assert any("Related: !c answer, !a <text>" in msg for msg, _, _ in sink.sent)
 
 
-def test_integration_run_completion_summary(tmp_path):
+def test_integration_run_completion_summary_for_long_run(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
 
     router, _ = _build_router(tmp_path)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    monkeypatch.setattr(router_mod, "_RUN_COMPLETION_MIN_SECONDS", 1)
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        for _ in range(50):
+            proc = await router.get_active("chan", "default")
+            if proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        await asyncio.sleep(1.05)
+        await router.handle_message(_discord_event("!c stop", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Run complete for session 'default'" in t for t in texts)
+
+
+def test_integration_run_completion_summary_suppressed_for_short_run(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    monkeypatch.setattr(router_mod, "_RUN_COMPLETION_MIN_SECONDS", 10)
 
     async def run():
         await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
@@ -630,7 +655,7 @@ def test_integration_run_completion_summary(tmp_path):
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
-    assert any("Run complete for session 'default'" in t for t in texts)
+    assert not any("Run complete for session 'default'" in t for t in texts)
 
 
 def test_integration_run_heartbeat_message(tmp_path, monkeypatch):

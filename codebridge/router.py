@@ -71,6 +71,7 @@ _READ_ONLY_COMMANDS = {
 }
 _GIT_READ_ONLY_SUBCOMMANDS = {"status", "log", "branches", "show", "diff", "remote"}
 _RUN_HEARTBEAT_SECONDS = 45
+_RUN_COMPLETION_MIN_SECONDS = 30
 _RUN_KEY_RESULT_MAX = 180
 
 
@@ -1557,6 +1558,8 @@ class Router:
     ) -> None:
         """Send concise completion details for a successful run."""
         elapsed = int(max(1.0, time.monotonic() - started_at))
+        if elapsed < _RUN_COMPLETION_MIN_SECONDS:
+            return
         parts = [f"Run complete for session '{session}' in {self._format_duration(elapsed)}."]
         usage = self.get_usage(channel_id, session)
         if usage and usage.total_tokens:
