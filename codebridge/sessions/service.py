@@ -1,0 +1,239 @@
+"""Session state, pending conflicts, and active process tracking."""
+
+from __future__ import annotations
+
+import asyncio
+import time
+from typing import Any, Dict, Optional
+
+from .. import config as cfgmod
+from ..routing.helpers import DEFAULT_SESSION, PendingConflict, normalize_session, set_sticky
+from .state import Store, utc_now_iso
+from ..util import path as pathutil
+
+
+class SessionService:
+    """Manage session state updates and in-memory process tracking."""
+
+    def __init__(self, state: Store, cfg: cfgmod.Config) -> None:
+        self._state = state
+        self._cfg = cfg
+        self._lock = asyncio.Lock()
+        self._active: Dict[str, Dict[str, Any]] = {}
+        self._pending: Dict[str, PendingConflict] = {}
+        self._activity: Dict[str, Dict[str, float]] = {}
+
+    async def set_active(self, channel_id: str, session: str, proc: Any) -> None:
+        """Track a running process for a session."""
+        async with self._lock:
+            if channel_id not in self._active:
+                self._active[channel_id] = {}
+            self._active[channel_id][session] = proc
+
+    async def clear_active(self, channel_id: str, session: str) -> None:
+        """Clear the running process for a session."""
+        async with self._lock:
+            if channel_id in self._active:
+                self._active[channel_id].pop(session, None)
+
+    async def get_active(self, channel_id: str, session: str) -> Optional[Any]:
+        """Return the running process for a session, if any."""
+        async with self._lock:
+            return self._active.get(channel_id, {}).get(session)
+
+    async def has_active(self, channel_id: str) -> bool:
+        """Return True if any session is active in a channel."""
+        async with self._lock:
+            if channel_id in self._active:
+                return any(self._active[channel_id].values())
+        return False
+
+    async def active_sessions(self, channel_id: str) -> list[str]:
+        """Return active session names for a channel."""
+        async with self._lock:
+            active = self._active.get(channel_id, {})
+            names = [name for name, proc in active.items() if proc is not None]
+        return sorted(names)
+
+    def update_activity(self, channel_id: str, session: str) -> None:
+        """Record last output time for a session."""
+        if channel_id not in self._activity:
+            self._activity[channel_id] = {}
+        self._activity[channel_id][session] = time.time()
+
+    def get_activity(self, channel_id: str, session: str) -> Optional[str]:
+        """Return last output time for a session."""
+        ts = self._activity.get(channel_id, {}).get(session)
+        if not ts:
+            return None
+        return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ts))
+
+    async def set_pending_conflict(self, channel_id: str, session: str, conflict: PendingConflict) -> None:
+        """Store a pending conflict for start/replace."""
+        async with self._lock:
+            self._pending[f"{channel_id}:{session}"] = conflict
+
+    async def consume_pending(self, channel_id: str, session: str) -> Optional[PendingConflict]:
+        """Consume a pending conflict if present and not expired."""
+        async with self._lock:
+            if session:
+                key = f"{channel_id}:{session}"
+                conflict = self._pending.pop(key, None)
+            else:
+                conflict = None
+                for key in list(self._pending.keys()):
+                    if key.startswith(f"{channel_id}:"):
+                        conflict = self._pending.pop(key, None)
+                        break
+        if not conflict:
+            return None
+        if conflict.expires_at < time.time():
+            return None
+        return conflict
+
+    async def reset_session(self, channel_id: str, session: str) -> bool:
+        """Reset in-memory and persistent context for a single session."""
+        async with self._lock:
+            active = self._active.get(channel_id)
+            if active is not None:
+                active.pop(session, None)
+                if not active:
+                    self._active.pop(channel_id, None)
+            self._pending.pop(f"{channel_id}:{session}", None)
+            activity = self._activity.get(channel_id)
+            if activity is not None:
+                activity.pop(session, None)
+                if not activity:
+                    self._activity.pop(channel_id, None)
+
+        removed = False
+
+        def mutator(fs):
+            nonlocal removed
+            ch = fs.channels.get(channel_id)
+            if ch is None:
+                return
+            if session in ch.sessions:
+                removed = True
+                del ch.sessions[session]
+            fs.channels[channel_id] = ch
+
+        self._state.update(mutator)
+        return removed
+
+    def update_state(
+        self,
+        channel_id: str,
+        session: str,
+        repo_name: str,
+        repo_path: str,
+        thread_id: str,
+        model: str,
+        reasoning_effort: str,
+    ) -> None:
+        """Update persistent state for a session."""
+        session = _normalize_session_default(session)
+        try:
+            repo_name = pathutil.normalize_repo_name(repo_name)
+        except ValueError:
+            repo_name = (repo_name or "").strip().lower()
+
+        def mutator(fs):
+            ch = fs.channels.get(channel_id)
+            if ch is None:
+                from .state import ChannelState
+
+                ch = ChannelState()
+                fs.channels[channel_id] = ch
+            sess = ch.sessions.get(session)
+            if sess is None:
+                from .state import SessionState
+
+                sess = SessionState(repo_name=repo_name, repo_path=repo_path, thread_id=thread_id)
+            if not sess.created_at:
+                sess.created_at = utc_now_iso()
+            if repo_name:
+                sess.repo_name = repo_name
+            if repo_path:
+                sess.repo_path = repo_path
+            if thread_id:
+                sess.thread_id = thread_id
+            if model:
+                sess.model = model
+            elif not sess.model and self._cfg.codex.model:
+                sess.model = self._cfg.codex.model
+            if reasoning_effort:
+                sess.reasoning_effort = reasoning_effort
+            elif not sess.reasoning_effort and self._cfg.codex.model_reasoning_effort:
+                sess.reasoning_effort = self._cfg.codex.model_reasoning_effort
+            sess.last_used_at = utc_now_iso()
+            ch.sessions[session] = sess
+            fs.channels[channel_id] = ch
+
+        self._state.update(mutator)
+
+    def session_model(self, channel_id: str, session: str) -> str:
+        """Return model override for a session or fallback to default."""
+        session = _normalize_session_default(session)
+        state = self._state.load()
+        ch = state.channels.get(channel_id)
+        if ch:
+            sess = ch.sessions.get(session)
+            if sess and sess.model:
+                return sess.model
+        return self._cfg.codex.model
+
+    def session_reasoning_effort(self, channel_id: str, session: str) -> str:
+        """Return reasoning effort override for a session or fallback to default."""
+        session = _normalize_session_default(session)
+        state = self._state.load()
+        ch = state.channels.get(channel_id)
+        if ch:
+            sess = ch.sessions.get(session)
+            if sess and sess.reasoning_effort:
+                return sess.reasoning_effort
+        return self._cfg.codex.model_reasoning_effort
+
+    def set_session_model(
+        self,
+        channel_id: str,
+        session: str,
+        repo_name: str,
+        repo_path: str,
+        model: str,
+        reasoning_effort: str,
+    ) -> None:
+        """Set model and reasoning overrides for a session."""
+        session = _normalize_session_default(session)
+        state = self._state.load()
+        thread_id = ""
+        ch = state.channels.get(channel_id)
+        if ch:
+            sess = ch.sessions.get(session)
+            if sess:
+                thread_id = sess.thread_id
+        self.update_state(channel_id, session, repo_name, repo_path, thread_id, model, reasoning_effort)
+
+    def current_session_for_user(self, user_id: str, channel_id: str) -> str:
+        """Return sticky session selection for a user or default."""
+        state = self._state.load()
+        ch = state.channels.get(channel_id)
+        if ch and user_id:
+            sess = ch.sticky.get(user_id)
+            if sess:
+                return sess
+        return "default"
+
+    def set_sticky(self, channel_id: str, user_id: str, session: str) -> None:
+        """Set sticky session selection for a user."""
+        self._state.update(lambda fs: set_sticky(fs, channel_id, user_id, _normalize_session_default(session)))
+
+
+def _normalize_session_default(session: str) -> str:
+    raw = (session or "").strip()
+    if not raw:
+        return DEFAULT_SESSION
+    try:
+        return normalize_session(raw)
+    except ValueError:
+        return DEFAULT_SESSION

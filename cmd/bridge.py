@@ -14,11 +14,11 @@ from codebridge import logging as logmod
 from codebridge.audit import Logger as AuditLogger
 from codebridge.codex import Runner
 from codebridge.discord_bot import build_client
-from codebridge.health import start_health_server
+from codebridge.services.health import start_health_server
 from codebridge.telegram_bot import build_application, run_polling
-from codebridge.router import Router
-from codebridge.session_coordinator import SessionCoordinator
-from codebridge.state import Store
+from codebridge.routing.router import Router
+from codebridge.sessions.coordinator import SessionCoordinator
+from codebridge.sessions.state import Store
 
 
 def _install_signal_handlers(stop_event: asyncio.Event) -> None:

@@ -3,7 +3,7 @@
 import discord
 
 from .adapters.discord import DiscordAdapter
-from .router import Router
+from .routing.router import Router
 
 
 class BridgeClient(discord.Client):

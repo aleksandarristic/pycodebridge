@@ -1,24 +1,11 @@
 # TODO (Public)
 
 Current status:
+- Completed: repository-wide module architecture reorganization into hierarchical packages
+  (`routing/`, `commands/`, `sessions/`, `services/`) with backward-compatible top-level shims and updated docs.
 
 TODO (Near-term):
-
-- Repository-wide module architecture reorganization (human-readable hierarchy).
-  - Goal: redesign the full repo layout so related concerns are grouped into clear packages/modules with explicit boundaries across routing, handlers, adapters, services, state, and utilities.
-  - Scope:
-    - Consolidate router-related files into a coherent package tree (for example: routing/core, routing/auth, routing/commands, routing/runtime, routing/io).
-    - Apply the same modularization approach repo-wide (handlers, transport adapters, services, config/state, shared utilities).
-    - Move command dispatch/alias/help parsing concerns into consistent command modules.
-    - Separate transport-facing orchestration from domain/state/update logic to reduce cross-file coupling throughout the codebase.
-  - Quality bar:
-    - Import graph becomes easier to follow (minimal circular risk, predictable dependency direction).
-    - File/module names reflect responsibility; no ambiguous “helpers” catch-alls for core logic.
-    - Public entrypoints remain stable (no user-facing command regressions).
-  - Deliverables:
-    - Proposed target package map and migration plan.
-    - Incremental refactor PR sequence with tests green at each step.
-    - Updated docs section describing architecture layout and ownership boundaries.
+- (none)
 
 Backlog:
 

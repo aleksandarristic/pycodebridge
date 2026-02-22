@@ -343,6 +343,19 @@ TOTP is not required in DMs for:
 When a repo is bound in DMs, a message without `!c` is treated as a prompt unless Codex is currently awaiting input (then it is relayed to the active session stdin).
 Attachments in channels or bound DMs will prompt for a destination path before saving.
 
+## Package layout
+Core modules are now grouped by responsibility:
+
+- `codebridge/routing/` — router orchestration, routing helpers, status/config formatting, reply helpers.
+- `codebridge/commands/` — command parsing, registry/dispatch, help rendering, model-list parsing.
+- `codebridge/sessions/` — session state persistence, active-process tracking, queue/coordinator lifecycle.
+- `codebridge/services/` — file transfer, health endpoint, git bootstrap lifecycle helpers.
+- `codebridge/handlers/` — command handlers that operate behind the router boundary.
+- `codebridge/adapters/` — transport adapter implementations (Discord/Telegram, Slack scaffold).
+- `codebridge/util/` — shared utility primitives.
+
+Backward-compatible top-level module shims are retained (for example `codebridge/router.py`) and re-export from the new package layout.
+
 ## Troubleshooting
 - No response: confirm Message Content intent is enabled and saved, and your user ID is allowlisted.
 - Repo error: ensure channel name matches `codex-<repo>` and `<code_root>/<repo>/.git` exists. Repo names are normalized to lowercase.

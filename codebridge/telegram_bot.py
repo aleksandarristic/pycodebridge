@@ -7,7 +7,7 @@ from telegram import Update
 from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageHandler, filters
 
 from .adapters.telegram import TelegramAdapter
-from .router import Router
+from .routing.router import Router
 
 
 def build_application(router: Router, token: str) -> Application:
