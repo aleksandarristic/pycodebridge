@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import json
 import os
 import re
@@ -59,6 +60,7 @@ _REASONING_ALIASES = {
     "extrahigh": "extra-high",
     "xhigh": "extra-high",
 }
+_TTL_RE = re.compile(r"^(\d+)\s*([mhd])$", re.IGNORECASE)
 
 _DEFAULT_MODELS_CACHE = os.path.expanduser("~/.codex/models_cache.json")
 
@@ -204,6 +206,15 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec("models", "models [session]", "list available models via /model", "Sessions", _cmd_models, AUTH_OPEN, aliases=("mdls",)),
         CommandSpec("thread", "thread [session] <id>", "set thread id", "Sessions", _cmd_thread, AUTH_UNLOCK, aliases=("tid",)),
         CommandSpec("reset", "reset [session]", "reset session context", "Sessions", _cmd_reset, AUTH_UNLOCK),
+        CommandSpec(
+            "session",
+            "session status | session prune <ttl> | session archive [session] | session restore [session] [archive-id]",
+            "session lifecycle controls",
+            "Sessions",
+            _cmd_session_lifecycle,
+            AUTH_UNLOCK,
+            aliases=("sess",),
+        ),
         CommandSpec("spec", "spec [session]", "capture repo spec and tasks", "Sessions", _cmd_spec, AUTH_UNLOCK, aliases=("plan",)),
         CommandSpec(
             "create",
@@ -582,6 +593,74 @@ async def _cmd_reset(router: Any, message: MessageEvent, sink: ResponseSink, rep
     if not session:
         return
     await router.handle_reset_session(sink, message.channel_id, session)
+
+
+async def _cmd_session_lifecycle(
+    router: Any,
+    message: MessageEvent,
+    sink: ResponseSink,
+    repo_name: str,
+    repo_path: str,
+    rest: str,
+) -> None:
+    parts = (rest or "").strip().split()
+    if not parts:
+        await router.reply_forbidden(
+            sink,
+            "Usage: !c session status | !c session prune <ttl> | !c session archive [session] | !c session restore [session] [archive-id]",
+        )
+        return
+    action = parts[0].lower()
+    if action == "status":
+        await router.handle_session_lifecycle_status(message, sink)
+        return
+    if action == "prune":
+        if len(parts) != 2:
+            await router.reply_forbidden(sink, "Usage: !c session prune <ttl>")
+            return
+        ttl = _parse_ttl_seconds(parts[1])
+        if ttl <= 0:
+            await router.reply_forbidden(sink, "TTL must be positive (examples: 30m, 4h, 7d).")
+            return
+        await router.handle_session_lifecycle_prune(message, sink, ttl)
+        return
+    if action == "archive":
+        session_name = parts[1] if len(parts) >= 2 else ""
+        session_name = await _resolve_session_name(router, message, sink, session_name)
+        if not session_name:
+            return
+        await router.handle_session_lifecycle_archive(message, sink, session_name, repo_name, repo_path)
+        return
+    if action == "restore":
+        if len(parts) > 3:
+            await router.reply_forbidden(sink, "Usage: !c session restore [session] [archive-id]")
+            return
+        session_name = ""
+        archive_id = ""
+        if len(parts) >= 2:
+            session_name = parts[1]
+        if len(parts) == 3:
+            archive_id = parts[2]
+        session_name = await _resolve_session_name(router, message, sink, session_name)
+        if not session_name:
+            return
+        await router.handle_session_lifecycle_restore(message, sink, session_name, repo_name, repo_path, archive_id)
+        return
+    await router.reply_forbidden(
+        sink,
+        "Usage: !c session status | !c session prune <ttl> | !c session archive [session] | !c session restore [session] [archive-id]",
+    )
+
+
+def _parse_ttl_seconds(raw: str) -> int:
+    token = (raw or "").strip().lower()
+    m = _TTL_RE.match(token)
+    if not m:
+        return 0
+    amount = int(m.group(1))
+    unit = m.group(2).lower()
+    mult = {"m": 60, "h": 3600, "d": 86400}[unit]
+    return amount * mult
 
 
 async def _cmd_spec(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

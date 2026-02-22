@@ -1,5 +1,6 @@
 import asyncio
 import base64
+from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import os
@@ -648,6 +649,63 @@ def test_integration_run_heartbeat_message(tmp_path, monkeypatch):
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
     assert any("Still running in session 'default'" in t for t in texts)
+
+
+def test_integration_session_prune_removes_idle_sessions(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    old_ts = (datetime.now(timezone.utc) - timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    new_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def _seed(fs):
+        from codebridge.state import ChannelState, SessionState
+
+        ch = fs.channels.get("chan") or ChannelState()
+        ch.sessions["old"] = SessionState(repo_name="repo", repo_path=str(repo), thread_id="", last_used_at=old_ts)
+        ch.sessions["new"] = SessionState(repo_name="repo", repo_path=str(repo), thread_id="", last_used_at=new_ts)
+        fs.channels["chan"] = ch
+
+    router.state.update(_seed)
+
+    async def run():
+        await router.handle_message(_discord_event("!c session prune 1h", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c session status", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Pruned 1 session(s)" in t for t in texts)
+    assert any("- new:" in t for t in texts)
+    assert not any("- old:" in t for t in texts)
+
+
+def test_integration_session_archive_and_restore(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        for _ in range(50):
+            proc = await router.get_active("chan", "default")
+            if proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        await router.handle_message(_discord_event("!c session archive default", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c session restore default", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c stop", "codex-repo"), sink)
+        await asyncio.sleep(0.05)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Archived session 'default'" in t for t in texts)
+    assert any(args and args[0] == "resume" for args in runner.calls)
 
 
 def test_integration_misc_shortcuts_dispatch(tmp_path):

@@ -16,6 +16,9 @@ def test_command_registry_aliases():
     assert "health" in registry
     assert "diag" in registry
     assert registry["diag"] is registry["health"]
+    assert "session" in registry
+    assert "sess" in registry
+    assert registry["sess"] is registry["session"]
     assert "show" in registry
     assert "showrepo" in registry
     assert registry["showrepo"] is registry["show"]

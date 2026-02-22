@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
 import json
+import tempfile
 
 from . import config as cfgmod
 from .audit import Entry, Logger as AuditLogger
@@ -736,6 +737,158 @@ class Router:
                 "cancelled_jobs": len(queued_ids),
             },
         )
+
+    async def handle_session_lifecycle_status(self, event: MessageEvent, sink: ResponseSink) -> None:
+        """Show session lifecycle status for the current channel."""
+        state = self.state.load()
+        ch = state.channels.get(event.channel_id)
+        if not ch or not ch.sessions:
+            await self.reply(sink, "No sessions tracked for this channel.")
+            return
+        lines = ["Session lifecycle status:"]
+        for name in sorted(ch.sessions.keys()):
+            sess = ch.sessions[name]
+            idle = self._session_idle_seconds(sess.last_used_at or sess.created_at)
+            idle_text = self._format_duration(int(idle)) if idle >= 0 else "unknown"
+            proc = await self.get_active(event.channel_id, name)
+            status = "running" if proc is not None else "idle"
+            lines.append(
+                f"- {name}: {status}, idle {idle_text}, repo {sess.repo_name or 'n/a'}, thread {sess.thread_id or 'n/a'}"
+            )
+        await self.reply(sink, "\n".join(lines))
+
+    async def handle_session_lifecycle_prune(self, event: MessageEvent, sink: ResponseSink, ttl_seconds: int) -> None:
+        """Prune idle sessions older than TTL for current channel."""
+        state = self.state.load()
+        ch = state.channels.get(event.channel_id)
+        if not ch or not ch.sessions:
+            await self.reply(sink, "No sessions to prune.")
+            return
+        removed: list[str] = []
+        skipped_running = 0
+        for name in sorted(list(ch.sessions.keys())):
+            sess = ch.sessions[name]
+            idle = self._session_idle_seconds(sess.last_used_at or sess.created_at)
+            if idle < 0 or idle < ttl_seconds:
+                continue
+            if await self.get_active(event.channel_id, name) is not None:
+                skipped_running += 1
+                continue
+            deleted = await self.coordinator.reset_session(event.channel_id, name)
+            self.clear_awaiting_input(event.channel_id, name)
+            if deleted:
+                removed.append(name)
+        if not removed and skipped_running == 0:
+            await self.reply(sink, f"No sessions exceeded idle TTL {self._format_duration(ttl_seconds)}.")
+            return
+        msg = f"Pruned {len(removed)} session(s) older than {self._format_duration(ttl_seconds)}."
+        if removed:
+            msg += " Removed: " + ", ".join(removed) + "."
+        if skipped_running:
+            msg += f" Skipped running: {skipped_running}."
+        await self.reply(sink, msg)
+
+    async def handle_session_lifecycle_archive(
+        self,
+        event: MessageEvent,
+        sink: ResponseSink,
+        session: str,
+        repo_name: str,
+        repo_path: str,
+    ) -> None:
+        """Archive concise session summary for later restore."""
+        state = self.state.load()
+        ch = state.channels.get(event.channel_id)
+        sess = ch.sessions.get(session) if ch else None
+        if not sess:
+            await self.reply_forbidden(sink, f"Session '{session}' not found.")
+            return
+        content = self._build_session_archive_text(event.channel_id, session, sess, repo_name or sess.repo_name, repo_path or sess.repo_path)
+        archive_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        archive_dir = self._session_archive_dir(event.channel_id, session)
+        os.makedirs(archive_dir, exist_ok=True)
+        path = os.path.join(archive_dir, f"{archive_id}.txt")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(content)
+        await self.reply(sink, f"Archived session '{session}' as `{archive_id}`.")
+
+    async def handle_session_lifecycle_restore(
+        self,
+        event: MessageEvent,
+        sink: ResponseSink,
+        session: str,
+        repo_name: str,
+        repo_path: str,
+        archive_id: str,
+    ) -> None:
+        """Restore context by sending archived summary as prompt preface."""
+        archive_file = self._find_archive_file(event.channel_id, session, archive_id)
+        if not archive_file:
+            await self.reply_forbidden(sink, "Archive not found for that session.")
+            return
+        try:
+            archived = Path(archive_file).read_text(encoding="utf-8")
+        except Exception as exc:
+            await self.reply_forbidden(sink, f"Archive read error: {exc}")
+            return
+        prompt = (
+            "Session context archive loaded. Use this summary as prior context.\n\n"
+            f"{archived}\n\n"
+            "Continue from this state and ask for clarification when needed."
+        )
+        await self.handle_resume(event, sink, repo_name, repo_path, session, prompt)
+
+    def _session_archive_dir(self, channel_id: str, session: str) -> str:
+        base = self.cfg.state.log_dir or tempfile.gettempdir()
+        safe_channel = re.sub(r"[^A-Za-z0-9._-]+", "_", channel_id or "channel")
+        safe_session = re.sub(r"[^A-Za-z0-9._-]+", "_", session or DEFAULT_SESSION)
+        return os.path.join(base, "session_archives", safe_channel, safe_session)
+
+    def _find_archive_file(self, channel_id: str, session: str, archive_id: str) -> str:
+        archive_dir = self._session_archive_dir(channel_id, session)
+        if not os.path.isdir(archive_dir):
+            return ""
+        if archive_id:
+            path = os.path.join(archive_dir, f"{archive_id}.txt")
+            return path if os.path.exists(path) else ""
+        candidates = sorted(Path(archive_dir).glob("*.txt"))
+        if not candidates:
+            return ""
+        return str(candidates[-1])
+
+    def _session_idle_seconds(self, timestamp: str) -> int:
+        raw = (timestamp or "").strip()
+        if not raw:
+            return -1
+        try:
+            dt = datetime.strptime(raw, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        except Exception:
+            try:
+                dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except Exception:
+                return -1
+        return max(0, int((datetime.now(timezone.utc) - dt).total_seconds()))
+
+    def _build_session_archive_text(self, channel_id: str, session: str, sess: Any, repo_name: str, repo_path: str) -> str:
+        lines = [
+            f"Session: {session}",
+            f"Repo: {repo_name or sess.repo_name or 'n/a'}",
+            f"Repo path: {repo_path or sess.repo_path or 'n/a'}",
+            f"Thread id: {sess.thread_id or 'n/a'}",
+            f"Model: {sess.model or self.cfg.codex.model or 'default'}",
+            f"Reasoning: {sess.reasoning_effort or self.cfg.codex.model_reasoning_effort or 'default'}",
+            f"Created at: {sess.created_at or 'n/a'}",
+            f"Last used: {sess.last_used_at or 'n/a'}",
+        ]
+        try:
+            summaries = self.audit.summaries(channel_id, session, 1)
+        except Exception:
+            summaries = []
+        if summaries:
+            req = summaries[0].request or {}
+            lines.append(f"Last request command: {req.get('command') or 'n/a'}")
+            lines.append(f"Last request args: {req.get('args') or ''}".strip())
+        return "\n".join(lines)
 
     async def handle_reset_all_sessions(self, sink: ResponseSink) -> None:
         """Reset all sessions across channels, cancelling queued work and killing active processes when possible."""

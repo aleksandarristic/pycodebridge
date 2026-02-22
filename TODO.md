@@ -4,8 +4,6 @@ Current status:
 
 TODO (Near-term):
 
-- Add session lifecycle controls.
-  - Support idle session expiry, archive/summary output, and easy restore/start-from-summary flow.
 - Add usage budget visibility and controls.
   - Track token/cost usage per user/channel with configurable soft/hard thresholds.
 - Expand audit trail UX commands.
