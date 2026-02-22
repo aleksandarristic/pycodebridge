@@ -716,6 +716,25 @@ def test_integration_repo_help_chunks_stay_within_limit_with_lock_prefix(tmp_pat
     assert all(t.startswith("🔒 ") for t in texts if t)
 
 
+def test_integration_contextual_sink_chunks_raw_send_globally(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    router.cfg.discord.max_discord_message_chars = 80
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    wrapped = router._contextual_sink(_discord_event("noop", "codex-repo"), sink)
+
+    async def run():
+        await wrapped.send("x" * 260)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert len(texts) > 1
+    assert all(len(t) <= 80 for t in texts)
+
+
 def test_integration_dm_shortcuts_and_help_details(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()

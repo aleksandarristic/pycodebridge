@@ -1772,6 +1772,7 @@ class Router:
             wrapped = _ThreadContextSink(wrapped, thread_id, reply_to_id)
         if self._totp_enabled(event):
             wrapped = _LockStateSink(wrapped, lambda: self._lock_emoji_for_event(event), self.cfg.discord.max_discord_message_chars)
+        wrapped = _ChunkingSink(wrapped, self.cfg.discord.max_discord_message_chars)
         return wrapped
 
     def _lock_emoji_for_event(self, event: MessageEvent) -> str:
@@ -2013,6 +2014,32 @@ class _ThreadContextSink:
         if not caps.replies:
             use_reply = None
         await self._sink.send_file(path, filename, thread_id=use_thread, reply_to_id=use_reply)
+
+
+class _ChunkingSink:
+    """Wrap a sink and enforce message-length chunking on every send."""
+
+    def __init__(self, sink: ResponseSink, max_chars: int) -> None:
+        self._sink = sink
+        self._max_chars = max_chars
+        self.channel_id = sink.channel_id
+
+    async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
+        text = strip_control_codes(content or "")
+        for chunk in chunk_text(text, self._max_chars):
+            await self._sink.send(chunk, thread_id=thread_id, reply_to_id=reply_to_id)
+
+    def capabilities(self) -> Capabilities:
+        return self._sink.capabilities()
+
+    def typing(self):  # type: ignore[override]
+        return self._sink.typing()
+
+    async def update_pinned_status(self, user_id: str, session: str, text: str) -> None:
+        await self._sink.update_pinned_status(user_id, session, text)
+
+    async def send_file(self, path: str, filename: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
+        await self._sink.send_file(path, filename, thread_id=thread_id, reply_to_id=reply_to_id)
 
 
 class _LockStateSink:
