@@ -4,6 +4,24 @@ Current status:
 
 TODO (Near-term):
 
+- Repository-wide module architecture reorganization (human-readable hierarchy).
+  - Goal: redesign the full repo layout so related concerns are grouped into clear packages/modules with explicit boundaries across routing, handlers, adapters, services, state, and utilities.
+  - Scope:
+    - Consolidate router-related files into a coherent package tree (for example: routing/core, routing/auth, routing/commands, routing/runtime, routing/io).
+    - Apply the same modularization approach repo-wide (handlers, transport adapters, services, config/state, shared utilities).
+    - Move command dispatch/alias/help parsing concerns into consistent command modules.
+    - Separate transport-facing orchestration from domain/state/update logic to reduce cross-file coupling throughout the codebase.
+  - Quality bar:
+    - Import graph becomes easier to follow (minimal circular risk, predictable dependency direction).
+    - File/module names reflect responsibility; no ambiguous “helpers” catch-alls for core logic.
+    - Public entrypoints remain stable (no user-facing command regressions).
+  - Deliverables:
+    - Proposed target package map and migration plan.
+    - Incremental refactor PR sequence with tests green at each step.
+    - Updated docs section describing architecture layout and ownership boundaries.
+
+Backlog:
+
 - Compose + global skill defaults for cross-repo persistence (deferred).
   - Goal: define and document a non-`AGENTS.md` channel for durable operator defaults across repos/sessions.
   - Approach:
@@ -34,23 +52,6 @@ TODO (Near-term):
     - Missing steer acknowledgement, no output pivot after acknowledged steer, or unexplained no-op behavior.
   - Artifacts to capture:
     - Command transcript (`start` + steer messages), timestamps, and final output snippet showing scope change.
-
-- Router/module architecture reorganization (human-readable hierarchy).
-  - Goal: redesign code layout so related router concerns are grouped into clear packages/modules with explicit boundaries.
-  - Scope:
-    - Consolidate router-related files into a coherent package tree (for example: routing/core, routing/auth, routing/commands, routing/runtime, routing/io).
-    - Move command dispatch/alias/help parsing concerns into consistent command modules.
-    - Separate transport-facing orchestration from domain/state/update logic to reduce cross-file coupling.
-  - Quality bar:
-    - Import graph becomes easier to follow (minimal circular risk, predictable dependency direction).
-    - File/module names reflect responsibility; no ambiguous “helpers” catch-alls for core logic.
-    - Public entrypoints remain stable (no user-facing command regressions).
-  - Deliverables:
-    - Proposed target package map and migration plan.
-    - Incremental refactor PR sequence with tests green at each step.
-    - Updated docs section describing architecture layout and ownership boundaries.
-
-Backlog:
 
 - Role-based permissions model (Discord-role driven access tiers).
 - Per-channel policy configuration (command/model/runtime policy by channel).
