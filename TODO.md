@@ -4,8 +4,7 @@ Current status:
 
 TODO (Near-term):
 
-- Add safer write-operation workflow.
-  - Introduce explicit confirmation flow for destructive/high-impact actions (for example push/delete/rename paths).
+- No open near-term TODO items.
 
 Backlog:
 

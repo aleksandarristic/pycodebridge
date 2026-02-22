@@ -734,3 +734,32 @@ def test_dm_prefixed_sink_adds_repo_prefix():
     asyncio.run(run())
 
     assert sink.sent == ["[repo] hello"]
+
+
+def test_dm_admin_deleterepo_requires_dangerous_confirmation(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.discord.prefix = "!c"
+    cfg.discord.dm_admin_enabled = True
+    cfg.discord.allowed_user_ids = ["user"]
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+
+    store = Store(cfg.state.data_dir)
+    router = _FakeRouter(cfg, store)
+    sink = _FakeSink("dm-1")
+    event = MessageEvent(
+        platform="discord",
+        content="!c deleterepo repo",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    async def run():
+        await dm_admin.handle_dm_message(router, event, sink)
+
+    asyncio.run(run())
+    assert any("Dangerous operation detected (delete repo)." in msg for msg in sink.sent)

@@ -43,6 +43,16 @@ _DM_COMMAND_ALIASES = {
 _DM_SHORTCUT_COMMANDS = {"gh", "health", "help", "lock", "status", "unlock", "updates"}
 
 
+def _require_dangerous_confirmation_token(router: "Router", rest: str) -> tuple[bool, str]:
+    """Validate dangerous-operation confirmation token in arg text."""
+    token = (router.cfg.git.dangerous_confirmation_token or "--confirm-dangerous").strip() or "--confirm-dangerous"
+    args = (rest or "").split()
+    if token in args:
+        filtered = " ".join(a for a in args if a != token).strip()
+        return True, filtered
+    return False, rest
+
+
 class _PrefixedSink:
     """Response sink wrapper that prefixes messages with a repo name."""
 
@@ -485,6 +495,11 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
                 await send_forbidden(str(err))
             return
         if cmd == "deleterepo":
+            ok_confirm, rest = _require_dangerous_confirmation_token(router, rest)
+            if not ok_confirm:
+                token = (router.cfg.git.dangerous_confirmation_token or "--confirm-dangerous").strip() or "--confirm-dangerous"
+                await send_forbidden(f"Dangerous operation detected (delete repo). Re-run with `{token}` to confirm.")
+                return
             name = rest.strip()
             if not name:
                 await send_forbidden("Usage: !c deleterepo <name>")
@@ -494,6 +509,11 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
                 await send_forbidden(str(err))
             return
         if cmd == "renamerepo":
+            ok_confirm, rest = _require_dangerous_confirmation_token(router, rest)
+            if not ok_confirm:
+                token = (router.cfg.git.dangerous_confirmation_token or "--confirm-dangerous").strip() or "--confirm-dangerous"
+                await send_forbidden(f"Dangerous operation detected (rename repo). Re-run with `{token}` to confirm.")
+                return
             parts = rest.split(maxsplit=1)
             if len(parts) < 2:
                 await send_forbidden("Usage: !c renamerepo <from> <to>")
