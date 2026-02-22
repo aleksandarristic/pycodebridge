@@ -109,6 +109,9 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `log_level` (default `info`) — `debug|info|warn|error`.
 - `health_bind` (default empty) — optional health HTTP bind (`<host>:<port>` or `<port>`).
 - `health_path` (default `/healthz`) — health endpoint path.
+- `run_heartbeat_seconds` (default `120`) — interval for "still running" status messages.
+- `run_completion_min_seconds` (default `300`) — minimum run duration before posting completion summary.
+- `show_reasoning_details` (default `true`) — include reasoning level text in status/pinned output.
 
 ### `audit`
 - `redact` (default `false`) — redact secrets from audit logs before writing.
@@ -233,6 +236,10 @@ General:
   - `status` includes contextual `Related:` hints (for example `!c start`, `!ps`, `!w`) when relevant.
   - `status` also shows lock state for your account (`default` and `gh` unlock remaining time).
 - `config` (alias: `cfg`) `[unlock/default]`
+- `options` (alias: `opts`) `[mixed]`
+  - Show: `!c options`
+  - Channel set (local only): `!c options set <key> <value>`
+  - DM set with scope: `!c options set <key> <value> [local|global]`
 
 Security:
 - `unlock` (alias: `ul`) `[totp]` (`unlock ... status` is `[open]`)

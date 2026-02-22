@@ -4,6 +4,15 @@ Current status:
 
 TODO (Near-term):
 
+- Compose + global skill defaults for cross-repo persistence (deferred).
+  - Goal: define and document a non-`AGENTS.md` channel for durable operator defaults across repos/sessions.
+  - Approach:
+    - Use user-level Codex skills persisted in mounted Codex home (`CODEX_AUTH_HOST -> /workspace/home/.codex` in Compose).
+    - Optionally set `codex.env.CODEX_HOME=/workspace/home/.codex` in `config.docker.yaml` for explicit subprocess behavior.
+  - Deliverables:
+    - Add docs snippet with host-side skill path, minimal `SKILL.md` example, and Compose restart/apply steps.
+    - Clarify precedence/coexistence with per-repo `AGENTS.md`.
+
 - Live steering reliability validation (operator-assisted test).
   - Goal: verify that `!s <text>` reliably reaches an active run and changes outcome.
   - Test setup:
@@ -25,6 +34,21 @@ TODO (Near-term):
     - Missing steer acknowledgement, no output pivot after acknowledged steer, or unexplained no-op behavior.
   - Artifacts to capture:
     - Command transcript (`start` + steer messages), timestamps, and final output snippet showing scope change.
+
+- Router/module architecture reorganization (human-readable hierarchy).
+  - Goal: redesign code layout so related router concerns are grouped into clear packages/modules with explicit boundaries.
+  - Scope:
+    - Consolidate router-related files into a coherent package tree (for example: routing/core, routing/auth, routing/commands, routing/runtime, routing/io).
+    - Move command dispatch/alias/help parsing concerns into consistent command modules.
+    - Separate transport-facing orchestration from domain/state/update logic to reduce cross-file coupling.
+  - Quality bar:
+    - Import graph becomes easier to follow (minimal circular risk, predictable dependency direction).
+    - File/module names reflect responsibility; no ambiguous “helpers” catch-alls for core logic.
+    - Public entrypoints remain stable (no user-facing command regressions).
+  - Deliverables:
+    - Proposed target package map and migration plan.
+    - Incremental refactor PR sequence with tests green at each step.
+    - Updated docs section describing architecture layout and ownership boundaries.
 
 Backlog:
 

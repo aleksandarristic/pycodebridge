@@ -74,6 +74,7 @@ _GIT_READ_ONLY_SUBCOMMANDS = {"status", "log", "branches", "show", "diff", "remo
 _RUN_HEARTBEAT_SECONDS = 120
 _RUN_COMPLETION_MIN_SECONDS = 300
 _RUN_KEY_RESULT_MAX = 180
+_RUNTIME_OPTION_KEYS = ("run_heartbeat_seconds", "run_completion_min_seconds", "show_reasoning_details")
 
 
 def _git_commit_hash() -> str:
@@ -119,9 +120,16 @@ class Router:
         self._budget_usage_user: Dict[str, int] = {}
         self._budget_thresholds_channel: Dict[str, tuple[int, int]] = {}
         self._budget_thresholds_user: Dict[str, tuple[int, int]] = {}
-        self._run_heartbeat_seconds = max(1, int(_RUN_HEARTBEAT_SECONDS))
-        self._run_completion_min_seconds = max(1, int(_RUN_COMPLETION_MIN_SECONDS))
-        self._show_reasoning_details = True
+        self._runtime_defaults = {
+            "run_heartbeat_seconds": max(1, min(86400, int(getattr(self.cfg.runtime, "run_heartbeat_seconds", _RUN_HEARTBEAT_SECONDS)))),
+            "run_completion_min_seconds": max(
+                1, min(86400, int(getattr(self.cfg.runtime, "run_completion_min_seconds", _RUN_COMPLETION_MIN_SECONDS)))
+            ),
+            "show_reasoning_details": bool(getattr(self.cfg.runtime, "show_reasoning_details", True)),
+        }
+        self._runtime_options_global: Dict[str, Any] = {}
+        self._runtime_options_channels: Dict[str, Dict[str, Any]] = {}
+        self._load_runtime_options_from_state()
 
     async def handle_message(self, event: MessageEvent, sink: ResponseSink) -> None:
         """Handle an incoming message event."""
@@ -571,22 +579,37 @@ class Router:
         """Show runtime diagnostics for the bridge."""
         await system_helpers.handle_health(self, sink, repo_path)
 
-    async def handle_options(self, sink: ResponseSink, rest: str) -> None:
+    async def handle_options(self, event: MessageEvent, sink: ResponseSink, rest: str) -> None:
         """Show or mutate mutable runtime options."""
         raw = (rest or "").strip()
         if not raw or self._options_show_requested(raw):
-            await self.reply(sink, self._runtime_options_text())
+            await self.reply(sink, self._runtime_options_text(sink.channel_id, event.is_dm))
             return
         parts = raw.split()
         action = parts[0].lower()
         if action != "set" or len(parts) < 3:
             await self.reply_forbidden(
                 sink,
-                "Usage: !c options [show] | !c options set <run_heartbeat_seconds|run_completion_min_seconds|show_reasoning_details> <value>",
+                self._options_usage_hint(event.is_dm),
             )
             return
         key = parts[1].strip().lower()
-        value = " ".join(parts[2:]).strip()
+        scope = "local"
+        value_parts = parts[2:]
+        if event.is_dm and len(value_parts) >= 2 and value_parts[-1].lower() in {"local", "global"}:
+            scope = value_parts[-1].lower()
+            value_parts = value_parts[:-1]
+        elif (not event.is_dm) and len(value_parts) >= 2 and value_parts[-1].lower() in {"local", "global"}:
+            await self.reply_forbidden(
+                sink,
+                "Scope is only supported in DM. Channel commands always use local scope.\n"
+                "Try: `!c options set run_heartbeat_seconds 120`",
+            )
+            return
+        value = " ".join(value_parts).strip()
+        if not value:
+            await self.reply_forbidden(sink, self._options_usage_hint(event.is_dm))
+            return
         key_aliases = {
             "run_heartbeat_seconds": "run_heartbeat_seconds",
             "heartbeat": "run_heartbeat_seconds",
@@ -603,40 +626,54 @@ class Router:
         if not canonical:
             await self.reply_forbidden(
                 sink,
-                "Unknown option key. Allowed: run_heartbeat_seconds, run_completion_min_seconds, show_reasoning_details.",
+                "Unknown option key.\n"
+                f"Allowed keys: {', '.join(_RUNTIME_OPTION_KEYS)}\n"
+                "Use `!c options` to see current values and examples.",
             )
             return
         if canonical in {"run_heartbeat_seconds", "run_completion_min_seconds"}:
             try:
                 parsed = int(value)
             except ValueError:
-                await self.reply_forbidden(sink, f"Invalid integer value for {canonical}: {value!r}")
+                await self.reply_forbidden(
+                    sink,
+                    f"Invalid integer value for {canonical}: {value!r}\n"
+                    "Expected an integer between 1 and 86400.\n"
+                    "Example: `!c options set run_heartbeat_seconds 120`",
+                )
                 return
             if parsed < 1 or parsed > 86400:
-                await self.reply_forbidden(sink, f"{canonical} must be between 1 and 86400.")
+                await self.reply_forbidden(
+                    sink,
+                    f"{canonical} must be between 1 and 86400.\n"
+                    "Example: `!c options set run_completion_min_seconds 300`",
+                )
                 return
-            if canonical == "run_heartbeat_seconds":
-                self._run_heartbeat_seconds = parsed
-            else:
-                self._run_completion_min_seconds = parsed
+            self._set_runtime_option(scope, sink.channel_id, canonical, parsed)
             await self.reply(
                 sink,
-                f"Runtime option updated: {canonical}={parsed} (applies immediately, resets on restart).",
+                f"Runtime option updated: {canonical}={parsed} (scope: {scope}, persisted).",
             )
             return
         bool_true = {"1", "true", "yes", "on"}
         bool_false = {"0", "false", "no", "off"}
         token = value.lower()
+        bool_value: Optional[bool]
         if token in bool_true:
-            self._show_reasoning_details = True
+            bool_value = True
         elif token in bool_false:
-            self._show_reasoning_details = False
+            bool_value = False
         else:
-            await self.reply_forbidden(sink, f"Invalid boolean value for {canonical}: {value!r}. Use true/false.")
+            await self.reply_forbidden(
+                sink,
+                f"Invalid boolean value for {canonical}: {value!r}. Use true/false.\n"
+                "Examples: `true`, `false`, `on`, `off`, `1`, `0`.",
+            )
             return
+        self._set_runtime_option(scope, sink.channel_id, canonical, bool_value)
         await self.reply(
             sink,
-            f"Runtime option updated: {canonical}={self._show_reasoning_details} (applies immediately, resets on restart).",
+            f"Runtime option updated: {canonical}={bool_value} (scope: {scope}, persisted).",
         )
 
     async def handle_budget(self, event: MessageEvent, sink: ResponseSink, rest: str) -> None:
@@ -1286,7 +1323,7 @@ class Router:
                         active,
                         self.cfg.codex.model,
                         self.cfg.codex.model_reasoning_effort,
-                        self._show_reasoning_details,
+                        bool(self._runtime_option_value(sink.channel_id, "show_reasoning_details")),
                     )
                 )
             current = self.current_session_for_user("", sink.channel_id)
@@ -1298,7 +1335,7 @@ class Router:
                         current,
                         current_model,
                         current_reasoning,
-                        self._show_reasoning_details,
+                        bool(self._runtime_option_value(sink.channel_id, "show_reasoning_details")),
                     )
                 )
             await self.reply(sink, self._with_related("\n".join(lines), *related))
@@ -1643,7 +1680,7 @@ class Router:
     async def _run_heartbeat(self, sink: ResponseSink, session: str, started_at: float) -> None:
         """Emit periodic run heartbeat messages while a job is active."""
         while True:
-            await asyncio.sleep(self._run_heartbeat_seconds)
+            await asyncio.sleep(self._runtime_option_value(sink.channel_id, "run_heartbeat_seconds"))
             elapsed = int(max(1.0, time.monotonic() - started_at))
             await self.reply(sink, f"Still running in session '{session}' ({self._format_duration(elapsed)} elapsed).")
 
@@ -1658,7 +1695,7 @@ class Router:
     ) -> None:
         """Send concise completion details for a successful run."""
         elapsed = int(max(1.0, time.monotonic() - started_at))
-        if elapsed < self._run_completion_min_seconds:
+        if elapsed < self._runtime_option_value(channel_id, "run_completion_min_seconds"):
             return
         parts = [f"Run complete for session '{session}' in {self._format_duration(elapsed)}."]
         usage = self.get_usage(channel_id, session)
@@ -1858,13 +1895,113 @@ class Router:
             return True
         return parts[0] in {"show", "status", "list"}
 
-    def _runtime_options_text(self) -> str:
+    def _options_usage_hint(self, is_dm: bool) -> str:
+        if is_dm:
+            return (
+                "Usage: !c options [show] | !c options set <key> <value> [local|global]\n"
+                f"Allowed keys: {', '.join(_RUNTIME_OPTION_KEYS)}\n"
+                "Examples:\n"
+                "- !c options set run_heartbeat_seconds 120 local\n"
+                "- !c options set show_reasoning_details false global"
+            )
         return (
-            "Runtime options (live, non-persistent):\n"
-            f"- run_heartbeat_seconds: {self._run_heartbeat_seconds}\n"
-            f"- run_completion_min_seconds: {self._run_completion_min_seconds}\n"
-            f"- show_reasoning_details: {self._show_reasoning_details}"
+            "Usage: !c options [show] | !c options set <key> <value>\n"
+            f"Allowed keys: {', '.join(_RUNTIME_OPTION_KEYS)}\n"
+            "Channel commands always use local scope.\n"
+            "Example: !c options set run_completion_min_seconds 300"
         )
+
+    def _sanitize_runtime_option(self, key: str, value: Any) -> Any:
+        if key in {"run_heartbeat_seconds", "run_completion_min_seconds"}:
+            parsed = int(value)
+            if parsed < 1 or parsed > 86400:
+                raise ValueError(f"{key} must be between 1 and 86400.")
+            return parsed
+        if key == "show_reasoning_details":
+            return bool(value)
+        raise ValueError(f"Unknown option key: {key}")
+
+    def _load_runtime_options_from_state(self) -> None:
+        try:
+            fs = self.state.load()
+        except Exception:
+            return
+        global_raw = getattr(fs, "runtime_options_global", {}) or {}
+        channel_raw = getattr(fs, "runtime_options_channels", {}) or {}
+        for key, value in global_raw.items():
+            if key not in _RUNTIME_OPTION_KEYS:
+                continue
+            try:
+                self._runtime_options_global[key] = self._sanitize_runtime_option(key, value)
+            except Exception:
+                continue
+        for channel_id, options in channel_raw.items():
+            if not isinstance(options, dict):
+                continue
+            scoped: Dict[str, Any] = {}
+            for key, value in options.items():
+                if key not in _RUNTIME_OPTION_KEYS:
+                    continue
+                try:
+                    scoped[key] = self._sanitize_runtime_option(key, value)
+                except Exception:
+                    continue
+            if scoped:
+                self._runtime_options_channels[str(channel_id)] = scoped
+
+    def _persist_runtime_options(self) -> None:
+        global_copy = dict(self._runtime_options_global)
+        channel_copy = {ch: dict(values) for ch, values in self._runtime_options_channels.items() if values}
+
+        def mutator(fs):
+            fs.runtime_options_global = global_copy
+            fs.runtime_options_channels = channel_copy
+
+        self.state.update(mutator)
+
+    def _set_runtime_option(self, scope: str, channel_id: str, key: str, value: Any) -> None:
+        normalized = self._sanitize_runtime_option(key, value)
+        if scope == "global":
+            self._runtime_options_global[key] = normalized
+        else:
+            channel_key = str(channel_id or "")
+            scoped = self._runtime_options_channels.get(channel_key)
+            if scoped is None:
+                scoped = {}
+                self._runtime_options_channels[channel_key] = scoped
+            scoped[key] = normalized
+        self._persist_runtime_options()
+
+    def _effective_runtime_options(self, channel_id: str) -> Dict[str, Any]:
+        out = dict(self._runtime_defaults)
+        out.update(self._runtime_options_global)
+        out.update(self._runtime_options_channels.get(str(channel_id or ""), {}))
+        return out
+
+    def _runtime_option_value(self, channel_id: str, key: str) -> Any:
+        effective = self._effective_runtime_options(channel_id)
+        return effective.get(key, self._runtime_defaults.get(key))
+
+    def _runtime_options_text(self, channel_id: str, is_dm: bool) -> str:
+        effective = self._effective_runtime_options(channel_id)
+        lines = [
+            "Runtime options (persisted):",
+            f"- local.run_heartbeat_seconds: {effective['run_heartbeat_seconds']}",
+            f"- local.run_completion_min_seconds: {effective['run_completion_min_seconds']}",
+            f"- local.show_reasoning_details: {effective['show_reasoning_details']}",
+        ]
+        if is_dm:
+            lines.extend(
+                [
+                    f"- global.run_heartbeat_seconds: {self._runtime_options_global.get('run_heartbeat_seconds', '<unset>')}",
+                    f"- global.run_completion_min_seconds: {self._runtime_options_global.get('run_completion_min_seconds', '<unset>')}",
+                    f"- global.show_reasoning_details: {self._runtime_options_global.get('show_reasoning_details', '<unset>')}",
+                    "DM set usage: !c options set <key> <value> [local|global]",
+                ]
+            )
+        else:
+            lines.append("Channel set usage: !c options set <key> <value> (always local scope)")
+        return "\n".join(lines)
 
     def _parse_unlock_action(self, rest: str) -> tuple[str, str, str]:
         raw = (rest or "").strip()
@@ -2379,7 +2516,8 @@ class Router:
         model = self.session_model(sink.channel_id, sess)
         reasoning = self.session_reasoning_effort(sink.channel_id, sess)
         model_info = f" model {model}" if model else ""
-        reasoning_info = f" reasoning {reasoning}" if self._show_reasoning_details and reasoning else ""
+        show_reasoning = bool(self._runtime_option_value(sink.channel_id, "show_reasoning_details"))
+        reasoning_info = f" reasoning {reasoning}" if show_reasoning and reasoning else ""
         text = f"User {user_id} current session: {sess}{model_info}{reasoning_info}"
         await sink.update_pinned_status(user_id, session, text)
 

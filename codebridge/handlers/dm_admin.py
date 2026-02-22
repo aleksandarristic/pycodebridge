@@ -87,7 +87,7 @@ def dm_help_text() -> str:
         "sessions — list sessions across channels [open]\n"
         "status — show queues and running jobs [open]\n"
         "config — show effective config [open]\n"
-        "options [show] | options set <name> <value> — runtime options (set requires totp) [mixed]\n"
+        "options [show] | options set <name> <value> [local|global] — runtime options (set requires totp) [mixed]\n"
         "gh <args> — run GitHub CLI in DM context [unlock/gh]\n"
         "updates — check Codex CLI update status [open]\n"
         "create/new <name> — create repo [totp]\n"
@@ -110,7 +110,7 @@ def dm_binding_help_text() -> str:
         "repo <repo> <prompt> — run a one-off prompt against a repo [unlock/default]\n"
         "gh <args> — run GitHub CLI (bound repo cwd, or code_root if unbound) [unlock/gh]\n"
         "updates — check Codex CLI update status [open]\n"
-        "options [show] | options set <name> <value> — runtime options (set requires totp) [mixed]\n"
+        "options [show] | options set <name> <value> [local|global] — runtime options (set requires totp) [mixed]\n"
         "unlock/ul [gh|all] [status|ttl] — unlock command scopes for your account [totp; status=open]\n"
         "lock/lk [gh|all] — clear unlock scopes for your account [open]\n"
         "unbind — clear bound repo [unlock/default]\n"
@@ -474,6 +474,12 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
             await send(msg)
             return
         if cmd == "config":
+            if rest.strip():
+                await send_forbidden(
+                    "Unknown `config` subcommand. Use `!cfg` to show effective config, "
+                    "or `!opts set <key> <value> [local|global]` to update runtime options."
+                )
+                return
             await send(router.config_text())
             return
         if cmd == "reset":
@@ -602,7 +608,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
             await router.handle_health(sink, run_path)
             return
         if cmd == "options":
-            await router.handle_options(sink, rest)
+            await router.handle_options(event, sink, rest)
             return
         if cmd in {"bind", "use"}:
             repo_name = rest.strip()

@@ -22,12 +22,16 @@ def test_state_save_load(tmp_path):
         ch.sticky["user"] = "default"
         fs.channels["chan"] = ch
         fs.dm_bindings["discord:dm-1"] = "repo"
+        fs.runtime_options_global["show_reasoning_details"] = False
+        fs.runtime_options_channels["chan"] = {"run_heartbeat_seconds": 90}
 
     store.update(mutator)
     loaded = store.load()
     assert "chan" in loaded.channels
     assert "default" in loaded.channels["chan"].sessions
     assert loaded.dm_bindings["discord:dm-1"] == "repo"
+    assert loaded.runtime_options_global["show_reasoning_details"] is False
+    assert loaded.runtime_options_channels["chan"]["run_heartbeat_seconds"] == 90
 
 
 def test_state_migrate_legacy(tmp_path):

@@ -81,12 +81,12 @@ COMMAND_DETAILS = {
         ),
     },
     "options": {
-        "details": "Shows or updates live runtime options. Changes apply immediately and reset on restart.",
+        "details": "Shows or updates runtime options. Changes apply immediately and are persisted; DM can target local or global scope.",
         "examples": (
             "!c options",
             "!options",
             "!c options set run_heartbeat_seconds 120 --totp 123456",
-            "!c options set show_reasoning_details false --totp 123456",
+            "!c options set show_reasoning_details false global --totp 123456",
         ),
     },
 }

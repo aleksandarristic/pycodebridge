@@ -46,6 +46,9 @@ runtime:
   log_level: "info"
   health_bind: ""
   health_path: "/healthz"
+  run_heartbeat_seconds: 120
+  run_completion_min_seconds: 300
+  show_reasoning_details: true
 
 audit:
   redact: false

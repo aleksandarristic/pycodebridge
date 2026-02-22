@@ -183,8 +183,8 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec("config", "config", "show effective config", "General", _cmd_config, AUTH_UNLOCK, aliases=("cfg",)),
         CommandSpec(
             "options",
-            "options [show] | options set <name> <value>",
-            "show or set live runtime options (set resets on restart)",
+            "options [show] | options set <name> <value> [local|global]",
+            "show or set runtime options (persisted; scope in DM only)",
             "General",
             _cmd_options,
             AUTH_MIXED,
@@ -410,11 +410,19 @@ async def _cmd_lock(router: Any, message: MessageEvent, sink: ResponseSink, repo
 
 
 async def _cmd_config(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    if (rest or "").strip():
+        await router.reply_forbidden(
+            sink,
+            "Unknown `config` subcommand.\n"
+            "Use `!cfg` to show effective config.\n"
+            "To change runtime options use: `!opts set <key> <value>`",
+        )
+        return
     await router.reply(sink, router.config_text())
 
 
 async def _cmd_options(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
-    await router.handle_options(sink, rest)
+    await router.handle_options(message, sink, rest)
 
 
 async def _cmd_updates(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

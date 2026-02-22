@@ -604,7 +604,7 @@ def test_integration_cfg_and_opts_shortcuts(tmp_path):
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
     assert any("code_root:" in msg for msg in texts)
-    assert any("Runtime options (live, non-persistent):" in msg for msg in texts)
+    assert any("Runtime options (persisted):" in msg for msg in texts)
 
 
 def test_integration_auto_relays_plain_reply_when_codex_waits_for_input(tmp_path):
@@ -678,7 +678,7 @@ def test_integration_run_completion_summary_for_long_run(tmp_path):
 
     router, _ = _build_router(tmp_path)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    router._run_completion_min_seconds = 1
+    router._set_runtime_option("local", "chan", "run_completion_min_seconds", 1)
 
     async def run():
         await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
@@ -702,7 +702,7 @@ def test_integration_run_completion_summary_suppressed_for_short_run(tmp_path):
 
     router, _ = _build_router(tmp_path)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    router._run_completion_min_seconds = 10
+    router._set_runtime_option("local", "chan", "run_completion_min_seconds", 10)
 
     async def run():
         await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
@@ -725,11 +725,11 @@ def test_integration_run_heartbeat_message(tmp_path, monkeypatch):
 
     router, _ = _build_router(tmp_path)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    router._run_heartbeat_seconds = 0.05
+    router._set_runtime_option("local", "chan", "run_heartbeat_seconds", 1)
 
     async def run():
         await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
-        await asyncio.sleep(0.12)
+        await asyncio.sleep(1.12)
         await router.handle_message(_discord_event("!c kill", "codex-repo"), sink)
 
     asyncio.run(run())
@@ -754,11 +754,11 @@ def test_integration_options_show_and_set_runtime(tmp_path):
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
-    assert router._run_heartbeat_seconds == 90
-    assert router._run_completion_min_seconds == 480
-    assert router._show_reasoning_details is False
-    assert any("Runtime options (live, non-persistent):" in t for t in texts)
-    assert any("show_reasoning_details: False" in t for t in texts)
+    assert router._runtime_option_value("chan", "run_heartbeat_seconds") == 90
+    assert router._runtime_option_value("chan", "run_completion_min_seconds") == 480
+    assert router._runtime_option_value("chan", "show_reasoning_details") is False
+    assert any("Runtime options (persisted):" in t for t in texts)
+    assert any("local.show_reasoning_details: False" in t for t in texts)
 
 
 def test_integration_options_set_requires_totp_when_enabled(tmp_path, monkeypatch):
@@ -783,6 +783,81 @@ def test_integration_options_set_requires_totp_when_enabled(tmp_path, monkeypatc
     texts = [msg for msg, _, _ in sink.sent]
     assert any("TOTP required for 'options'" in t for t in texts)
     assert any("Runtime option updated: run_heartbeat_seconds=90" in t for t in texts)
+
+
+def test_integration_options_persist_across_router_restart(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run_set():
+        await router.handle_message(_discord_event("!c options set run_completion_min_seconds 480", "codex-repo"), sink)
+
+    asyncio.run(run_set())
+
+    router2, _ = _build_router(tmp_path)
+    sink2 = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run_show():
+        await router2.handle_message(_discord_event("!c options", "codex-repo"), sink2)
+
+    asyncio.run(run_show())
+    texts = [msg for msg, _, _ in sink2.sent]
+    assert any("local.run_completion_min_seconds: 480" in t for t in texts)
+
+
+def test_integration_options_dm_global_scope_applies_to_channels(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_dm_event("!c options set show_reasoning_details false global"), sink)
+        await router.handle_message(_discord_event("!c options", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("scope: global" in t for t in texts)
+    assert any("local.show_reasoning_details: False" in t for t in texts)
+
+
+def test_integration_options_channel_rejects_scope_token(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c options set run_heartbeat_seconds 120 global", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Scope is only supported in DM." in t for t in texts)
+
+
+def test_integration_cfg_set_returns_hint(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!cfg set wrong_key value", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Use `!cfg` to show effective config." in t for t in texts)
+    assert any("!opts set <key> <value>" in t for t in texts)
 
 
 def test_integration_session_prune_removes_idle_sessions(tmp_path):

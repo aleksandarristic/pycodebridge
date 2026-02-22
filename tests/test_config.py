@@ -272,12 +272,18 @@ def test_load_config_runtime_health_fields(tmp_path, monkeypatch):
           log_level: "info"
           health_bind: "127.0.0.1:8080"
           health_path: "health"
+          run_heartbeat_seconds: 90
+          run_completion_min_seconds: 420
+          show_reasoning_details: false
         """,
         encoding="utf-8",
     )
     cfg = cfgmod.load(str(cfg_path))
     assert cfg.runtime.health_bind == "127.0.0.1:8080"
     assert cfg.runtime.health_path == "/health"
+    assert cfg.runtime.run_heartbeat_seconds == 90
+    assert cfg.runtime.run_completion_min_seconds == 420
+    assert cfg.runtime.show_reasoning_details is False
 
 
 def test_load_config_git_bootstrap_fields(tmp_path, monkeypatch):

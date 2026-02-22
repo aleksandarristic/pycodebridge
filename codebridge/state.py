@@ -37,6 +37,8 @@ class FileState:
     version: int = CURRENT_VERSION
     channels: Dict[str, ChannelState] = field(default_factory=dict)
     dm_bindings: Dict[str, str] = field(default_factory=dict)
+    runtime_options_global: Dict[str, Any] = field(default_factory=dict)
+    runtime_options_channels: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
 
 class Store:
@@ -92,12 +94,29 @@ def _from_dict(data: Dict[str, Any]) -> FileState:
     version = int(data.get("version", CURRENT_VERSION))
     channels_raw = data.get("channels", {}) or {}
     dm_bindings_raw = data.get("dm_bindings", {}) or {}
+    runtime_global_raw = data.get("runtime_options_global", {}) or {}
+    runtime_channels_raw = data.get("runtime_options_channels", {}) or {}
     channels: Dict[str, ChannelState] = {}
     dm_bindings: Dict[str, str] = {}
+    runtime_options_global: Dict[str, Any] = {}
+    runtime_options_channels: Dict[str, Dict[str, Any]] = {}
     for key, value in dm_bindings_raw.items():
         repo = _normalize_repo_name(value)
         if repo:
             dm_bindings[str(key)] = repo
+    for key, value in runtime_global_raw.items():
+        normalized = _normalize_runtime_option_value(str(key), value)
+        if normalized is not None:
+            runtime_options_global[str(key)] = normalized
+    for channel_id, values in runtime_channels_raw.items():
+        raw_values = values if isinstance(values, dict) else {}
+        scoped: Dict[str, Any] = {}
+        for key, value in raw_values.items():
+            normalized = _normalize_runtime_option_value(str(key), value)
+            if normalized is not None:
+                scoped[str(key)] = normalized
+        if scoped:
+            runtime_options_channels[str(channel_id)] = scoped
 
     for channel_id, ch in channels_raw.items():
         sessions_raw = (ch or {}).get("sessions", {}) or {}
@@ -115,7 +134,13 @@ def _from_dict(data: Dict[str, Any]) -> FileState:
             )
         channels[channel_id] = ChannelState(sessions=sessions, sticky=dict(sticky))
 
-    fs = FileState(version=version, channels=channels, dm_bindings=dict(dm_bindings))
+    fs = FileState(
+        version=version,
+        channels=channels,
+        dm_bindings=dict(dm_bindings),
+        runtime_options_global=runtime_options_global,
+        runtime_options_channels=runtime_options_channels,
+    )
     _migrate_legacy(fs, data)
     return fs
 
@@ -163,7 +188,28 @@ def _to_dict(state: FileState) -> Dict[str, Any]:
             "sessions": sessions,
             "sticky": ch.sticky,
         }
-    return {"version": state.version, "channels": channels, "dm_bindings": state.dm_bindings}
+    runtime_global = {}
+    for key, value in (state.runtime_options_global or {}).items():
+        normalized = _normalize_runtime_option_value(str(key), value)
+        if normalized is not None:
+            runtime_global[str(key)] = normalized
+    runtime_channels = {}
+    for channel_id, values in (state.runtime_options_channels or {}).items():
+        raw_values = values if isinstance(values, dict) else {}
+        scoped: Dict[str, Any] = {}
+        for key, value in raw_values.items():
+            normalized = _normalize_runtime_option_value(str(key), value)
+            if normalized is not None:
+                scoped[str(key)] = normalized
+        if scoped:
+            runtime_channels[str(channel_id)] = scoped
+    return {
+        "version": state.version,
+        "channels": channels,
+        "dm_bindings": state.dm_bindings,
+        "runtime_options_global": runtime_global,
+        "runtime_options_channels": runtime_channels,
+    }
 
 
 def utc_now_iso() -> str:
@@ -179,3 +225,18 @@ def _normalize_repo_name(value: Any) -> str:
         return pathutil.normalize_repo_name(raw)
     except ValueError:
         return raw.lower()
+
+
+def _normalize_runtime_option_value(key: str, value: Any) -> Any:
+    token = (key or "").strip()
+    if token in {"run_heartbeat_seconds", "run_completion_min_seconds"}:
+        try:
+            parsed = int(value)
+        except Exception:
+            return None
+        if 1 <= parsed <= 86400:
+            return parsed
+        return None
+    if token == "show_reasoning_details":
+        return bool(value)
+    return None

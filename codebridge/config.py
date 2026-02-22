@@ -101,6 +101,9 @@ class RuntimeConfig:
     log_level: str = DEFAULT_LOG_LEVEL
     health_bind: str = ""
     health_path: str = "/healthz"
+    run_heartbeat_seconds: int = 120
+    run_completion_min_seconds: int = 300
+    show_reasoning_details: bool = True
 
 
 @dataclass
@@ -258,6 +261,15 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.runtime.log_level = runtime.get("log_level", cfg.runtime.log_level)
     cfg.runtime.health_bind = str(runtime.get("health_bind", cfg.runtime.health_bind) or "")
     cfg.runtime.health_path = str(runtime.get("health_path", cfg.runtime.health_path) or "")
+    cfg.runtime.run_heartbeat_seconds = int(
+        runtime.get("run_heartbeat_seconds", cfg.runtime.run_heartbeat_seconds)
+    )
+    cfg.runtime.run_completion_min_seconds = int(
+        runtime.get("run_completion_min_seconds", cfg.runtime.run_completion_min_seconds)
+    )
+    cfg.runtime.show_reasoning_details = bool(
+        runtime.get("show_reasoning_details", cfg.runtime.show_reasoning_details)
+    )
 
     audit = raw.get("audit", {}) or {}
     cfg.audit.redact = bool(audit.get("redact", cfg.audit.redact))
@@ -339,6 +351,11 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.runtime.health_path = "/healthz"
     if not cfg.runtime.health_path.startswith("/"):
         cfg.runtime.health_path = "/" + cfg.runtime.health_path
+    if cfg.runtime.run_heartbeat_seconds <= 0:
+        cfg.runtime.run_heartbeat_seconds = 120
+    if cfg.runtime.run_completion_min_seconds <= 0:
+        cfg.runtime.run_completion_min_seconds = 300
+    cfg.runtime.show_reasoning_details = bool(cfg.runtime.show_reasoning_details)
     cfg.audit.redact = bool(cfg.audit.redact)
     if cfg.files.max_upload_mb <= 0:
         cfg.files.max_upload_mb = DEFAULT_MAX_UPLOAD_MB
@@ -381,6 +398,10 @@ def _validate(cfg: Config) -> None:
     level = cfg.runtime.log_level.lower()
     if level not in {"debug", "info", "warn", "warning", "error"}:
         raise ValueError("runtime.log_level must be debug|info|warn|error")
+    if cfg.runtime.run_heartbeat_seconds < 1 or cfg.runtime.run_heartbeat_seconds > 86400:
+        raise ValueError("runtime.run_heartbeat_seconds must be between 1 and 86400")
+    if cfg.runtime.run_completion_min_seconds < 1 or cfg.runtime.run_completion_min_seconds > 86400:
+        raise ValueError("runtime.run_completion_min_seconds must be between 1 and 86400")
 
     if cfg.transport.adapter.lower() not in {"discord", "slack", "telegram"}:
         raise ValueError("transport.adapter must be discord, slack, or telegram (additional adapters not yet supported)")
