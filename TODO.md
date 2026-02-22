@@ -4,8 +4,6 @@ Current status:
 
 TODO (Near-term):
 
-- Expand audit trail UX commands.
-  - Add easier `audit` lookup/filter commands and a downloadable artifact bundle for a job/session.
 - Add safer write-operation workflow.
   - Introduce explicit confirmation flow for destructive/high-impact actions (for example push/delete/rename paths).
 

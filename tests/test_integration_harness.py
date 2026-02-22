@@ -8,6 +8,7 @@ import struct
 import time
 import json
 from types import MethodType
+from types import SimpleNamespace
 
 from codebridge import config as cfgmod
 from codebridge import router as router_mod
@@ -747,6 +748,55 @@ def test_integration_budget_hard_limit_blocks_new_runs(tmp_path):
     texts = [msg for msg, _, _ in sink.sent]
     assert any("Budget limit reached" in t for t in texts)
     assert not any(args and args[0] == "start" for args in runner.calls)
+
+
+def test_integration_audit_show_find_and_bundle(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    audit_dir = tmp_path / "audit" / "chan" / "default" / "thread-1"
+    audit_dir.mkdir(parents=True)
+    (audit_dir / "000001.request.json").write_text(
+        json.dumps({"command": "start", "args": "", "timestamp": "2026-01-01T00:00:00Z"}),
+        encoding="utf-8",
+    )
+    (audit_dir / "000001.codex.jsonl").write_text('{"type":"item.completed"}\n', encoding="utf-8")
+    (audit_dir / "000001.discord_out.txt").write_text("hello\n", encoding="utf-8")
+    (audit_dir / "000001.codex.stderr.txt").write_text("", encoding="utf-8")
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    class _FakeAudit:
+        def summaries(self, channel_id: str, session: str, limit: int):
+            _ = (channel_id, session, limit)
+            return [
+                SimpleNamespace(
+                    seq="000001",
+                    channel_id="chan",
+                    session="default",
+                    thread_id="thread-1",
+                    request={"command": "start", "args": "", "timestamp": "2026-01-01T00:00:00Z"},
+                    path=str(audit_dir),
+                    started_at="2026-01-01T00:00:00Z",
+                    ended_at="2026-01-01T00:01:00Z",
+                )
+            ]
+
+    router.audit = _FakeAudit()
+
+    async def run():
+        await router.handle_message(_discord_event("!c audit show 000001", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c audit find start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c audit bundle 000001", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Audit `000001`" in t for t in texts)
+    assert any("Audit matches for `start`" in t for t in texts)
+    assert any("Audit bundle ready" in t for t in texts)
+    assert any(name == "audit-000001.zip" for _, name, _, _ in sink.files)
 
 
 def test_integration_misc_shortcuts_dispatch(tmp_path):

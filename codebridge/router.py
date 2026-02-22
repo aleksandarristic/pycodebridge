@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Set
 import json
 import tempfile
+import zipfile
 
 from . import config as cfgmod
 from .audit import Entry, Logger as AuditLogger
@@ -609,6 +610,138 @@ class Router:
         text = "\n".join(lines)
         for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
             await self.reply(sink, chunk)
+
+    async def handle_audit_list(self, sink: ResponseSink, session: str, limit: int) -> None:
+        """Show audit summaries with request command context."""
+        try:
+            summaries = self.audit.summaries(sink.channel_id, session, limit)
+        except Exception as exc:
+            await self.reply(sink, f"audit error: {exc}")
+            return
+        if not summaries:
+            await self.reply(sink, "No audit entries found.")
+            return
+        lines = []
+        for s in summaries:
+            req = s.request or {}
+            cmd = str(req.get("command") or "").strip() or "?"
+            args = str(req.get("args") or "").strip()
+            lines.append(
+                f"[{s.seq}] session:{s.session} thread:{s.thread_id} cmd:{cmd} args:{args} started:{s.started_at or 'n/a'}"
+            )
+        await self.reply(sink, "\n".join(lines))
+
+    async def handle_audit_find(self, sink: ResponseSink, term: str, limit: int) -> None:
+        """Filter audit entries for current channel by term."""
+        query = (term or "").strip().lower()
+        if not query:
+            await self.reply_forbidden(sink, "Search term required.")
+            return
+        try:
+            summaries = self.audit.summaries(sink.channel_id, "", max(limit * 5, limit))
+        except Exception as exc:
+            await self.reply(sink, f"audit error: {exc}")
+            return
+        filtered = []
+        for s in summaries:
+            req = s.request or {}
+            hay = " ".join(
+                [
+                    s.seq,
+                    s.session,
+                    s.thread_id,
+                    str(req.get("command") or ""),
+                    str(req.get("args") or ""),
+                    str(req.get("timestamp") or ""),
+                ]
+            ).lower()
+            if query in hay:
+                filtered.append(s)
+            if len(filtered) >= limit:
+                break
+        if not filtered:
+            await self.reply(sink, f"No audit matches for `{term}`.")
+            return
+        lines = [f"Audit matches for `{term}`:"]
+        for s in filtered:
+            req = s.request or {}
+            lines.append(
+                f"- [{s.seq}] session:{s.session} cmd:{req.get('command') or '?'} args:{req.get('args') or ''}"
+            )
+        await self.reply(sink, "\n".join(lines))
+
+    async def handle_audit_show(self, sink: ResponseSink, seq: str) -> None:
+        """Show one audit entry in detail."""
+        summary = self._audit_find_summary_by_seq(sink.channel_id, seq)
+        if not summary:
+            await self.reply_forbidden(sink, f"Audit entry `{seq}` not found.")
+            return
+        req = summary.request or {}
+        lines = [
+            f"Audit `{summary.seq}`",
+            f"- Channel: {summary.channel_id}",
+            f"- Session: {summary.session}",
+            f"- Thread: {summary.thread_id}",
+            f"- Command: {req.get('command') or 'n/a'}",
+            f"- Args: {req.get('args') or ''}",
+            f"- Started: {summary.started_at or 'n/a'}",
+            f"- Ended: {summary.ended_at or 'n/a'}",
+            f"- Path: {summary.path}",
+        ]
+        await self.reply(sink, "\n".join(lines))
+
+    async def handle_audit_bundle(self, sink: ResponseSink, seq: str) -> None:
+        """Bundle one audit entry artifacts into a zip and send it."""
+        summary = self._audit_find_summary_by_seq(sink.channel_id, seq)
+        if not summary:
+            await self.reply_forbidden(sink, f"Audit entry `{seq}` not found.")
+            return
+        bundle_path = self._create_audit_bundle(summary)
+        if not bundle_path:
+            await self.reply_forbidden(sink, "Unable to create audit bundle.")
+            return
+        filename = f"audit-{summary.seq}.zip"
+        await sink.send_file(bundle_path, filename)
+        await self.reply(sink, f"Audit bundle ready: `{filename}`")
+
+    def _audit_find_summary_by_seq(self, channel_id: str, seq: str):
+        token = (seq or "").strip()
+        if not token:
+            return None
+        try:
+            summaries = self.audit.summaries(channel_id, "", 500)
+        except Exception:
+            return None
+        for s in summaries:
+            if s.seq == token:
+                return s
+        return None
+
+    def _create_audit_bundle(self, summary) -> str:
+        seq = summary.seq
+        thread_dir = summary.path
+        files = [
+            os.path.join(thread_dir, f"{seq}.request.json"),
+            os.path.join(thread_dir, f"{seq}.codex.jsonl"),
+            os.path.join(thread_dir, f"{seq}.discord_out.txt"),
+            os.path.join(thread_dir, f"{seq}.codex.stderr.txt"),
+        ]
+        existing = [p for p in files if os.path.exists(p)]
+        if not existing:
+            return ""
+        tmp = tempfile.NamedTemporaryFile(prefix=f"audit-{seq}-", suffix=".zip", delete=False)
+        tmp.close()
+        try:
+            with zipfile.ZipFile(tmp.name, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                for path in existing:
+                    zf.write(path, arcname=os.path.basename(path))
+            return tmp.name
+        except Exception:
+            try:
+                os.remove(tmp.name)
+            except Exception:
+                pass
+            return ""
 
     async def handle_ps(self, sink: ResponseSink) -> None:
         """Show queued/running jobs for the channel."""

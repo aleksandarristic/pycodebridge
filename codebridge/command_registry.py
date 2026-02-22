@@ -305,6 +305,14 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         ),
         CommandSpec("download", "download <path>", "download a file from repo", "Repo helpers", _cmd_download, AUTH_UNLOCK, aliases=("dl",)),
         CommandSpec("logs", "logs [session] [n]", "show recent audit entries", "Queue", _cmd_logs, AUTH_UNLOCK, aliases=("log",)),
+        CommandSpec(
+            "audit",
+            "audit [session] [n] | audit find <term> [n] | audit show <seq> | audit bundle <seq>",
+            "audit lookup, filter, and artifact bundle",
+            "Queue",
+            _cmd_audit,
+            AUTH_UNLOCK,
+        ),
         CommandSpec("ps", "ps", "list queued/running jobs", "Queue", _cmd_ps, AUTH_OPEN),
         CommandSpec("cancel", "cancel <job-id>", "cancel queued job", "Queue", _cmd_cancel, AUTH_UNLOCK, aliases=("drop",)),
         CommandSpec("rerun", "rerun", "requeue last job", "Queue", _cmd_rerun, AUTH_UNLOCK, aliases=("retry",)),
@@ -876,6 +884,42 @@ async def _cmd_logs(router: Any, message: MessageEvent, sink: ResponseSink, repo
         if not session_name:
             return
     await router.handle_logs(sink, session_name, limit)
+
+
+async def _cmd_audit(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    parts = (rest or "").strip().split()
+    if parts and parts[0].lower() in {"show", "bundle"}:
+        if len(parts) != 2:
+            await router.reply_forbidden(sink, f"Usage: !c audit {parts[0].lower()} <seq>")
+            return
+        if parts[0].lower() == "show":
+            await router.handle_audit_show(sink, parts[1])
+            return
+        await router.handle_audit_bundle(sink, parts[1])
+        return
+    if parts and parts[0].lower() == "find":
+        if len(parts) < 2:
+            await router.reply_forbidden(sink, "Usage: !c audit find <term> [n]")
+            return
+        term = parts[1]
+        limit = 10
+        if len(parts) >= 3:
+            try:
+                limit = int(parts[2])
+            except ValueError:
+                await router.reply_forbidden(sink, "Limit must be an integer.")
+                return
+        await router.handle_audit_find(sink, term, limit)
+        return
+    session_name, limit = parse_session_or_limit(rest)
+    if limit <= 0:
+        await router.reply_forbidden(sink, "Limit must be >= 1")
+        return
+    if session_name:
+        session_name = await _normalize_session_or_reply(router, sink, session_name)
+        if not session_name:
+            return
+    await router.handle_audit_list(sink, session_name, limit)
 
 
 async def _cmd_ps(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

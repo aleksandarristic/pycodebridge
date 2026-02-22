@@ -22,6 +22,7 @@ def test_command_registry_aliases():
     assert "budget" in registry
     assert "budgets" in registry
     assert registry["budgets"] is registry["budget"]
+    assert "audit" in registry
     assert "show" in registry
     assert "showrepo" in registry
     assert registry["showrepo"] is registry["show"]
