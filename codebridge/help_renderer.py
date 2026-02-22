@@ -17,6 +17,7 @@ AUTH_LABELS = {
 HELP_SHORTCUT_TRIGGERS = {
     "status": ("!st",),
     "updates": ("!u",),
+    "health": ("!health", "!diag"),
     "wait": ("!w",),
     "ps": ("!ps",),
     "rerun": ("!retry",),
@@ -67,6 +68,14 @@ COMMAND_DETAILS = {
             "!help",
             "!c help git",
             "!c help unlock",
+        ),
+    },
+    "health": {
+        "details": "Shows runtime diagnostics including queue/session counts and environment sanity checks.",
+        "examples": (
+            "!c health",
+            "!health",
+            "!diag",
         ),
     },
 }

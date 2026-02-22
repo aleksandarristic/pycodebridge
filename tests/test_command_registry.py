@@ -13,6 +13,9 @@ def test_command_registry_aliases():
     assert registry["cp"] is registry["copy"]
     assert "cfg" in registry
     assert registry["cfg"] is registry["config"]
+    assert "health" in registry
+    assert "diag" in registry
+    assert registry["diag"] is registry["health"]
     assert "show" in registry
     assert "showrepo" in registry
     assert registry["showrepo"] is registry["show"]
@@ -30,6 +33,7 @@ def test_command_registry_help_text():
     assert "General:" in text
     assert "Auth tags: [open]=no TOTP" in text
     assert "- **`!c help [command]`**, **`!c commands [command]`**, **`!help`** - show this help [open]" in text
+    assert "- **`!c health`**, **`!c diag`**, **`!health`**, **`!diag`** - show runtime diagnostics [open]" in text
     assert "**`!c unlock [gh|all] [status|ttl]`**" in text
     assert "**`!c ul [gh|all] [status|ttl]`**" in text
     assert "**`!unlock ...`**" in text

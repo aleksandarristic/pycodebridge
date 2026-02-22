@@ -55,6 +55,7 @@ _UNLOCK_SCOPE_DEFAULT = "default"
 _UNLOCK_SCOPE_GH = "gh"
 _READ_ONLY_COMMANDS = {
     "help",
+    "health",
     "status",
     "stats",
     "peek",
@@ -345,6 +346,7 @@ class Router:
         mapping = {
             "!st": "status",
             "!u": "updates",
+            "!diag": "health",
             "!w": "wait",
             "!ps": "ps",
             "!retry": "rerun",
@@ -373,6 +375,10 @@ class Router:
             return ("gh " + _tail("!gh")).strip()
         if lower == "!help" or lower.startswith("!help "):
             return ("help " + _tail("!help")).strip()
+        if lower == "!health" or lower.startswith("!health "):
+            return ("health " + _tail("!health")).strip()
+        if lower == "!diag" or lower.startswith("!diag "):
+            return ("health " + _tail("!diag")).strip()
         if lower == "!unlock" or lower.startswith("!unlock "):
             return ("unlock " + _tail("!unlock")).strip()
         if lower == "!ul" or lower.startswith("!ul "):
@@ -525,6 +531,10 @@ class Router:
     async def handle_updates(self, sink: ResponseSink, repo_path: str) -> None:
         """Check installed Codex CLI version against npm latest."""
         await system_helpers.handle_updates(self, sink, repo_path)
+
+    async def handle_health(self, sink: ResponseSink, repo_path: str) -> None:
+        """Show runtime diagnostics for the bridge."""
+        await system_helpers.handle_health(self, sink, repo_path)
 
     async def handle_logs(self, sink: ResponseSink, session: str, limit: int) -> None:
         """Show recent audit log entries."""

@@ -619,12 +619,19 @@ def test_integration_misc_shortcuts_dispatch(tmp_path):
         _ = repo_path
         await self.reply(sink_obj, "updates-ok")
 
+    async def _fake_handle_health(self, sink_obj, repo_path: str) -> None:
+        _ = repo_path
+        await self.reply(sink_obj, "health-ok")
+
     router.handle_updates = MethodType(_fake_handle_updates, router)
+    router.handle_health = MethodType(_fake_handle_health, router)
 
     async def run():
         await router.handle_message(_discord_event("!help", "codex-repo"), sink)
         await router.handle_message(_discord_event("!st", "codex-repo"), sink)
         await router.handle_message(_discord_event("!u", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!health", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!diag", "codex-repo"), sink)
         await router.handle_message(_discord_event("!w", "codex-repo"), sink)
         await router.handle_message(_discord_event("!unlock status", "codex-repo"), sink)
         await router.handle_message(_discord_event("!ul status", "codex-repo"), sink)
@@ -649,6 +656,7 @@ def test_integration_misc_shortcuts_dispatch(tmp_path):
     assert any("Repo: repo" in t for t in texts)
     assert any("Related: !c start" in t for t in texts)
     assert any("updates-ok" in t for t in texts)
+    assert sum("health-ok" in t for t in texts) >= 2
     assert any("No sessions are waiting for input." in t for t in texts)
     assert any("TOTP default unlock: inactive." in t for t in texts)
     assert any("TOTP gh unlock: inactive." in t for t in texts)
@@ -747,7 +755,12 @@ def test_integration_dm_shortcuts_and_help_details(tmp_path):
         _ = repo_path
         await self.reply(sink_obj, "updates-ok")
 
+    async def _fake_handle_health(self, sink_obj, repo_path: str) -> None:
+        _ = repo_path
+        await self.reply(sink_obj, "health-ok")
+
     router.handle_updates = MethodType(_fake_handle_updates, router)
+    router.handle_health = MethodType(_fake_handle_health, router)
 
     async def run():
         await router.handle_message(_discord_dm_event("!help"), sink)
@@ -756,6 +769,8 @@ def test_integration_dm_shortcuts_and_help_details(tmp_path):
         await router.handle_message(_discord_dm_event("!c commands git"), sink)
         await router.handle_message(_discord_dm_event("!st"), sink)
         await router.handle_message(_discord_dm_event("!u"), sink)
+        await router.handle_message(_discord_dm_event("!health"), sink)
+        await router.handle_message(_discord_dm_event("!diag"), sink)
         await router.handle_message(_discord_dm_event("!unlock status"), sink)
         await router.handle_message(_discord_dm_event("!ul status"), sink)
         await router.handle_message(_discord_dm_event("!lock status"), sink)
@@ -767,6 +782,7 @@ def test_integration_dm_shortcuts_and_help_details(tmp_path):
     assert any("!help" in t for t in texts)
     assert any("Bound repo: none" in t for t in texts)
     assert any("updates-ok" in t for t in texts)
+    assert sum("health-ok" in t for t in texts) >= 2
     assert sum("TOTP default unlock: inactive." in t for t in texts) >= 2
 
 

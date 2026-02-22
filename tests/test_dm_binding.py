@@ -140,6 +140,10 @@ class _FakeRouter:
             return "status"
         if lower == "!u":
             return "updates"
+        if lower == "!health" or lower.startswith("!health "):
+            return ("health " + raw[7:].strip()).strip()
+        if lower == "!diag" or lower.startswith("!diag "):
+            return ("health " + raw[5:].strip()).strip()
         return ""
 
     def _totp_required_for_command(self, event: MessageEvent, cmd: str, rest: str) -> bool:
@@ -171,6 +175,9 @@ class _FakeRouter:
     async def handle_updates(self, sink, repo_path: str) -> None:
         self.last_updates = repo_path
         await sink.send(f"updates@{repo_path}")
+
+    async def handle_health(self, sink, repo_path: str) -> None:
+        await sink.send(f"health@{repo_path}")
 
     async def handle_reset_all_sessions(self, sink) -> None:
         self.reset_all_calls += 1
@@ -550,6 +557,48 @@ def test_dm_updates_uses_bound_repo_path(tmp_path):
 
     assert router.last_updates == str(repo)
     assert any(msg.startswith("updates@") for msg in sink.sent)
+
+
+def test_dm_health_uses_bound_repo_path(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.telegram.allowed_user_ids = ["user"]
+    cfg.telegram.prefix = "!c"
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    store = Store(cfg.state.data_dir)
+    router = _FakeRouter(cfg, store)
+    sink = _FakeSink("dm-1")
+    bind_event = MessageEvent(
+        platform="telegram",
+        content="!c bind repo",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+    health_event = MessageEvent(
+        platform="telegram",
+        content="!health",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    async def run():
+        await dm_admin.handle_dm_message(router, bind_event, sink)
+        await dm_admin.handle_dm_message(router, health_event, sink)
+
+    asyncio.run(run())
+    assert any(msg.startswith("health@") for msg in sink.sent)
 
 
 def test_dm_answer_command_relays_without_repo_binding(tmp_path):

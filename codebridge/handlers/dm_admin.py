@@ -40,7 +40,7 @@ _DM_COMMAND_ALIASES = {
     "rename": "renamerepo",
 }
 
-_DM_SHORTCUT_COMMANDS = {"gh", "help", "lock", "status", "unlock", "updates"}
+_DM_SHORTCUT_COMMANDS = {"gh", "health", "help", "lock", "status", "unlock", "updates"}
 
 
 class _PrefixedSink:
@@ -395,7 +395,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         await dm_reply(router, sink, entry, forbidden_message(detail))
 
     is_admin = event.platform == "discord" and router.cfg.discord.dm_admin_enabled and router._dm_admin_allowed(event.author_id)
-    binding_commands = {"bind", "use", "repo", "unbind", "status", "unlock", "lock", "updates"}
+    binding_commands = {"bind", "use", "repo", "unbind", "status", "unlock", "lock", "updates", "health"}
     admin_commands = {
         "repos",
         "sessions",
@@ -547,6 +547,17 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
                     await send_forbidden(f"Repo error: {exc}")
                     return
             await router.handle_updates(sink, run_path)
+            return
+        if cmd == "health":
+            run_path = router.cfg.codex.code_root
+            bound = router.get_dm_binding(event)
+            if bound:
+                try:
+                    run_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, bound)
+                except Exception as exc:
+                    await send_forbidden(f"Repo error: {exc}")
+                    return
+            await router.handle_health(sink, run_path)
             return
         if cmd in {"bind", "use"}:
             repo_name = rest.strip()

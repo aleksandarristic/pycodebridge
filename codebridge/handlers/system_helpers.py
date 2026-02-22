@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import shutil
 from typing import TYPE_CHECKING
 
 from ..router_helpers import HELPER_TIMEOUT, run_limited_command
@@ -83,3 +85,85 @@ async def handle_updates(router: "Router", sink: ResponseSink, repo_path: str) -
         lines.append("Status: version comparison unavailable.")
 
     await router.reply(sink, "\n".join(lines))
+
+
+async def handle_health(router: "Router", sink: ResponseSink, repo_path: str) -> None:
+    """Render runtime diagnostics for operators."""
+    binary = getattr(router.runner, "binary", "codex") or "codex"
+    resolved_binary = shutil.which(binary)
+    current_out, current_err = await run_limited_command(repo_path, [binary, "--version"], timeout=HELPER_TIMEOUT)
+    current = _extract_version(current_out)
+
+    snapshots = await router.coordinator.snapshot_all()
+    running = sum(1 for statuses in snapshots.values() for st in statuses if st.status == "running")
+    queued = sum(1 for statuses in snapshots.values() for st in statuses if st.status == "queued")
+    channel_count = len(snapshots)
+
+    state = router.state.load()
+    tracked_channels = len(state.channels)
+    tracked_sessions = sum(len(ch.sessions) for ch in state.channels.values())
+
+    code_root = router.cfg.codex.code_root or ""
+    state_dir = router.cfg.state.data_dir or ""
+    log_dir = router.cfg.state.log_dir or ""
+    code_root_ok = bool(code_root and os.path.isdir(code_root))
+    state_dir_ok = bool(state_dir and os.path.isdir(state_dir))
+    log_dir_ok = bool(log_dir and os.path.isdir(log_dir))
+
+    last_error = _read_last_codex_error_summary(getattr(router, "_codex_error_log_path", ""))
+    if not last_error:
+        last_error = "none"
+
+    lines = [
+        "Health:",
+        f"- Codex binary: {binary} ({'found' if resolved_binary else 'not found'})",
+        f"- Codex version: {current or 'unknown'}",
+        f"- Queue: {running} running, {queued} queued across {channel_count} channel(s)",
+        f"- Tracked sessions: {tracked_sessions} across {tracked_channels} channel(s)",
+        f"- Last codex error: {last_error}",
+        (
+            "- Env sanity: "
+            f"code_root={'ok' if code_root_ok else 'missing'}, "
+            f"state_dir={'ok' if state_dir_ok else 'missing'}, "
+            f"log_dir={'ok' if log_dir_ok else 'missing'}"
+        ),
+    ]
+    if current_err and not current:
+        lines.append("- Note: failed to query `codex --version`.")
+    await router.reply(sink, "\n".join(lines))
+
+
+def _read_last_codex_error_summary(path: str) -> str:
+    """Return a compact summary from the newest codex error log line."""
+    if not path or not os.path.exists(path):
+        return ""
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            lines = fh.readlines()
+    except Exception:
+        return ""
+    for raw in reversed(lines):
+        text = (raw or "").strip()
+        if not text:
+            continue
+        try:
+            payload = json.loads(text)
+        except Exception:
+            continue
+        rc = payload.get("return_code")
+        note = str(payload.get("note") or "").strip()
+        stderr_tail = payload.get("stderr_tail") or []
+        tail = ""
+        if isinstance(stderr_tail, list) and stderr_tail:
+            tail = str(stderr_tail[-1]).strip()
+        parts = []
+        if rc is not None:
+            parts.append(f"rc={rc}")
+        if note:
+            parts.append(note)
+        if tail:
+            parts.append(tail)
+        summary = " | ".join(p for p in parts if p)
+        if summary:
+            return summary[:240]
+    return ""

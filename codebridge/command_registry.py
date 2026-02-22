@@ -160,6 +160,15 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             AUTH_OPEN,
             aliases=("update", "version"),
         ),
+        CommandSpec(
+            "health",
+            "health",
+            "show runtime diagnostics",
+            "General",
+            _cmd_health,
+            AUTH_OPEN,
+            aliases=("diag",),
+        ),
         CommandSpec("config", "config", "show effective config", "General", _cmd_config, AUTH_UNLOCK, aliases=("cfg",)),
         CommandSpec(
             "unlock",
@@ -365,6 +374,10 @@ async def _cmd_config(router: Any, message: MessageEvent, sink: ResponseSink, re
 
 async def _cmd_updates(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     await router.handle_updates(sink, repo_path)
+
+
+async def _cmd_health(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    await router.handle_health(sink, repo_path)
 
 
 async def _cmd_start(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
