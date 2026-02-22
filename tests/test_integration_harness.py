@@ -708,6 +708,47 @@ def test_integration_session_archive_and_restore(tmp_path):
     assert any(args and args[0] == "resume" for args in runner.calls)
 
 
+def test_integration_budget_status_and_set(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c budget status", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c budget set channel 100 200", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c budget set user 50 80", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c budget status", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Budgets:" in t for t in texts)
+    assert any("Budget channel thresholds set: soft=100, hard=200." in t for t in texts)
+    assert any("Budget user thresholds set: soft=50, hard=80." in t for t in texts)
+    assert any("soft=100 hard=200" in t for t in texts)
+
+
+def test_integration_budget_hard_limit_blocks_new_runs(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c budget set channel 0 10", "codex-repo"), sink)
+        router._budget_usage_channel["chan"] = 10
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Budget limit reached" in t for t in texts)
+    assert not any(args and args[0] == "start" for args in runner.calls)
+
+
 def test_integration_misc_shortcuts_dispatch(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()

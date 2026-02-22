@@ -152,6 +152,15 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec("help", "help [command]", "show this help", "General", _cmd_help, AUTH_OPEN, aliases=("commands",)),
         CommandSpec("status", "status", "show repo path and sessions", "General", _cmd_status, AUTH_OPEN, aliases=("st",)),
         CommandSpec("stats", "stats [session]", "show usage totals", "General", _cmd_stats, AUTH_OPEN, aliases=("usage",)),
+        CommandSpec(
+            "budget",
+            "budget [status] | budget set channel <soft> <hard> | budget set user <soft> <hard> | budget clear [channel|user|all]",
+            "usage budget visibility and controls",
+            "General",
+            _cmd_budget,
+            AUTH_OPEN,
+            aliases=("budgets",),
+        ),
         CommandSpec("peek", "peek [session]", "show active status and last output time", "General", _cmd_peek, AUTH_OPEN, aliases=("pk",)),
         CommandSpec(
             "updates",
@@ -362,6 +371,10 @@ async def _cmd_stats(router: Any, message: MessageEvent, sink: ResponseSink, rep
     if not session:
         return
     await router.handle_stats(sink, session)
+
+
+async def _cmd_budget(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    await router.handle_budget(message, sink, rest)
 
 
 async def _cmd_peek(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

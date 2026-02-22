@@ -4,8 +4,6 @@ Current status:
 
 TODO (Near-term):
 
-- Add usage budget visibility and controls.
-  - Track token/cost usage per user/channel with configurable soft/hard thresholds.
 - Expand audit trail UX commands.
   - Add easier `audit` lookup/filter commands and a downloadable artifact bundle for a job/session.
 - Add safer write-operation workflow.
