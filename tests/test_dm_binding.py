@@ -55,6 +55,7 @@ class _FakeRouter:
         self.last_answer = None
         self.last_updates = None
         self.reset_all_calls = 0
+        self._reset_all_confirm_until = {}
 
     def _transport_prefix(self, event: MessageEvent) -> str:
         if event.platform == "telegram":
@@ -178,6 +179,26 @@ class _FakeRouter:
 
     async def handle_health(self, sink, repo_path: str) -> None:
         await sink.send(f"health@{repo_path}")
+
+    def begin_reset_all_confirmation(self, event: MessageEvent, ttl_seconds: int = 60) -> int:
+        key = f"{event.platform}:{event.author_id}"
+        self._reset_all_confirm_until[key] = ttl_seconds
+        return ttl_seconds
+
+    def consume_reset_all_confirmation(self, event: MessageEvent) -> bool:
+        key = f"{event.platform}:{event.author_id}"
+        if key not in self._reset_all_confirm_until:
+            return False
+        self._reset_all_confirm_until.pop(key, None)
+        return True
+
+    def has_reset_all_confirmation_pending(self, event: MessageEvent) -> bool:
+        key = f"{event.platform}:{event.author_id}"
+        return key in self._reset_all_confirm_until
+
+    def clear_reset_all_confirmation(self, event: MessageEvent) -> None:
+        key = f"{event.platform}:{event.author_id}"
+        self._reset_all_confirm_until.pop(key, None)
 
     async def handle_reset_all_sessions(self, sink) -> None:
         self.reset_all_calls += 1
@@ -631,7 +652,7 @@ def test_dm_answer_command_relays_without_repo_binding(tmp_path):
     assert router.last_answer["text"] == "yes"
 
 
-def test_dm_admin_reset_all_executes_for_discord_admin(tmp_path):
+def test_dm_admin_reset_all_executes_for_discord_admin_after_yes_confirmation(tmp_path):
     cfg = cfgmod.Config()
     cfg.discord.prefix = "!c"
     cfg.discord.dm_admin_enabled = True
@@ -652,13 +673,24 @@ def test_dm_admin_reset_all_executes_for_discord_admin(tmp_path):
         author_is_bot=False,
         is_dm=True,
     )
+    event_yes = MessageEvent(
+        platform="discord",
+        content="yes",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
 
     async def run():
         await dm_admin.handle_dm_message(router, event, sink)
+        await dm_admin.handle_dm_message(router, event_yes, sink)
 
     asyncio.run(run())
 
     assert router.reset_all_calls == 1
+    assert any("Are you sure you want to reset all sessions" in msg for msg in sink.sent)
     assert any("Reset all sessions:" in msg for msg in sink.sent)
 
 
@@ -691,6 +723,78 @@ def test_dm_admin_reset_all_requires_all_keyword(tmp_path):
 
     assert router.reset_all_calls == 0
     assert any("Usage: !c reset all" in msg for msg in sink.sent)
+
+
+def test_dm_admin_reset_all_yes_requires_pending_confirmation(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.discord.prefix = "!c"
+    cfg.discord.dm_admin_enabled = True
+    cfg.discord.allowed_user_ids = ["user"]
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+
+    store = Store(cfg.state.data_dir)
+    router = _FakeRouter(cfg, store)
+    sink = _FakeSink("dm-1")
+    event = MessageEvent(
+        platform="discord",
+        content="yes",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    async def run():
+        await dm_admin.handle_dm_message(router, event, sink)
+
+    asyncio.run(run())
+
+    assert router.reset_all_calls == 0
+    assert any("No repo bound." in msg or "DM Repo Binding:" in msg for msg in sink.sent)
+
+
+def test_dm_admin_reset_all_non_yes_reply_cancels(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.discord.prefix = "!c"
+    cfg.discord.dm_admin_enabled = True
+    cfg.discord.allowed_user_ids = ["user"]
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+
+    store = Store(cfg.state.data_dir)
+    router = _FakeRouter(cfg, store)
+    sink = _FakeSink("dm-1")
+    event = MessageEvent(
+        platform="discord",
+        content="!c reset all",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+    event_cancel = MessageEvent(
+        platform="discord",
+        content="no",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    async def run():
+        await dm_admin.handle_dm_message(router, event, sink)
+        await dm_admin.handle_dm_message(router, event_cancel, sink)
+
+    asyncio.run(run())
+
+    assert router.reset_all_calls == 0
+    assert any("Reset-all operation cancelled." in msg for msg in sink.sent)
 
 
 def test_dm_admin_reset_all_rejected_for_non_admin(tmp_path):

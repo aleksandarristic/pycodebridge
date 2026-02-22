@@ -11,7 +11,6 @@ from types import MethodType
 from types import SimpleNamespace
 
 from codebridge import config as cfgmod
-from codebridge import router as router_mod
 from codebridge.codex import Options
 from codebridge.router import Router
 from codebridge.session_coordinator import SessionCoordinator
@@ -523,6 +522,49 @@ def test_integration_bang_s_shortcut_relays_to_active_session(tmp_path):
     assert any("Sent steer input to session 'default'." in msg for msg, _, _ in sink.sent)
 
 
+def test_integration_bang_s_shortcut_with_non_space_whitespace_relays(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        for _ in range(50):
+            proc = await router.get_active("chan", "default")
+            if proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        await router.handle_message(_discord_event("!s\ttrim scope", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!s\nkeep only tests", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert runner.last_proc is not None
+    assert "trim scope\n" in runner.last_proc.writes
+    assert "keep only tests\n" in runner.last_proc.writes
+    assert any("Sent steer input to session 'default'." in msg for msg, _, _ in sink.sent)
+
+
+def test_integration_bare_s_and_a_shortcuts_show_validation_errors(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!s", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!a", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Usage: !c steer [session] -- <text>  or  !c steer <text>" in msg for msg in texts)
+    assert any("Usage: !c answer [session] -- <text>  or  !c answer <text>" in msg for msg in texts)
+
+
 def test_integration_session_targeted_steer_and_answer_shortcuts(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -545,6 +587,24 @@ def test_integration_session_targeted_steer_and_answer_shortcuts(tmp_path):
     assert runner.last_proc is not None
     assert "keep edits minimal\n" in runner.last_proc.writes
     assert "yes proceed\n" in runner.last_proc.writes
+
+
+def test_integration_cfg_and_opts_shortcuts(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!cfg", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!opts", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("code_root:" in msg for msg in texts)
+    assert any("Runtime options (live, non-persistent):" in msg for msg in texts)
 
 
 def test_integration_auto_relays_plain_reply_when_codex_waits_for_input(tmp_path):
@@ -611,14 +671,14 @@ def test_integration_wait_command_reports_pending_input(tmp_path):
     assert any("Related: !c answer, !a <text>" in msg for msg, _, _ in sink.sent)
 
 
-def test_integration_run_completion_summary_for_long_run(tmp_path, monkeypatch):
+def test_integration_run_completion_summary_for_long_run(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
 
     router, _ = _build_router(tmp_path)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    monkeypatch.setattr(router_mod, "_RUN_COMPLETION_MIN_SECONDS", 1)
+    router._run_completion_min_seconds = 1
 
     async def run():
         await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
@@ -635,14 +695,14 @@ def test_integration_run_completion_summary_for_long_run(tmp_path, monkeypatch):
     assert any("Run complete for session 'default'" in t for t in texts)
 
 
-def test_integration_run_completion_summary_suppressed_for_short_run(tmp_path, monkeypatch):
+def test_integration_run_completion_summary_suppressed_for_short_run(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
 
     router, _ = _build_router(tmp_path)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    monkeypatch.setattr(router_mod, "_RUN_COMPLETION_MIN_SECONDS", 10)
+    router._run_completion_min_seconds = 10
 
     async def run():
         await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
@@ -665,7 +725,7 @@ def test_integration_run_heartbeat_message(tmp_path, monkeypatch):
 
     router, _ = _build_router(tmp_path)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    monkeypatch.setattr(router_mod, "_RUN_HEARTBEAT_SECONDS", 0.05)
+    router._run_heartbeat_seconds = 0.05
 
     async def run():
         await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
@@ -675,6 +735,54 @@ def test_integration_run_heartbeat_message(tmp_path, monkeypatch):
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
     assert any("Still running in session 'default'" in t for t in texts)
+
+
+def test_integration_options_show_and_set_runtime(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c options", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c options set run_heartbeat_seconds 90", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c options set run_completion_min_seconds 480", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c options set show_reasoning_details false", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c options", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert router._run_heartbeat_seconds == 90
+    assert router._run_completion_min_seconds == 480
+    assert router._show_reasoning_details is False
+    assert any("Runtime options (live, non-persistent):" in t for t in texts)
+    assert any("show_reasoning_details: False" in t for t in texts)
+
+
+def test_integration_options_set_requires_totp_when_enabled(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c options set run_heartbeat_seconds 90", "codex-repo"), sink)
+        code = _totp_code(secret)
+        await router.handle_message(
+            _discord_event(f"!c options set run_heartbeat_seconds 90 --totp {code}", "codex-repo"),
+            sink,
+        )
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("TOTP required for 'options'" in t for t in texts)
+    assert any("Runtime option updated: run_heartbeat_seconds=90" in t for t in texts)
 
 
 def test_integration_session_prune_removes_idle_sessions(tmp_path):

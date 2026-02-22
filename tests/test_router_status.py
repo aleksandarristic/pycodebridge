@@ -39,3 +39,11 @@ def test_format_current_selection_line_allows_empty_values():
 def test_format_current_selection_line_includes_reasoning():
     line = format_current_selection_line("foo", "gpt-5", "extra-high")
     assert line.endswith("reasoning extra-high")
+
+
+def test_format_lines_can_hide_reasoning():
+    sess = _make_session(reasoning="high")
+    session_line = format_session_line("default", sess, False, "gpt-5", "medium", show_reasoning=False)
+    current_line = format_current_selection_line("default", "gpt-5", "high", show_reasoning=False)
+    assert "reasoning" not in session_line
+    assert "reasoning" not in current_line

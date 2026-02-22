@@ -56,6 +56,7 @@ _UNLOCK_TTL_RE = re.compile(r"^(\d+)\s*([mhd])$", re.IGNORECASE)
 _UNLOCK_STATUS_TOKENS = {"status", "state"}
 _UNLOCK_SCOPE_DEFAULT = "default"
 _UNLOCK_SCOPE_GH = "gh"
+_RESET_ALL_CONFIRM_TTL_SECONDS = 30
 _READ_ONLY_COMMANDS = {
     "budget",
     "help",
@@ -70,7 +71,7 @@ _READ_ONLY_COMMANDS = {
     "ps",
 }
 _GIT_READ_ONLY_SUBCOMMANDS = {"status", "log", "branches", "show", "diff", "remote"}
-_RUN_HEARTBEAT_SECONDS = 45
+_RUN_HEARTBEAT_SECONDS = 120
 _RUN_COMPLETION_MIN_SECONDS = 300
 _RUN_KEY_RESULT_MAX = 180
 
@@ -107,6 +108,7 @@ class Router:
         self._totp_last_step_by_user: Dict[str, int] = {}
         self._totp_locked_users: Set[str] = set()
         self._totp_unlock_until: Dict[str, float] = {}
+        self._reset_all_confirm_until: Dict[str, float] = {}
         self._totp_limiter = TotpAttemptLimiter(
             max_failures=cfg.discord.totp_max_failures,
             window_seconds=cfg.discord.totp_failure_window_seconds,
@@ -117,6 +119,9 @@ class Router:
         self._budget_usage_user: Dict[str, int] = {}
         self._budget_thresholds_channel: Dict[str, tuple[int, int]] = {}
         self._budget_thresholds_user: Dict[str, tuple[int, int]] = {}
+        self._run_heartbeat_seconds = max(1, int(_RUN_HEARTBEAT_SECONDS))
+        self._run_completion_min_seconds = max(1, int(_RUN_COMPLETION_MIN_SECONDS))
+        self._show_reasoning_details = True
 
     async def handle_message(self, event: MessageEvent, sink: ResponseSink) -> None:
         """Handle an incoming message event."""
@@ -374,18 +379,37 @@ class Router:
             return ("interrupt " + _tail("!stop")).strip()
         if lower == "!pause" or lower.startswith("!pause "):
             return ("interrupt " + _tail("!pause")).strip()
-        if lower.startswith("!steer "):
-            return "steer " + _tail("!steer")
-        if lower.startswith("!s "):
-            return "steer " + _tail("!s")
-        if lower.startswith("!a "):
-            return "answer " + _tail("!a")
+        if lower == "!s":
+            return "steer"
+        if lower.startswith("!steer"):
+            if len(raw) == len("!steer"):
+                return "steer"
+            if raw[len("!steer")].isspace():
+                return ("steer " + raw[len("!steer") :].strip()).strip()
+        if lower.startswith("!s"):
+            if len(raw) == len("!s"):
+                return "steer"
+            if raw[len("!s")].isspace():
+                return ("steer " + raw[len("!s") :].strip()).strip()
+        if lower == "!a":
+            return "answer"
+        if lower.startswith("!a"):
+            if len(raw) == len("!a"):
+                return "answer"
+            if raw[len("!a")].isspace():
+                return ("answer " + raw[len("!a") :].strip()).strip()
         if lower == "!git" or lower.startswith("!git "):
             return ("git " + _tail("!git")).strip()
         if lower == "!gh" or lower.startswith("!gh "):
             return ("gh " + _tail("!gh")).strip()
+        if lower == "!cfg" or lower.startswith("!cfg "):
+            return ("config " + _tail("!cfg")).strip()
+        if lower == "!opts" or lower.startswith("!opts "):
+            return ("options " + _tail("!opts")).strip()
         if lower == "!help" or lower.startswith("!help "):
             return ("help " + _tail("!help")).strip()
+        if lower == "!options" or lower.startswith("!options "):
+            return ("options " + _tail("!options")).strip()
         if lower == "!health" or lower.startswith("!health "):
             return ("health " + _tail("!health")).strip()
         if lower == "!diag" or lower.startswith("!diag "):
@@ -546,6 +570,74 @@ class Router:
     async def handle_health(self, sink: ResponseSink, repo_path: str) -> None:
         """Show runtime diagnostics for the bridge."""
         await system_helpers.handle_health(self, sink, repo_path)
+
+    async def handle_options(self, sink: ResponseSink, rest: str) -> None:
+        """Show or mutate mutable runtime options."""
+        raw = (rest or "").strip()
+        if not raw or self._options_show_requested(raw):
+            await self.reply(sink, self._runtime_options_text())
+            return
+        parts = raw.split()
+        action = parts[0].lower()
+        if action != "set" or len(parts) < 3:
+            await self.reply_forbidden(
+                sink,
+                "Usage: !c options [show] | !c options set <run_heartbeat_seconds|run_completion_min_seconds|show_reasoning_details> <value>",
+            )
+            return
+        key = parts[1].strip().lower()
+        value = " ".join(parts[2:]).strip()
+        key_aliases = {
+            "run_heartbeat_seconds": "run_heartbeat_seconds",
+            "heartbeat": "run_heartbeat_seconds",
+            "runtime.run_heartbeat_seconds": "run_heartbeat_seconds",
+            "run_completion_min_seconds": "run_completion_min_seconds",
+            "completion": "run_completion_min_seconds",
+            "runtime.run_completion_min_seconds": "run_completion_min_seconds",
+            "show_reasoning_details": "show_reasoning_details",
+            "reasoning_details": "show_reasoning_details",
+            "show_reasoning": "show_reasoning_details",
+            "runtime.show_reasoning_details": "show_reasoning_details",
+        }
+        canonical = key_aliases.get(key)
+        if not canonical:
+            await self.reply_forbidden(
+                sink,
+                "Unknown option key. Allowed: run_heartbeat_seconds, run_completion_min_seconds, show_reasoning_details.",
+            )
+            return
+        if canonical in {"run_heartbeat_seconds", "run_completion_min_seconds"}:
+            try:
+                parsed = int(value)
+            except ValueError:
+                await self.reply_forbidden(sink, f"Invalid integer value for {canonical}: {value!r}")
+                return
+            if parsed < 1 or parsed > 86400:
+                await self.reply_forbidden(sink, f"{canonical} must be between 1 and 86400.")
+                return
+            if canonical == "run_heartbeat_seconds":
+                self._run_heartbeat_seconds = parsed
+            else:
+                self._run_completion_min_seconds = parsed
+            await self.reply(
+                sink,
+                f"Runtime option updated: {canonical}={parsed} (applies immediately, resets on restart).",
+            )
+            return
+        bool_true = {"1", "true", "yes", "on"}
+        bool_false = {"0", "false", "no", "off"}
+        token = value.lower()
+        if token in bool_true:
+            self._show_reasoning_details = True
+        elif token in bool_false:
+            self._show_reasoning_details = False
+        else:
+            await self.reply_forbidden(sink, f"Invalid boolean value for {canonical}: {value!r}. Use true/false.")
+            return
+        await self.reply(
+            sink,
+            f"Runtime option updated: {canonical}={self._show_reasoning_details} (applies immediately, resets on restart).",
+        )
 
     async def handle_budget(self, event: MessageEvent, sink: ResponseSink, rest: str) -> None:
         """Show or mutate usage budget settings."""
@@ -1194,13 +1286,21 @@ class Router:
                         active,
                         self.cfg.codex.model,
                         self.cfg.codex.model_reasoning_effort,
+                        self._show_reasoning_details,
                     )
                 )
             current = self.current_session_for_user("", sink.channel_id)
             if current:
                 current_model = self.session_model(sink.channel_id, current)
                 current_reasoning = self.session_reasoning_effort(sink.channel_id, current)
-                lines.append(format_current_selection_line(current, current_model, current_reasoning))
+                lines.append(
+                    format_current_selection_line(
+                        current,
+                        current_model,
+                        current_reasoning,
+                        self._show_reasoning_details,
+                    )
+                )
             await self.reply(sink, self._with_related("\n".join(lines), *related))
             return
         await self.reply(
@@ -1543,7 +1643,7 @@ class Router:
     async def _run_heartbeat(self, sink: ResponseSink, session: str, started_at: float) -> None:
         """Emit periodic run heartbeat messages while a job is active."""
         while True:
-            await asyncio.sleep(_RUN_HEARTBEAT_SECONDS)
+            await asyncio.sleep(self._run_heartbeat_seconds)
             elapsed = int(max(1.0, time.monotonic() - started_at))
             await self.reply(sink, f"Still running in session '{session}' ({self._format_duration(elapsed)} elapsed).")
 
@@ -1558,7 +1658,7 @@ class Router:
     ) -> None:
         """Send concise completion details for a successful run."""
         elapsed = int(max(1.0, time.monotonic() - started_at))
-        if elapsed < _RUN_COMPLETION_MIN_SECONDS:
+        if elapsed < self._run_completion_min_seconds:
             return
         parts = [f"Run complete for session '{session}' in {self._format_duration(elapsed)}."]
         usage = self.get_usage(channel_id, session)
@@ -1704,6 +1804,8 @@ class Router:
 
     def _totp_required_for_command(self, event: MessageEvent, cmd: str, rest: str) -> bool:
         token = self._canonical_command(cmd)
+        if token == "options":
+            return not self._options_show_requested(rest)
         if token == "lock":
             if self._lock_status_requested(rest):
                 return False
@@ -1749,6 +1851,20 @@ class Router:
         if parts[0] in _UNLOCK_STATUS_TOKENS:
             return True
         return len(parts) >= 2 and parts[0] in {"all", _UNLOCK_SCOPE_DEFAULT, _UNLOCK_SCOPE_GH} and parts[1] in _UNLOCK_STATUS_TOKENS
+
+    def _options_show_requested(self, rest: str) -> bool:
+        parts = (rest or "").strip().lower().split()
+        if not parts:
+            return True
+        return parts[0] in {"show", "status", "list"}
+
+    def _runtime_options_text(self) -> str:
+        return (
+            "Runtime options (live, non-persistent):\n"
+            f"- run_heartbeat_seconds: {self._run_heartbeat_seconds}\n"
+            f"- run_completion_min_seconds: {self._run_completion_min_seconds}\n"
+            f"- show_reasoning_details: {self._show_reasoning_details}"
+        )
 
     def _parse_unlock_action(self, rest: str) -> tuple[str, str, str]:
         raw = (rest or "").strip()
@@ -1994,6 +2110,36 @@ class Router:
     def _totp_user_key(self, event: MessageEvent) -> str:
         return f"{event.platform}:{event.author_id}"
 
+    def _reset_all_confirm_key(self, event: MessageEvent) -> str:
+        return f"{event.platform}:{event.author_id}"
+
+    def begin_reset_all_confirmation(self, event: MessageEvent, ttl_seconds: int = _RESET_ALL_CONFIRM_TTL_SECONDS) -> int:
+        key = self._reset_all_confirm_key(event)
+        ttl = max(1, int(ttl_seconds))
+        self._reset_all_confirm_until[key] = time.time() + ttl
+        return ttl
+
+    def consume_reset_all_confirmation(self, event: MessageEvent) -> bool:
+        key = self._reset_all_confirm_key(event)
+        until = self._reset_all_confirm_until.get(key, 0.0)
+        if until <= time.time():
+            self._reset_all_confirm_until.pop(key, None)
+            return False
+        self._reset_all_confirm_until.pop(key, None)
+        return True
+
+    def has_reset_all_confirmation_pending(self, event: MessageEvent) -> bool:
+        key = self._reset_all_confirm_key(event)
+        until = self._reset_all_confirm_until.get(key, 0.0)
+        if until <= time.time():
+            self._reset_all_confirm_until.pop(key, None)
+            return False
+        return True
+
+    def clear_reset_all_confirmation(self, event: MessageEvent) -> None:
+        key = self._reset_all_confirm_key(event)
+        self._reset_all_confirm_until.pop(key, None)
+
     async def _reply_totp_locked(self, sink: ResponseSink, retry_after_seconds: int) -> None:
         await self.reply_forbidden(
             sink,
@@ -2233,7 +2379,7 @@ class Router:
         model = self.session_model(sink.channel_id, sess)
         reasoning = self.session_reasoning_effort(sink.channel_id, sess)
         model_info = f" model {model}" if model else ""
-        reasoning_info = f" reasoning {reasoning}" if reasoning else ""
+        reasoning_info = f" reasoning {reasoning}" if self._show_reasoning_details and reasoning else ""
         text = f"User {user_id} current session: {sess}{model_info}{reasoning_info}"
         await sink.update_pinned_status(user_id, session, text)
 

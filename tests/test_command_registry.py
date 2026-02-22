@@ -40,6 +40,8 @@ def test_command_registry_help_text():
     assert "General:" in text
     assert "Auth tags: [open]=no TOTP" in text
     assert "- **`!c help [command]`**, **`!c commands [command]`**, **`!help`** - show this help [open]" in text
+    assert "**`!cfg`**" in text
+    assert "**`!opts`**" in text
     assert "- **`!c health`**, **`!c diag`**, **`!health`**, **`!diag`** - show runtime diagnostics [open]" in text
     assert "**`!c unlock [gh|all] [status|ttl]`**" in text
     assert "**`!c ul [gh|all] [status|ttl]`**" in text

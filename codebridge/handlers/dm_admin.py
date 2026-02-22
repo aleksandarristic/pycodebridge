@@ -38,9 +38,10 @@ _DM_COMMAND_ALIASES = {
     "delete": "deleterepo",
     "ren": "renamerepo",
     "rename": "renamerepo",
+    "opts": "options",
 }
 
-_DM_SHORTCUT_COMMANDS = {"gh", "health", "help", "lock", "status", "unlock", "updates"}
+_DM_SHORTCUT_COMMANDS = {"config", "gh", "health", "help", "lock", "options", "status", "unlock", "updates"}
 
 
 def _require_dangerous_confirmation_token(router: "Router", rest: str) -> tuple[bool, str]:
@@ -86,6 +87,7 @@ def dm_help_text() -> str:
         "sessions — list sessions across channels [open]\n"
         "status — show queues and running jobs [open]\n"
         "config — show effective config [open]\n"
+        "options [show] | options set <name> <value> — runtime options (set requires totp) [mixed]\n"
         "gh <args> — run GitHub CLI in DM context [unlock/gh]\n"
         "updates — check Codex CLI update status [open]\n"
         "create/new <name> — create repo [totp]\n"
@@ -93,7 +95,7 @@ def dm_help_text() -> str:
         "copy/cp <from> <to> — copy repo [totp]\n"
         "deleterepo/del <name> — delete repo [totp]\n"
         "renamerepo/ren <from> <to> — rename repo [totp]\n"
-        "reset all — reset all sessions across channels [totp]\n"
+        "reset all — request reset-all confirmation; next reply must be `yes` within 60s [open]\n"
         "unlock/ul [gh|all] [status|ttl] — unlock command scopes for your account [totp; status=open]\n"
         "lock/lk [gh|all] — clear unlock scopes for your account [open]\n"
     )
@@ -108,6 +110,7 @@ def dm_binding_help_text() -> str:
         "repo <repo> <prompt> — run a one-off prompt against a repo [unlock/default]\n"
         "gh <args> — run GitHub CLI (bound repo cwd, or code_root if unbound) [unlock/gh]\n"
         "updates — check Codex CLI update status [open]\n"
+        "options [show] | options set <name> <value> — runtime options (set requires totp) [mixed]\n"
         "unlock/ul [gh|all] [status|ttl] — unlock command scopes for your account [totp; status=open]\n"
         "lock/lk [gh|all] — clear unlock scopes for your account [open]\n"
         "unbind — clear bound repo [unlock/default]\n"
@@ -346,6 +349,18 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
             return
     if await router.handle_pending_upload_response(event, sink, router.get_dm_binding(event) or "", pending_content):
         return
+    if event.platform == "discord" and router.cfg.discord.dm_admin_enabled and router._dm_admin_allowed(event.author_id):
+        if router.has_reset_all_confirmation_pending(event):
+            answer = (content or "").strip().lower()
+            if answer in {"yes", "y"}:
+                if not router.consume_reset_all_confirmation(event):
+                    await sink.send("Reset-all confirmation expired. Run `!c reset all` again.")
+                    return
+                await router.handle_reset_all_sessions(sink)
+                return
+            router.clear_reset_all_confirmation(event)
+            await sink.send("Reset-all operation cancelled.")
+            return
     if not content.startswith(prefix):
         relay_session, ambiguous = await router.pending_input_session(event)
         if ambiguous:
@@ -405,7 +420,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         await dm_reply(router, sink, entry, forbidden_message(detail))
 
     is_admin = event.platform == "discord" and router.cfg.discord.dm_admin_enabled and router._dm_admin_allowed(event.author_id)
-    binding_commands = {"bind", "use", "repo", "unbind", "status", "unlock", "lock", "updates", "health"}
+    binding_commands = {"bind", "use", "repo", "unbind", "status", "unlock", "lock", "updates", "health", "options"}
     admin_commands = {
         "repos",
         "sessions",
@@ -437,7 +452,7 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         if not is_admin:
             await send_forbidden("You are not allowed to use DM admin commands.")
             return
-        if cmd in {"create", "clone", "copy", "deleterepo", "renamerepo", "reset"}:
+        if cmd in {"create", "clone", "copy", "deleterepo", "renamerepo"}:
             ok, cmdline = await router.require_totp(event, sink, cmd, cmdline)
             if not ok:
                 return
@@ -462,10 +477,17 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
             await send(router.config_text())
             return
         if cmd == "reset":
-            if rest.strip().lower() != "all":
-                await send_forbidden("Usage: !c reset all")
+            token = rest.strip().lower()
+            if token == "all":
+                ttl = router.begin_reset_all_confirmation(event)
+                await send(
+                    f"Are you sure you want to reset all sessions across all channels? "
+                    f"This will clear stored context, cancel queued jobs, and stop active work where possible. "
+                    f"Reply with `yes` within {ttl}s to proceed. "
+                    f"Any other reply cancels immediately; no reply before timeout expires the confirmation."
+                )
                 return
-            await router.handle_reset_all_sessions(sink)
+            await send_forbidden("Usage: !c reset all")
             return
         if cmd == "create":
             name = rest.strip()
@@ -578,6 +600,9 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
                     await send_forbidden(f"Repo error: {exc}")
                     return
             await router.handle_health(sink, run_path)
+            return
+        if cmd == "options":
+            await router.handle_options(sink, rest)
             return
         if cmd in {"bind", "use"}:
             repo_name = rest.strip()

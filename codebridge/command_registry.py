@@ -182,6 +182,15 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         ),
         CommandSpec("config", "config", "show effective config", "General", _cmd_config, AUTH_UNLOCK, aliases=("cfg",)),
         CommandSpec(
+            "options",
+            "options [show] | options set <name> <value>",
+            "show or set live runtime options (set resets on restart)",
+            "General",
+            _cmd_options,
+            AUTH_MIXED,
+            aliases=("opts",),
+        ),
+        CommandSpec(
             "unlock",
             "unlock [gh|all] [status|ttl] | unlock extend [gh|all] <ttl>",
             "unlock command scopes for your account (status is open; extend requires totp)",
@@ -402,6 +411,10 @@ async def _cmd_lock(router: Any, message: MessageEvent, sink: ResponseSink, repo
 
 async def _cmd_config(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     await router.reply(sink, router.config_text())
+
+
+async def _cmd_options(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    await router.handle_options(sink, rest)
 
 
 async def _cmd_updates(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
