@@ -135,6 +135,66 @@ def test_download_allowed_when_capability_true(tmp_path):
     assert sink.files == [(str(target), "note.txt")]
 
 
+def test_upload_sanitizes_attachment_filename_before_save(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+    cfg.files.max_upload_mb = 1
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    (repo / "uploads").mkdir()
+
+    saved: list[_Saved] = []
+    attachment = Attachment(
+        filename="../outside.txt",
+        size=5,
+        content_type="text/plain",
+        save=lambda path: _save_to(saved, path),
+    )
+    request = MessageEvent(
+        platform="telegram",
+        content="",
+        channel_id="dm",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+        attachments=[attachment],
+    )
+    response = MessageEvent(
+        platform="telegram",
+        content="uploads/",
+        channel_id="dm",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    service = FileTransferService(cfg, logger=_FakeLogger())
+    sink = _FakeSink(Capabilities(uploads=True))
+
+    async def run():
+        await service.handle_upload_request(request, sink, "repo", str(repo), _reply_forbidden, _reply)
+        handled = await service.handle_pending_upload_response(
+            response,
+            sink,
+            "repo",
+            "!c",
+            _reply_forbidden,
+            _reply,
+        )
+        assert handled is True
+
+    asyncio.run(run())
+    assert saved, "expected uploaded file to be saved"
+    saved_path = saved[0].path
+    assert saved_path == str(repo / "uploads" / "outside.txt")
+
+
 class _FakeLogger:
     def info(self, name: str, extra=None):
         return None

@@ -105,12 +105,21 @@ class FileTransferService:
         if len(upload.attachments) > 1 and not is_dir:
             await reply_forbidden(sink, "Provide a directory path when uploading multiple files.")
             return True
-        saved = []
+        planned: list[tuple[object, str]] = []
+        repo_root = os.path.realpath(upload.repo_path)
         for att in upload.attachments:
             dest = target_path
             if is_dir:
-                dest = os.path.join(target_path, att.filename)
+                filename = self._safe_attachment_filename(att.filename)
+                candidate = os.path.realpath(os.path.join(target_path, filename))
+                if os.path.relpath(candidate, repo_root).startswith(".."):
+                    await reply_forbidden(sink, f"Invalid attachment filename: {att.filename}")
+                    return True
+                dest = candidate
             dest = self._unique_path(dest)
+            planned.append((att, dest))
+        saved = []
+        for att, dest in planned:
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             await att.save(dest)
             saved.append(os.path.relpath(dest, upload.repo_path))
@@ -160,6 +169,14 @@ class FileTransferService:
             if not os.path.exists(candidate):
                 return candidate
             idx += 1
+
+    def _safe_attachment_filename(self, filename: str) -> str:
+        """Collapse path-like attachment names to a basename under repo."""
+        normalized = (filename or "").replace("\\", "/").strip()
+        safe = os.path.basename(normalized)
+        if safe in {"", ".", ".."}:
+            return "attachment"
+        return safe
 
     def _suggest_upload_paths(self, repo_path: str) -> list[str]:
         suggestions = []

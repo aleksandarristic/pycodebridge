@@ -341,7 +341,7 @@ TOTP is not required in DMs for:
 - `!c lock [gh|all]`
 
 When a repo is bound in DMs, a message without `!c` is treated as a prompt unless Codex is currently awaiting input (then it is relayed to the active session stdin).
-Attachments in channels or bound DMs will prompt for a destination path before saving.
+Attachments in channels or bound DMs will prompt for a destination path before saving. Attachment filenames are normalized to a basename before write.
 
 ## Package layout
 Core modules are now grouped by responsibility:
