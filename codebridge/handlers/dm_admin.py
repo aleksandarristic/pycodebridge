@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Awaitable, Callable, Optional
 
 from ..commands import registry as command_registry
 from ..commands import help as help_renderer
@@ -333,10 +333,18 @@ async def dm_rename_repo(
     return None
 
 
-async def handle_dm_message(router: "Router", event: MessageEvent, sink: ResponseSink) -> None:
-    """Handle an incoming DM admin message."""
-    content = (event.content or "").strip()
-    prefix = router._transport_prefix(event)
+def _is_dm_admin(router: "Router", event: MessageEvent) -> bool:
+    return event.platform == "discord" and router.cfg.discord.dm_admin_enabled and router._dm_admin_allowed(event.author_id)
+
+
+async def _prepare_dm_content(
+    router: "Router",
+    event: MessageEvent,
+    sink: ResponseSink,
+    content: str,
+    prefix: str,
+) -> tuple[str, bool]:
+    """Apply DM shortcuts and handle pending upload path prompts."""
     shortcut_cmdline = router._shortcut_cmdline(content)
     if shortcut_cmdline:
         shortcut_head = shortcut_cmdline.split(maxsplit=1)[0].lower()
@@ -350,80 +358,79 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
     if pending_upload and router._totp_enabled(event):
         ok, pending_content = await router.require_totp(event, sink, "upload", content)
         if not ok:
-            return
+            return content, True
     if await router.handle_pending_upload_response(event, sink, router.get_dm_binding(event) or "", pending_content):
-        return
-    if event.platform == "discord" and router.cfg.discord.dm_admin_enabled and router._dm_admin_allowed(event.author_id):
-        if router.has_reset_all_confirmation_pending(event):
-            answer = (content or "").strip().lower()
-            if answer in {"yes", "y"}:
-                if not router.consume_reset_all_confirmation(event):
-                    await sink.send("Reset-all confirmation expired. Run `!c reset all` again.")
-                    return
-                await router.handle_reset_all_sessions(sink)
-                return
-            router.clear_reset_all_confirmation(event)
-            await sink.send("Reset-all operation cancelled.")
-            return
-    if not content.startswith(prefix):
-        relay_session, ambiguous = await router.pending_input_session(event)
-        if ambiguous:
-            await sink.send(forbidden_message("Multiple sessions are waiting for input. Use `!c answer <session> -- <text>`."))
-            return
-        if relay_session and not event.attachments:
-            relay_text = content.strip()
-            if not relay_text:
-                return
-            if router._totp_enabled(event) and not router._totp_is_unlocked(event):
-                ok, relay_text = await router.require_totp(event, sink, "answer", relay_text)
-                if not ok:
-                    return
-            await router.handle_answer(event, sink, relay_session, relay_text)
-            return
-        if not router._transport_user_allowed(event):
-            await sink.send(forbidden_message("You are not allowed to use this bot."))
-            return
-        bound_repo = router.get_dm_binding(event)
-        if not bound_repo:
-            await sink.send("No repo bound. Send `!c repos` to list and then `!c bind <repo>` to bind a repo. Send `!c help` for instructions.")
-            return
-        try:
-            repo_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, bound_repo)
-        except Exception as exc:
-            await sink.send(forbidden_message(f"Repo error: {exc}"))
-            return
-        if event.attachments:
-            if router._totp_enabled(event):
-                ok, _ = await router.require_totp(event, sink, "upload", content)
-                if not ok:
-                    return
-            await router.handle_upload_request(event, sink, bound_repo, repo_path)
-            return
-        session = router.current_session_for_user(event.author_id, event.channel_id)
-        prefixed_sink = _PrefixedSink(sink, bound_repo)
+        return pending_content, True
+    return content, False
+
+
+async def _handle_dm_unprefixed(
+    router: "Router",
+    event: MessageEvent,
+    sink: ResponseSink,
+    content: str,
+    prefix: str,
+) -> bool:
+    """Handle unprefixed DM input (relay/bound repo prompts/uploads)."""
+    if content.startswith(prefix):
+        return False
+    relay_session, ambiguous = await router.pending_input_session(event)
+    if ambiguous:
+        await sink.send(forbidden_message("Multiple sessions are waiting for input. Use `!c answer <session> -- <text>`."))
+        return True
+    if relay_session and not event.attachments:
+        relay_text = content.strip()
+        if not relay_text:
+            return True
         if router._totp_enabled(event) and not router._totp_is_unlocked(event):
-            ok, content = await router.require_totp(event, sink, "resume", content)
+            ok, relay_text = await router.require_totp(event, sink, "answer", relay_text)
             if not ok:
-                return
-        await router.handle_resume(event, prefixed_sink, bound_repo, repo_path, session, content)
-        return
-    cmdline = content[len(prefix) :].strip()
-    if not cmdline:
-        return
-    cmdline = router._normalize_unlock_totp_syntax(cmdline)
-    fields = cmdline.split()
-    cmd = _DM_COMMAND_ALIASES.get(fields[0].lower(), fields[0].lower())
-    rest = cmdline[len(fields[0]) :].strip()
+                return True
+        await router.handle_answer(event, sink, relay_session, relay_text)
+        return True
+    if not router._transport_user_allowed(event):
+        await sink.send(forbidden_message("You are not allowed to use this bot."))
+        return True
+    bound_repo = router.get_dm_binding(event)
+    if not bound_repo:
+        await sink.send("No repo bound. Send `!c repos` to list and then `!c bind <repo>` to bind a repo. Send `!c help` for instructions.")
+        return True
+    try:
+        repo_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, bound_repo)
+    except Exception as exc:
+        await sink.send(forbidden_message(f"Repo error: {exc}"))
+        return True
+    if event.attachments:
+        if router._totp_enabled(event):
+            ok, _ = await router.require_totp(event, sink, "upload", content)
+            if not ok:
+                return True
+        await router.handle_upload_request(event, sink, bound_repo, repo_path)
+        return True
+    session = router.current_session_for_user(event.author_id, event.channel_id)
+    prefixed_sink = _PrefixedSink(sink, bound_repo)
+    if router._totp_enabled(event) and not router._totp_is_unlocked(event):
+        ok, content = await router.require_totp(event, sink, "resume", content)
+        if not ok:
+            return True
+    await router.handle_resume(event, prefixed_sink, bound_repo, repo_path, session, content)
+    return True
 
-    entry = dm_audit_start(router, event, cmd, rest)
 
-    async def send(text: str) -> None:
-        await dm_reply(router, sink, entry, text)
-
-    async def send_forbidden(detail: str) -> None:
-        await dm_reply(router, sink, entry, forbidden_message(detail))
-
-    is_admin = event.platform == "discord" and router.cfg.discord.dm_admin_enabled and router._dm_admin_allowed(event.author_id)
+async def _dispatch_prefixed_dm_command(
+    router: "Router",
+    event: MessageEvent,
+    sink: ResponseSink,
+    entry: Optional[Entry],
+    prefix: str,
+    cmd: str,
+    rest: str,
+    cmdline: str,
+    is_admin: bool,
+    send: Callable[[str], Awaitable[None]],
+    send_forbidden: Callable[[str], Awaitable[None]],
+) -> None:
+    """Dispatch a parsed prefixed DM command and perform fallback handling."""
     binding_commands = {"bind", "use", "repo", "unbind", "status", "unlock", "lock", "updates", "health", "options"}
     admin_commands = {
         "repos",
@@ -753,3 +760,57 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         extra={"platform": event.platform, "user_id": event.author_id, "repo": bound_repo, "session": session},
     )
     await router.handle_resume(event, prefixed_sink, bound_repo, repo_path, session, cmdline)
+
+
+async def handle_dm_message(router: "Router", event: MessageEvent, sink: ResponseSink) -> None:
+    """Handle an incoming DM admin message."""
+    content = (event.content or "").strip()
+    prefix = router._transport_prefix(event)
+    content, handled = await _prepare_dm_content(router, event, sink, content, prefix)
+    if handled:
+        return
+
+    if _is_dm_admin(router, event) and router.has_reset_all_confirmation_pending(event):
+        answer = (content or "").strip().lower()
+        if answer in {"yes", "y"}:
+            if not router.consume_reset_all_confirmation(event):
+                await sink.send("Reset-all confirmation expired. Run `!c reset all` again.")
+                return
+            await router.handle_reset_all_sessions(sink)
+            return
+        router.clear_reset_all_confirmation(event)
+        await sink.send("Reset-all operation cancelled.")
+        return
+
+    if await _handle_dm_unprefixed(router, event, sink, content, prefix):
+        return
+
+    cmdline = content[len(prefix) :].strip()
+    if not cmdline:
+        return
+    cmdline = router._normalize_unlock_totp_syntax(cmdline)
+    fields = cmdline.split()
+    cmd = _DM_COMMAND_ALIASES.get(fields[0].lower(), fields[0].lower())
+    rest = cmdline[len(fields[0]) :].strip()
+
+    entry = dm_audit_start(router, event, cmd, rest)
+
+    async def send(text: str) -> None:
+        await dm_reply(router, sink, entry, text)
+
+    async def send_forbidden(detail: str) -> None:
+        await dm_reply(router, sink, entry, forbidden_message(detail))
+
+    await _dispatch_prefixed_dm_command(
+        router,
+        event,
+        sink,
+        entry,
+        prefix,
+        cmd,
+        rest,
+        cmdline,
+        _is_dm_admin(router, event),
+        send,
+        send_forbidden,
+    )
