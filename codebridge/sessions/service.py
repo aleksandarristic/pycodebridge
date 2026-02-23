@@ -172,6 +172,28 @@ class SessionService:
 
         self._state.update(mutator)
 
+    def clear_session_thread(self, channel_id: str, session: str) -> bool:
+        """Clear stored thread id for a session; return True when changed."""
+        session = _normalize_session_default(session)
+        cleared = False
+
+        def mutator(fs):
+            nonlocal cleared
+            ch = fs.channels.get(channel_id)
+            if ch is None:
+                return
+            sess = ch.sessions.get(session)
+            if sess is None:
+                return
+            if sess.thread_id:
+                sess.thread_id = ""
+                ch.sessions[session] = sess
+                fs.channels[channel_id] = ch
+                cleared = True
+
+        self._state.update(mutator)
+        return cleared
+
     def session_model(self, channel_id: str, session: str) -> str:
         """Return model override for a session or fallback to default."""
         session = _normalize_session_default(session)

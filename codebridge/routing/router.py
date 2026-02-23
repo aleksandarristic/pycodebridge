@@ -1539,6 +1539,7 @@ class Router:
         async with self.typing_context(sink):
             args_to_run = list(original_args)
             attempted_compat_retry = False
+            attempted_stale_resume_retry = False
             while True:
                 stderr_tail.clear()
                 try:
@@ -1585,6 +1586,36 @@ class Router:
                     await self.clear_active(channel_id, session)
 
                 if rc == 0:
+                    if (
+                        not attempted_stale_resume_retry
+                        and self._looks_like_missing_rollout_thread_error(stderr_tail)
+                        and self._is_resume_command(args_to_run)
+                        and output_events == 0
+                    ):
+                        retry_args = self._resume_fallback_start_args(args_to_run)
+                        if retry_args != args_to_run:
+                            self.clear_session_thread(channel_id, session)
+                            attempted_stale_resume_retry = True
+                            args_to_run = retry_args
+                            self.logger.warning(
+                                "codex.retry.stale_thread",
+                                extra={"channel_id": channel_id, "repo": repo_name, "session": session},
+                            )
+                            self._append_codex_error_log(
+                                channel_id=channel_id,
+                                session=session,
+                                repo_name=repo_name,
+                                repo_path=repo_path,
+                                args=retry_args,
+                                return_code=None,
+                                stderr_lines=stderr_tail,
+                                note="stale resume thread; retrying with fresh start args",
+                            )
+                            await self.reply(
+                                sink,
+                                "Codex resume thread appears stale; retrying with a fresh start for this prompt.",
+                            )
+                            continue
                     usage_after = self.get_usage(channel_id, session)
                     after_total = usage_after.total_tokens if usage_after else 0
                     delta_total = max(0, after_total - before_total)
@@ -1634,6 +1665,35 @@ class Router:
                         await self.reply(
                             sink,
                             "Codex command failed with current flags; retrying with compatibility args.",
+                        )
+                        continue
+                if (
+                    not attempted_stale_resume_retry
+                    and self._looks_like_missing_rollout_thread_error(stderr_tail)
+                    and self._is_resume_command(args_to_run)
+                ):
+                    retry_args = self._resume_fallback_start_args(args_to_run)
+                    if retry_args != args_to_run:
+                        self.clear_session_thread(channel_id, session)
+                        attempted_stale_resume_retry = True
+                        args_to_run = retry_args
+                        self.logger.warning(
+                            "codex.retry.stale_thread",
+                            extra={"channel_id": channel_id, "repo": repo_name, "session": session},
+                        )
+                        self._append_codex_error_log(
+                            channel_id=channel_id,
+                            session=session,
+                            repo_name=repo_name,
+                            repo_path=repo_path,
+                            args=retry_args,
+                            return_code=None,
+                            stderr_lines=stderr_tail,
+                            note="stale resume thread; retrying with fresh start args",
+                        )
+                        await self.reply(
+                            sink,
+                            "Codex resume thread appears stale; retrying with a fresh start for this prompt.",
                         )
                         continue
 
@@ -2594,6 +2654,29 @@ class Router:
         text = "\n".join(stderr_tail).lower()
         return "--help" in text or "usage:" in text or "unexpected argument" in text
 
+    def _looks_like_missing_rollout_thread_error(self, stderr_tail: list[str]) -> bool:
+        text = "\n".join(stderr_tail).lower()
+        return "missing rollout path for thread" in text
+
+    def _is_resume_command(self, args: list[str]) -> bool:
+        return "resume" in args
+
+    def _resume_fallback_start_args(self, args: list[str]) -> list[str]:
+        retry: list[str] = []
+        dropped = False
+        i = 0
+        while i < len(args):
+            token = args[i]
+            if token == "resume" and i + 1 < len(args):
+                dropped = True
+                i += 2
+                continue
+            retry.append(token)
+            i += 1
+        if dropped:
+            return retry
+        return list(args)
+
     def _compat_retry_args(self, args: list[str]) -> list[str]:
         retry: list[str] = []
         sandbox_value = ""
@@ -2773,6 +2856,10 @@ class Router:
     def get_activity(self, channel_id: str, session: str) -> Optional[str]:
         """Return last output time for a session."""
         return self.coordinator.get_activity(channel_id, session or DEFAULT_SESSION)
+
+    def clear_session_thread(self, channel_id: str, session: str) -> bool:
+        """Clear stored thread id for a session when resume thread is stale."""
+        return self.coordinator.clear_session_thread(channel_id, session or DEFAULT_SESSION)
 
     async def set_active(self, channel_id: str, session: str, proc: Any) -> None:
         """Track a running Codex process for a session."""

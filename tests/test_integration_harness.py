@@ -99,6 +99,27 @@ class _FakeProc:
         self.writes.append(data)
 
 
+class _ProcDone:
+    def __init__(self, rc: int) -> None:
+        self._rc = rc
+
+    async def wait(self) -> int:
+        return self._rc
+
+    async def stop(self) -> None:
+        return None
+
+    async def interrupt(self) -> None:
+        return None
+
+    async def kill(self) -> None:
+        return None
+
+    async def write(self, data: str) -> None:
+        _ = data
+        return None
+
+
 class _FakeRunner:
     def __init__(self) -> None:
         self.calls = []
@@ -2237,6 +2258,113 @@ def test_router_compat_retry_args_preserves_sandbox_from_config_override(tmp_pat
         'approval_policy="on-request"',
         "fix it",
     ]
+
+
+def test_router_detects_missing_rollout_thread_error(tmp_path):
+    router, _ = _build_router(tmp_path)
+    assert router._looks_like_missing_rollout_thread_error(
+        ["ERROR codex_core::rollout::list: state db missing rollout path for thread thread_123"]
+    )
+    assert router._looks_like_missing_rollout_thread_error(
+        ["missing rollout path for thread thread_123"]
+    )
+    assert not router._looks_like_missing_rollout_thread_error(
+        ["error sending request for url"]
+    )
+
+
+def test_router_resume_fallback_start_args_drops_resume_target(tmp_path):
+    router, _ = _build_router(tmp_path)
+    args = [
+        "exec",
+        "--json",
+        "--cd",
+        "/workspace/code_root/ProbablyFine",
+        "--sandbox",
+        "workspace-write",
+        "-c",
+        'approval_policy="on-request"',
+        "resume",
+        "thread_123",
+        "--model",
+        "gpt-5.3-codex",
+        "-c",
+        'model_reasoning_effort="high"',
+        "fix it",
+    ]
+    out = router._resume_fallback_start_args(args)
+    assert out == [
+        "exec",
+        "--json",
+        "--cd",
+        "/workspace/code_root/ProbablyFine",
+        "--sandbox",
+        "workspace-write",
+        "-c",
+        'approval_policy="on-request"',
+        "--model",
+        "gpt-5.3-codex",
+        "-c",
+        'model_reasoning_effort="high"',
+        "fix it",
+    ]
+
+
+def test_run_codex_retries_stale_resume_thread_with_start_args(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    class _StaleResumeRunner:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def run(self, opts: Options):
+            self.calls.append(list(opts.args))
+            if len(self.calls) == 1:
+                if opts.on_stderr:
+                    await opts.on_stderr(
+                        "ERROR codex_core::rollout::list: state db missing rollout path for thread thread_123"
+                    )
+                return _ProcDone(1)
+            if opts.on_jsonl:
+                await opts.on_jsonl('{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}')
+            return _ProcDone(0)
+
+    runner = _StaleResumeRunner()
+    router, _ = _build_router(tmp_path, runner=runner)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    event = _discord_event("!c resume fix it", "codex-repo")
+    router.update_state("chan", "default", "repo", str(repo), "thread_123", "gpt-5.3-codex", "high")
+    args = [
+        "exec",
+        "--json",
+        "--cd",
+        str(repo),
+        "--sandbox",
+        "workspace-write",
+        "-c",
+        'approval_policy="on-request"',
+        "resume",
+        "thread_123",
+        "--model",
+        "gpt-5.3-codex",
+        "-c",
+        'model_reasoning_effort="high"',
+        "fix it",
+    ]
+
+    async def run():
+        await router.run_codex(event, sink, "repo", str(repo), "default", "gpt-5.3-codex", "high", args)
+
+    asyncio.run(run())
+    assert len(runner.calls) == 2
+    assert runner.calls[0][8:10] == ["resume", "thread_123"]
+    assert "resume" not in runner.calls[1]
+    assert runner.calls[1][-1] == "fix it"
+    assert any("retrying with a fresh start" in msg for msg, _, _ in sink.sent)
+    state = router.state.load()
+    assert state.channels["chan"].sessions["default"].thread_id == ""
 
 
 def test_router_writes_codex_error_log(tmp_path):
