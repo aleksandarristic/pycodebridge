@@ -59,6 +59,9 @@ Quick start:
    - Set `runtime.health_bind` (example: `127.0.0.1:8080`)
    - Optional path: `runtime.health_path` (default `/healthz`)
    - Probe: `curl -fsS http://127.0.0.1:8080/healthz`
+10) Reset persisted bridge state quickly:
+   - `./reset_state.sh` (uses running Compose container when available, else host state dir)
+   - Optional explicit host path: `./reset_state.sh /absolute/path/to/state`
 
 ## Configuration reference
 Paths support `$VAR`/`%APPDATA%`/`~` expansion.

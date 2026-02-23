@@ -120,6 +120,19 @@ Example:
 IMAGE_NAME=pycodebridge:dev BUILD_IMAGE=0 ./run_docker.sh
 ```
 
+## Resetting state quickly
+
+To wipe persisted bridge state/logs:
+
+```bash
+./reset_state.sh
+```
+
+Behavior:
+- If Compose service `codebridge` is running, wipes `/workspace/state` inside that container.
+- Otherwise, wipes host state dir from `STATE_DIR_HOST` (or `./.docker-state` fallback).
+- You can also pass an explicit host path: `./reset_state.sh /absolute/path/to/state`.
+
 ## Notes
 
 - The Docker image installs `codex` via npm (`@openai/codex`).
