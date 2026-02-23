@@ -2,7 +2,6 @@
 
 import asyncio
 import contextlib
-from dataclasses import replace
 import os
 import re
 import subprocess
@@ -21,7 +20,7 @@ from ..observability.audit_helpers import AuditHelper
 from ..codex import Event, Options, Runner, display_texts, parse_event
 from ..sessions.coordinator import SessionCoordinator
 from ..sessions.state import Store, utc_now_iso
-from ..platform.transport import Capabilities, MessageEvent, ResponseSink, null_typing
+from ..platform.transport import MessageEvent, ResponseSink, null_typing
 from ..util import path as pathutil
 from ..handlers import core as core_handlers
 from ..handlers import dm_admin as dm_admin_handlers
@@ -50,6 +49,7 @@ from .helpers import (
 )
 from .config import render_config_text
 from .status import format_current_selection_line, format_session_line
+from .event_context import build_contextual_sink, normalize_event_context
 
 _TOTP_ARG_RE = re.compile(r"(?:^|\s)--totp\s+(\d{6})(?=\s|$)")
 _AWAITING_INPUT_TTL_SECONDS = 900
@@ -137,8 +137,11 @@ class Router:
         """Handle an incoming message event."""
         if event.author_is_bot:
             return
-        event = self._normalize_event_context(event)
-        sink = self._contextual_sink(event, sink)
+        event = normalize_event_context(event)
+        lock_emoji = ""
+        if self._totp_enabled(event):
+            lock_emoji = "🔓" if self._totp_is_unlocked(event, _UNLOCK_SCOPE_DEFAULT) else "🔒"
+        sink = build_contextual_sink(event, sink, self.cfg.discord.max_discord_message_chars, lock_emoji)
 
         self.logger.info(
             "incoming.message",
@@ -2544,56 +2547,6 @@ class Router:
         text = f"User {user_id} current session: {sess}{model_info}{reasoning_info}"
         await sink.update_pinned_status(user_id, session, text)
 
-    def _contextual_sink(self, event: MessageEvent, sink: ResponseSink) -> ResponseSink:
-        wrapped: ResponseSink = sink
-        thread_id = event.platform_thread_id or ""
-        reply_to_id = ""
-        if not thread_id and wrapped.capabilities().replies:
-            reply_to_id = event.message_id or ""
-        if thread_id or reply_to_id:
-            wrapped = _ThreadContextSink(wrapped, thread_id, reply_to_id)
-        if event.channel_id and wrapped.channel_id != event.channel_id:
-            wrapped = _ChannelScopeSink(wrapped, event.channel_id)
-        if self._totp_enabled(event):
-            wrapped = _LockStateSink(wrapped, lambda: self._lock_emoji_for_event(event), self.cfg.discord.max_discord_message_chars)
-        wrapped = _ChunkingSink(wrapped, self.cfg.discord.max_discord_message_chars)
-        return wrapped
-
-    def _normalize_event_context(self, event: MessageEvent) -> MessageEvent:
-        """Normalize Discord thread events to parent-mapped room context."""
-        if event.platform != "discord" or event.is_dm or not event.platform_thread_id:
-            return event
-        parent_id, parent_name = self._discord_parent_context(event)
-        if not parent_id:
-            return event
-        room_key = f"discord:{parent_id}:{event.platform_thread_id}"
-        channel_name = parent_name or event.channel_name
-        if room_key == event.channel_id and channel_name == event.channel_name:
-            return event
-        return replace(event, channel_id=room_key, channel_name=channel_name)
-
-    def _discord_parent_context(self, event: MessageEvent) -> tuple[str, str]:
-        """Return parent channel id/name for a Discord thread event."""
-        message = event.raw_event
-        channel = getattr(message, "channel", None) if message is not None else None
-        if channel is None:
-            return "", ""
-        parent = getattr(channel, "parent", None)
-        parent_id = getattr(channel, "parent_id", None)
-        parent_name = ""
-        if parent is not None:
-            if parent_id is None:
-                parent_id = getattr(parent, "id", None)
-            parent_name = str(getattr(parent, "name", "") or "").strip()
-        if parent_id is None:
-            return "", parent_name
-        return str(parent_id), parent_name
-
-    def _lock_emoji_for_event(self, event: MessageEvent) -> str:
-        if self._totp_is_unlocked(event, _UNLOCK_SCOPE_DEFAULT):
-            return "🔓"
-        return "🔒"
-
     def seed_agents_template(self, repo_path: str) -> None:
         """Seed AGENTS.md from a template when configured."""
         tmpl = (self.cfg.repo_bootstrap.agents_template or "").strip()
@@ -2848,124 +2801,3 @@ class Router:
     def current_session_for_user(self, user_id: str, channel_id: str) -> str:
         """Return sticky session selection for a user or default."""
         return self.coordinator.current_session_for_user(user_id, channel_id)
-
-
-class _ThreadContextSink:
-    """Wrap a sink with thread/reply metadata for message sends."""
-
-    def __init__(self, sink: ResponseSink, thread_id: str, reply_to_id: str) -> None:
-        self._sink = sink
-        self._thread_id = thread_id
-        self._reply_to_id = reply_to_id
-        self.channel_id = sink.channel_id
-
-    async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
-        caps = self._sink.capabilities()
-        use_thread = thread_id or self._thread_id or None
-        use_reply = reply_to_id or self._reply_to_id or None
-        if not caps.threads:
-            use_thread = None
-        if not caps.replies:
-            use_reply = None
-        await self._sink.send(content, thread_id=use_thread, reply_to_id=use_reply)
-
-    def capabilities(self) -> Capabilities:
-        return self._sink.capabilities()
-
-    def typing(self):  # type: ignore[override]
-        return self._sink.typing()
-
-    async def update_pinned_status(self, user_id: str, session: str, text: str) -> None:
-        await self._sink.update_pinned_status(user_id, session, text)
-
-    async def send_file(self, path: str, filename: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
-        caps = self._sink.capabilities()
-        use_thread = thread_id or self._thread_id or None
-        use_reply = reply_to_id or self._reply_to_id or None
-        if not caps.threads:
-            use_thread = None
-        if not caps.replies:
-            use_reply = None
-        await self._sink.send_file(path, filename, thread_id=use_thread, reply_to_id=use_reply)
-
-
-class _ChannelScopeSink:
-    """Wrap a sink and override channel_id for routing/state scoping."""
-
-    def __init__(self, sink: ResponseSink, channel_id: str) -> None:
-        self._sink = sink
-        self.channel_id = channel_id
-
-    async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
-        await self._sink.send(content, thread_id=thread_id, reply_to_id=reply_to_id)
-
-    def capabilities(self) -> Capabilities:
-        return self._sink.capabilities()
-
-    def typing(self):  # type: ignore[override]
-        return self._sink.typing()
-
-    async def update_pinned_status(self, user_id: str, session: str, text: str) -> None:
-        await self._sink.update_pinned_status(user_id, session, text)
-
-    async def send_file(self, path: str, filename: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
-        await self._sink.send_file(path, filename, thread_id=thread_id, reply_to_id=reply_to_id)
-
-
-class _ChunkingSink:
-    """Wrap a sink and enforce message-length chunking on every send."""
-
-    def __init__(self, sink: ResponseSink, max_chars: int) -> None:
-        self._sink = sink
-        self._max_chars = max_chars
-        self.channel_id = sink.channel_id
-
-    async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
-        text = strip_control_codes(content or "")
-        for chunk in chunk_text(text, self._max_chars):
-            await self._sink.send(chunk, thread_id=thread_id, reply_to_id=reply_to_id)
-
-    def capabilities(self) -> Capabilities:
-        return self._sink.capabilities()
-
-    def typing(self):  # type: ignore[override]
-        return self._sink.typing()
-
-    async def update_pinned_status(self, user_id: str, session: str, text: str) -> None:
-        await self._sink.update_pinned_status(user_id, session, text)
-
-    async def send_file(self, path: str, filename: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
-        await self._sink.send_file(path, filename, thread_id=thread_id, reply_to_id=reply_to_id)
-
-
-class _LockStateSink:
-    """Wrap a sink and prefix messages with lock state emoji."""
-
-    def __init__(self, sink: ResponseSink, emoji_fn, max_chars: int) -> None:
-        self._sink = sink
-        self._emoji_fn = emoji_fn
-        self._max_chars = max_chars
-        self.channel_id = sink.channel_id
-
-    async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
-        emoji = self._emoji_fn() or ""
-        text = content or ""
-        if not emoji:
-            await self._sink.send(text, thread_id=thread_id, reply_to_id=reply_to_id)
-            return
-        prefix = f"{emoji} "
-        budget = max(self._max_chars - len(prefix), 1)
-        for chunk in chunk_text(text, budget):
-            await self._sink.send(f"{prefix}{chunk}", thread_id=thread_id, reply_to_id=reply_to_id)
-
-    def capabilities(self) -> Capabilities:
-        return self._sink.capabilities()
-
-    def typing(self):  # type: ignore[override]
-        return self._sink.typing()
-
-    async def update_pinned_status(self, user_id: str, session: str, text: str) -> None:
-        await self._sink.update_pinned_status(user_id, session, text)
-
-    async def send_file(self, path: str, filename: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
-        await self._sink.send_file(path, filename, thread_id=thread_id, reply_to_id=reply_to_id)

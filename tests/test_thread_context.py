@@ -1,4 +1,4 @@
-from codebridge.routing.router import _ThreadContextSink
+from codebridge.routing.event_context import ThreadContextSink
 from codebridge.platform.transport import Capabilities
 
 
@@ -35,7 +35,7 @@ class _FakeAsyncContext:
 
 def test_thread_context_prefers_reply_when_threads_disabled():
     sink = _FakeSink(Capabilities(threads=False, replies=True))
-    wrapped = _ThreadContextSink(sink, thread_id="thread", reply_to_id="reply")
+    wrapped = ThreadContextSink(sink, thread_id="thread", reply_to_id="reply")
 
     async def run():
         await wrapped.send("hello")
@@ -50,7 +50,7 @@ def test_thread_context_prefers_reply_when_threads_disabled():
 
 def test_thread_context_prefers_thread_when_supported():
     sink = _FakeSink(Capabilities(threads=True, replies=False))
-    wrapped = _ThreadContextSink(sink, thread_id="thread", reply_to_id="reply")
+    wrapped = ThreadContextSink(sink, thread_id="thread", reply_to_id="reply")
 
     async def run():
         await wrapped.send("hello")

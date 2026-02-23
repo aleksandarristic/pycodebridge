@@ -27,6 +27,7 @@ from types import SimpleNamespace
 
 from codebridge import config as cfgmod
 from codebridge.codex import Options, Runner
+from codebridge.routing.event_context import build_contextual_sink
 from codebridge.routing.router import Router
 from codebridge.sessions.coordinator import SessionCoordinator
 from codebridge.sessions.state import Store
@@ -1614,7 +1615,8 @@ def test_integration_contextual_sink_chunks_raw_send_globally(tmp_path):
     router, _ = _build_router(tmp_path)
     router.cfg.discord.max_discord_message_chars = 80
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    wrapped = router._contextual_sink(_discord_event("noop", "codex-repo"), sink)
+    event = _discord_event("noop", "codex-repo")
+    wrapped = build_contextual_sink(event, sink, router.cfg.discord.max_discord_message_chars)
 
     async def run():
         await wrapped.send("x" * 260)
