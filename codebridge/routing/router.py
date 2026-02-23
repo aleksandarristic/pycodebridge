@@ -2422,8 +2422,10 @@ class Router:
             if not self.cfg.telegram.allowed_user_ids:
                 return True
             return event.author_id in self.cfg.telegram.allowed_user_ids
-        if self.cfg.discord.allowed_user_ids and event.author_id not in self.cfg.discord.allowed_user_ids:
-            return False
+        if event.platform == "discord":
+            if not self.cfg.discord.allowed_user_ids:
+                return False
+            return event.author_id in self.cfg.discord.allowed_user_ids
         return True
 
     def _discord_repo_channel_is_private(self, event: MessageEvent) -> bool:

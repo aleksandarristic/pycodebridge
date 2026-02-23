@@ -456,8 +456,7 @@ def _validate(cfg: Config) -> None:
         raise ValueError("discord.guild_id is required when transport.adapter is discord")
 
     if len(cfg.discord.allowed_user_ids) == 0:
-        if not cfg.discord.dm_admin_enabled or len(cfg.discord.dm_admin_user_ids) == 0:
-            raise ValueError("discord.allowed_user_ids must list at least one user (or enable DM admin with dm_admin_user_ids)")
+        raise ValueError("discord.allowed_user_ids must list at least one user")
     if cfg.discord.totp_window < 0:
         raise ValueError("discord.totp_window must be >= 0")
     if cfg.discord.totp_max_failures < 0:

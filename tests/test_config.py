@@ -83,6 +83,38 @@ def test_load_config_totp_enabled_requires_secret_env(tmp_path, monkeypatch):
         assert "discord TOTP secret env" in str(exc)
 
 
+def test_load_config_discord_allowlist_required_even_with_dm_admin(tmp_path, monkeypatch):
+    code_root = tmp_path / "code"
+    data_dir = tmp_path / "data"
+    code_root.mkdir()
+    data_dir.mkdir()
+
+    monkeypatch.setenv("CODE_ROOT", str(code_root))
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        """
+        discord:
+          guild_id: "123"
+          allowed_user_ids: []
+          dm_admin_enabled: true
+          dm_admin_user_ids: ["admin1"]
+        codex:
+          code_root: "$CODE_ROOT"
+        state:
+          data_dir: "%DATA_DIR%"
+          log_dir: "%DATA_DIR%/logs"
+        """,
+        encoding="utf-8",
+    )
+    try:
+        cfgmod.load(str(cfg_path))
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "discord.allowed_user_ids must list at least one user" in str(exc)
+
+
 def test_load_config_totp_limiter_knobs(tmp_path, monkeypatch):
     code_root = tmp_path / "code"
     data_dir = tmp_path / "data"

@@ -300,6 +300,24 @@ def test_integration_ignores_public_discord_repo_channel(tmp_path):
     assert router.state.load().channels == {}
 
 
+def test_transport_user_allowed_discord_denies_when_allowlist_empty(tmp_path):
+    router, _ = _build_router(tmp_path)
+    router.cfg.discord.allowed_user_ids = []
+    event = MessageEvent(
+        platform="discord",
+        content="!c status",
+        channel_id="chan",
+        channel_name="codex-repo",
+        author_id="intruder",
+        author_is_bot=False,
+        is_dm=False,
+        guild_id="guild",
+        raw_event=_FakeDiscordMessage(is_private=True),
+    )
+
+    assert router._transport_user_allowed(event) is False
+
+
 def test_integration_start_with_case_variant_repo_dir(tmp_path):
     repo = tmp_path / "ProbablyFine"
     repo.mkdir()

@@ -66,7 +66,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 ### `discord`
 - `token_env` (default `DISCORD_TOKEN`) — environment variable containing bot token.
 - `guild_id` (required for Discord adapter) — restrict to a single server ID. Bot rejects other guilds and auto-leaves them on startup/join.
-- `allowed_user_ids` (default empty) — allowlist for channel commands; if non-empty, ignore others.
+- `allowed_user_ids` (required, non-empty) — allowlist for channel commands; users outside this list are rejected.
 - `prefix` (default `!c`) — command prefix.
 - `channel_name_regex` (default `^codex-([A-Za-z0-9._-]+)$`) — maps channel to repo name.
 - Discord repo channels must be private (`@everyone` cannot view); messages in non-private Discord channels are ignored.
@@ -359,7 +359,7 @@ Backward-compatible top-level module shims are retained (for example `codebridge
 ## Troubleshooting
 - No response: confirm Message Content intent is enabled and saved, and your user ID is allowlisted.
 - Repo error: ensure channel name matches `codex-<repo>` and `<code_root>/<repo>/.git` exists. Repo names are normalized to lowercase.
-- DM admin: enable `discord.dm_admin_enabled` and ensure `dm_admin_user_ids` or `allowed_user_ids` includes you.
+- DM admin: enable `discord.dm_admin_enabled` and ensure `allowed_user_ids` includes you; optionally set `dm_admin_user_ids` for a separate admin allowlist.
 - Security logs (`state.log_dir/bridge.log`): look for `security.totp_invalid`, `security.totp_replay`, `security.totp_locked`, `security.totp_unlock`, `security.totp_success`.
 - Codex execution errors are also written as JSON lines to `state.log_dir/codex_errors.log` (contains args, return code, stderr tail, and retry notes).
 
