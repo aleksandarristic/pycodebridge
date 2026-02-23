@@ -374,6 +374,9 @@ async def _handle_dm_unprefixed(
     """Handle unprefixed DM input (relay/bound repo prompts/uploads)."""
     if content.startswith(prefix):
         return False
+    if not router._transport_user_allowed(event):
+        await sink.send(forbidden_message("You are not allowed to use this bot."))
+        return True
     relay_session, ambiguous = await router.pending_input_session(event)
     if ambiguous:
         await sink.send(forbidden_message("Multiple sessions are waiting for input. Use `!c answer <session> -- <text>`."))
@@ -387,9 +390,6 @@ async def _handle_dm_unprefixed(
             if not ok:
                 return True
         await router.handle_answer(event, sink, relay_session, relay_text)
-        return True
-    if not router._transport_user_allowed(event):
-        await sink.send(forbidden_message("You are not allowed to use this bot."))
         return True
     bound_repo = router.get_dm_binding(event)
     if not bound_repo:

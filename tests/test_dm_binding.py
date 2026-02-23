@@ -55,6 +55,8 @@ class _FakeRouter:
         self.last_answer = None
         self.last_updates = None
         self.reset_all_calls = 0
+        self.pending_session = ""
+        self.pending_ambiguous = False
         self._reset_all_confirm_until = {}
 
     def _transport_prefix(self, event: MessageEvent) -> str:
@@ -167,7 +169,7 @@ class _FakeRouter:
 
     async def pending_input_session(self, event: MessageEvent) -> tuple[str, bool]:
         _ = event
-        return "", False
+        return self.pending_session, self.pending_ambiguous
 
     async def handle_answer(self, event: MessageEvent, sink, session: str, text: str) -> None:
         _ = (event, sink)
@@ -650,6 +652,37 @@ def test_dm_answer_command_relays_without_repo_binding(tmp_path):
 
     assert router.last_answer is not None
     assert router.last_answer["text"] == "yes"
+
+
+def test_dm_unprefixed_relay_rejects_unauthorized_user(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.telegram.allowed_user_ids = ["allowed-user"]
+    cfg.telegram.prefix = "!c"
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+
+    store = Store(cfg.state.data_dir)
+    router = _FakeRouter(cfg, store)
+    router.pending_session = "default"
+    sink = _FakeSink("dm-1")
+    event = MessageEvent(
+        platform="telegram",
+        content="yes",
+        channel_id="dm-1",
+        channel_name="",
+        author_id="intruder",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    async def run():
+        await dm_admin.handle_dm_message(router, event, sink)
+
+    asyncio.run(run())
+
+    assert router.last_answer is None
+    assert any("You are not allowed to use this bot." in msg for msg in sink.sent)
 
 
 def test_dm_admin_reset_all_executes_for_discord_admin_after_yes_confirmation(tmp_path):
