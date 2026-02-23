@@ -73,7 +73,6 @@ _READ_ONLY_COMMANDS = {
     "changes",
     "ps",
 }
-_GIT_READ_ONLY_SUBCOMMANDS = {"status", "log", "branches", "show", "diff", "remote"}
 _RUN_HEARTBEAT_SECONDS = 120
 _RUN_COMPLETION_MIN_SECONDS = 300
 _RUN_KEY_RESULT_MAX = 180
@@ -2018,8 +2017,8 @@ class Router:
             return False
         if token == "unlock" and self._unlock_status_requested(rest):
             return False
-        if token == "git" and self._git_subcommand(rest) in _GIT_READ_ONLY_SUBCOMMANDS:
-            return False
+        if token == "git":
+            return not self._totp_is_unlocked(event)
         if token == "gh":
             return not self._totp_is_unlocked(event, _UNLOCK_SCOPE_GH)
         if self._totp_command_is_high_risk(token, rest):
@@ -2033,20 +2032,9 @@ class Router:
     def _totp_command_is_high_risk(self, cmd: str, rest: str) -> bool:
         if cmd in {"create", "clone", "copy", "deleterepo", "delete", "renamerepo", "rename"}:
             return True
-        if cmd == "git":
-            subcmd = self._git_subcommand(rest)
-            if not subcmd:
-                return True
-            return subcmd not in _GIT_READ_ONLY_SUBCOMMANDS
         if cmd == "unlock" and not self._unlock_status_requested(rest):
             return True
         return False
-
-    def _git_subcommand(self, rest: str) -> str:
-        parts = (rest or "").split()
-        if not parts:
-            return ""
-        return parts[0].strip().lower()
 
     def _unlock_status_requested(self, rest: str) -> bool:
         parts = (rest or "").strip().lower().split()

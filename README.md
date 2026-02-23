@@ -153,7 +153,7 @@ Use `!c lock extend [gh|all] <ttl> --totp <code>` to extend active unlock window
 While default scope is unlocked, plain chat prompts are accepted even if `allow_plain_prompts` is `false`.
 Failed/replayed TOTP attempts are rate-limited per user (`platform:user_id`) using the limiter settings above.
 
-TOTP not required (read-only in channel):
+TOTP not required (open in channel):
 - `!c help`
 - `!c help <command>`
 - `!help` (top-level shortcut for `!c help`)
@@ -169,8 +169,6 @@ TOTP not required (read-only in channel):
 - `!c lock [gh|all]`
 - `!c lock status [gh|all]`
 - `!unlock ...`, `!ul ...`, `!lock ...` (top-level shortcuts for `!c unlock ...` / `!c lock ...` in mapped repo channels)
-- `!c git status|log|branches|branch|show|diff|remote`
-- `!git ...` (shortcut for `!c git ...`)
 
 TOTP always required (high-risk in channel):
 - `!c unlock [gh|all] [ttl]`
@@ -179,7 +177,6 @@ TOTP always required (high-risk in channel):
 - `!c create` (aliases: `createrepo`, `new`)
 - `!c clone <url>` (alias: `clonerepo`)
 - `!c copy <newname>` (aliases: `copyrepo`, `cp`)
-- `!c git` write commands (`pull`, `commit`, `push`, `merge`, etc.)
 - Upload flows (attachment submit and upload-path response)
 
 TOTP required for GitHub CLI unless gh scope is unlocked:
@@ -222,6 +219,8 @@ TOTP required unless the chat is unlocked:
 - `!c download <path>`
 - `!c logs [session] [n]`
 - Shortcut: `!log [n]` (maps to `!c logs [n]`)
+- `!c git <status|log|branches|branch|show|diff|remote|pull|commit|push|merge>`
+- Shortcut: `!git ...` (maps to `!c git ...`)
 - Any other prompt-style `!c ...` command that is not in the read-only list
 - Plain prompts in mapped channels when `allow_plain_prompts: true`
 
@@ -230,7 +229,7 @@ Auth tags used by `!c help`:
 - `[unlock/default]` requires default unlock (or `--totp`).
 - `[unlock/gh]` requires gh unlock (or `--totp`).
 - `[totp]` always requires `--totp`.
-- `[mixed]` depends on subcommand (for `git`).
+- `[mixed]` depends on command mode.
 
 General:
 - `help` (alias: `commands`) `[open]`
@@ -275,7 +274,7 @@ Run control:
 Repo helpers:
 - `show` (aliases: `showrepo`, `tree`), `changes` (alias: `showchanges`) `[open]`
 - `tests` (alias: `test`), `download` (alias: `dl`) `[unlock/default]`
-- `git` `[mixed]`
+- `git` `[unlock/default]`
   - Dangerous `git` helper operations (force push, branch delete) require opt-in and explicit confirmation token.
 - `gh` `[unlock/gh]` (examples: `!c gh repo sync` or `!gh repo sync`)
 

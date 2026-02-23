@@ -2069,7 +2069,7 @@ def test_totp_replies_include_lock_emoji_prefix(tmp_path, monkeypatch):
     assert any(msg.startswith("🔓 ") for msg in messages)
 
 
-def test_totp_git_status_read_only_without_totp(tmp_path, monkeypatch):
+def test_totp_git_status_requires_totp_when_locked(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
@@ -2084,10 +2084,10 @@ def test_totp_git_status_read_only_without_totp(tmp_path, monkeypatch):
         await router.handle_message(_discord_event("!c git status", "codex-repo"), sink)
 
     asyncio.run(run())
-    assert not any("TOTP required for 'git'" in msg for msg, _, _ in sink.sent)
+    assert any("TOTP required for 'git'" in msg for msg, _, _ in sink.sent)
 
 
-def test_totp_bang_git_status_read_only_without_totp(tmp_path, monkeypatch):
+def test_totp_bang_git_status_requires_totp_when_locked(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
@@ -2102,10 +2102,10 @@ def test_totp_bang_git_status_read_only_without_totp(tmp_path, monkeypatch):
         await router.handle_message(_discord_event("!git status", "codex-repo"), sink)
 
     asyncio.run(run())
-    assert not any("TOTP required for 'git'" in msg for msg, _, _ in sink.sent)
+    assert any("TOTP required for 'git'" in msg for msg, _, _ in sink.sent)
 
 
-def test_totp_git_remote_read_only_without_totp(tmp_path, monkeypatch):
+def test_totp_git_push_allowed_without_totp_when_unlocked(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
@@ -2117,7 +2117,8 @@ def test_totp_git_remote_read_only_without_totp(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c git remote -v", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c git push", "codex-repo"), sink)
 
     asyncio.run(run())
     assert not any("TOTP required for 'git'" in msg for msg, _, _ in sink.sent)

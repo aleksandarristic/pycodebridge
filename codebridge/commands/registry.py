@@ -302,7 +302,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             "git helpers",
             "Repo helpers",
             _cmd_git,
-            AUTH_MIXED,
+            AUTH_UNLOCK,
         ),
         CommandSpec(
             "gh",
