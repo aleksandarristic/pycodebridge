@@ -11,7 +11,7 @@ from types import MethodType
 from types import SimpleNamespace
 
 from codebridge import config as cfgmod
-from codebridge.codex import Options
+from codebridge.codex import Options, Runner
 from codebridge.routing.router import Router
 from codebridge.sessions.coordinator import SessionCoordinator
 from codebridge.sessions.state import Store
@@ -110,6 +110,22 @@ class _FakeRunner:
         return self.last_proc
 
 
+class _CapturingRealRunner(Runner):
+    def __init__(self, sandbox: str, ask_for_approval: str, network_access: bool) -> None:
+        super().__init__("codex", sandbox, {}, ask_for_approval, network_access)
+        self.calls = []
+        self.last_proc = None
+
+    async def run(self, opts: Options):
+        self.calls.append(opts.args)
+        if opts.on_thread:
+            await opts.on_thread("thread-1")
+        if opts.on_jsonl:
+            await opts.on_jsonl("hello from codex")
+        self.last_proc = _FakeProc()
+        return self.last_proc
+
+
 class _FakeSink:
     def __init__(self, caps: Capabilities) -> None:
         self._caps = caps
@@ -151,11 +167,32 @@ class _FakeDiscordGuild:
         self.default_role = object()
 
 
+class _FakeDiscordChannelType:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class _FakeDiscordChannel:
-    def __init__(self, *, is_private: bool) -> None:
+    def __init__(
+        self,
+        *,
+        is_private: bool,
+        channel_id: str = "chan",
+        channel_name: str = "chan",
+        channel_type: str = "text",
+        parent=None,
+        parent_id: str = "",
+    ) -> None:
+        self.id = channel_id
+        self.name = channel_name
         self.guild = _FakeDiscordGuild()
-        self.type = "text"
+        self.type = _FakeDiscordChannelType(channel_type)
         self._is_private = is_private
+        self.parent = parent
+        self.parent_id = parent_id or (str(getattr(parent, "id", "")) if parent is not None else "")
 
     def permissions_for(self, role) -> _FakeDiscordPermissions:
         _ = role
@@ -163,8 +200,8 @@ class _FakeDiscordChannel:
 
 
 class _FakeDiscordMessage:
-    def __init__(self, *, is_private: bool) -> None:
-        self.channel = _FakeDiscordChannel(is_private=is_private)
+    def __init__(self, channel: _FakeDiscordChannel) -> None:
+        self.channel = channel
 
 
 def _hotp(secret_b32: str, counter: int) -> str:
@@ -181,7 +218,7 @@ def _totp_code(secret_b32: str, step_offset: int = 0) -> str:
     return _hotp(secret_b32, step)
 
 
-def _build_router(tmp_path, *, totp_enabled: bool = False):
+def _build_router(tmp_path, *, totp_enabled: bool = False, runner=None):
     cfg = cfgmod.Config()
     cfg.discord.allowed_user_ids = ["user"]
     cfg.telegram.allowed_user_ids = ["user"]
@@ -194,13 +231,46 @@ def _build_router(tmp_path, *, totp_enabled: bool = False):
 
     store = Store(cfg.state.data_dir)
     coordinator = SessionCoordinator(store, cfg)
-    runner = _FakeRunner()
+    runner = runner or _FakeRunner()
     logger = _FakeLogger()
     router = Router(cfg, store, _FakeAudit(), runner, coordinator, logger)
     return router, runner
 
 
-def _discord_event(content: str, channel_name: str, channel_id: str = "chan", *, is_private: bool = True) -> MessageEvent:
+def _discord_event(
+    content: str,
+    channel_name: str,
+    channel_id: str = "chan",
+    *,
+    is_private: bool = True,
+    platform_thread_id: str = "",
+    parent_channel_id: str = "",
+    parent_channel_name: str = "",
+) -> MessageEvent:
+    if platform_thread_id:
+        parent_id = parent_channel_id or "parent-chan"
+        parent_name = parent_channel_name or "codex-repo"
+        parent_channel = _FakeDiscordChannel(
+            is_private=is_private,
+            channel_id=parent_id,
+            channel_name=parent_name,
+            channel_type="text",
+        )
+        channel = _FakeDiscordChannel(
+            is_private=is_private,
+            channel_id=channel_id,
+            channel_name=channel_name,
+            channel_type="public_thread",
+            parent=parent_channel,
+            parent_id=parent_id,
+        )
+    else:
+        channel = _FakeDiscordChannel(
+            is_private=is_private,
+            channel_id=channel_id,
+            channel_name=channel_name,
+            channel_type="text",
+        )
     return MessageEvent(
         platform="discord",
         content=content,
@@ -209,8 +279,9 @@ def _discord_event(content: str, channel_name: str, channel_id: str = "chan", *,
         author_id="user",
         author_is_bot=False,
         is_dm=False,
+        platform_thread_id=platform_thread_id,
         guild_id="guild",
-        raw_event=_FakeDiscordMessage(is_private=is_private),
+        raw_event=_FakeDiscordMessage(channel),
     )
 
 
@@ -259,6 +330,220 @@ def test_integration_start_stop(tmp_path):
     assert runner.last_proc is not None
     assert runner.last_proc.stopped is True
     assert runner.last_proc.interrupted is True
+
+
+def test_integration_start_builds_exec_args_in_expected_order(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    runner = _CapturingRealRunner("workspace-write", "on-request", True)
+    router, _ = _build_router(tmp_path, runner=runner)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        for _ in range(50):
+            proc = await router.get_active("chan", "default")
+            if proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        await router.handle_message(_discord_event("!c stop", "codex-repo"), sink)
+
+    asyncio.run(run())
+
+    assert runner.calls
+    args = runner.calls[0]
+    assert args[:10] == [
+        "exec",
+        "--json",
+        "--cd",
+        str(repo),
+        "--sandbox",
+        "workspace-write",
+        "-c",
+        'approval_policy="on-request"',
+        "-c",
+        "sandbox_workspace_write.network_access=true",
+    ]
+    assert args[-1] == router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", "repo")
+
+
+def test_integration_discord_thread_uses_parent_repo_mapping_and_room_scope(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    room_key = "discord:chan-parent:thread-a"
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(
+            _discord_event(
+                "!c start",
+                "topic-a",
+                channel_id="thread-a",
+                platform_thread_id="thread-a",
+                parent_channel_id="chan-parent",
+                parent_channel_name="codex-repo",
+            ),
+            sink,
+        )
+        for _ in range(100):
+            proc = await router.get_active(room_key, "default")
+            if proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        await router.handle_message(
+            _discord_event(
+                "!c stop",
+                "topic-a",
+                channel_id="thread-a",
+                platform_thread_id="thread-a",
+                parent_channel_id="chan-parent",
+                parent_channel_name="codex-repo",
+            ),
+            sink,
+        )
+
+    asyncio.run(run())
+
+    state = router.state.load()
+    assert room_key in state.channels
+    assert any(args and args[0] == "start" for args in runner.calls)
+    assert any(thread_id == "thread-a" for _, thread_id, _ in sink.sent)
+
+
+def test_integration_discord_sibling_threads_are_isolated(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    room_a = "discord:chan-parent:thread-a"
+    room_b = "discord:chan-parent:thread-b"
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(
+            _discord_event(
+                "!c start",
+                "topic-a",
+                channel_id="thread-a",
+                platform_thread_id="thread-a",
+                parent_channel_id="chan-parent",
+                parent_channel_name="codex-repo",
+            ),
+            sink,
+        )
+        await router.handle_message(
+            _discord_event(
+                "!c start",
+                "topic-b",
+                channel_id="thread-b",
+                platform_thread_id="thread-b",
+                parent_channel_id="chan-parent",
+                parent_channel_name="codex-repo",
+            ),
+            sink,
+        )
+        for _ in range(100):
+            proc_a = await router.get_active(room_a, "default")
+            proc_b = await router.get_active(room_b, "default")
+            if proc_a is not None and proc_b is not None:
+                break
+            await asyncio.sleep(0.01)
+
+        await router.handle_message(
+            _discord_event(
+                "!c stop",
+                "topic-a",
+                channel_id="thread-a",
+                platform_thread_id="thread-a",
+                parent_channel_id="chan-parent",
+                parent_channel_name="codex-repo",
+            ),
+            sink,
+        )
+        for _ in range(100):
+            if await router.get_active(room_a, "default") is None:
+                break
+            await asyncio.sleep(0.01)
+        assert await router.get_active(room_a, "default") is None
+        assert await router.get_active(room_b, "default") is not None
+
+        await router.handle_message(
+            _discord_event(
+                "!c stop",
+                "topic-b",
+                channel_id="thread-b",
+                platform_thread_id="thread-b",
+                parent_channel_id="chan-parent",
+                parent_channel_name="codex-repo",
+            ),
+            sink,
+        )
+
+    asyncio.run(run())
+    assert any(thread_id == "thread-a" for _, thread_id, _ in sink.sent)
+    assert any(thread_id == "thread-b" for _, thread_id, _ in sink.sent)
+
+
+def test_integration_discord_parent_channel_remains_backward_compatible_with_thread_rooms(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    parent_channel_id = "chan-parent"
+    thread_room = "discord:chan-parent:thread-a"
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo", channel_id=parent_channel_id), sink)
+        await router.handle_message(
+            _discord_event(
+                "!c start",
+                "topic-a",
+                channel_id="thread-a",
+                platform_thread_id="thread-a",
+                parent_channel_id=parent_channel_id,
+                parent_channel_name="codex-repo",
+            ),
+            sink,
+        )
+        for _ in range(100):
+            parent_proc = await router.get_active(parent_channel_id, "default")
+            thread_proc = await router.get_active(thread_room, "default")
+            if parent_proc is not None and thread_proc is not None:
+                break
+            await asyncio.sleep(0.01)
+
+        await router.handle_message(_discord_event("!c stop", "codex-repo", channel_id=parent_channel_id), sink)
+        for _ in range(100):
+            if await router.get_active(parent_channel_id, "default") is None:
+                break
+            await asyncio.sleep(0.01)
+        assert await router.get_active(parent_channel_id, "default") is None
+        assert await router.get_active(thread_room, "default") is not None
+
+        await router.handle_message(
+            _discord_event(
+                "!c stop",
+                "topic-a",
+                channel_id="thread-a",
+                platform_thread_id="thread-a",
+                parent_channel_id=parent_channel_id,
+                parent_channel_name="codex-repo",
+            ),
+            sink,
+        )
+
+    asyncio.run(run())
+    state = router.state.load()
+    assert parent_channel_id in state.channels
+    assert thread_room in state.channels
 
 
 def test_integration_bang_stop_interrupts_active_prompt(tmp_path):
@@ -312,7 +597,7 @@ def test_transport_user_allowed_discord_denies_when_allowlist_empty(tmp_path):
         author_is_bot=False,
         is_dm=False,
         guild_id="guild",
-        raw_event=_FakeDiscordMessage(is_private=True),
+        raw_event=_FakeDiscordMessage(_FakeDiscordChannel(is_private=True, channel_id="chan", channel_name="codex-repo")),
     )
 
     assert router._transport_user_allowed(event) is False
@@ -1749,7 +2034,7 @@ def test_totp_required_for_config_tests_download_logs_and_upload(tmp_path, monke
         is_dm=False,
         guild_id="guild",
         attachments=[Attachment(filename="note.txt", size=2, content_type="text/plain", save=save_noop)],
-        raw_event=_FakeDiscordMessage(is_private=True),
+        raw_event=_FakeDiscordMessage(_FakeDiscordChannel(is_private=True, channel_id="chan", channel_name="codex-repo")),
     )
 
     async def run():
