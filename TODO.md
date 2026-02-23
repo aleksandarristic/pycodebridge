@@ -5,6 +5,10 @@ Current status:
   (`routing/`, `commands/`, `sessions/`, `services/`) with backward-compatible top-level shims and updated docs.
 
 TODO (Near-term):
+- None currently.
+
+Backlog:
+
 - Final-message ordering hardening for run lifecycle output.
   - Goal: prevent stale/intermediate progress updates from appearing after a run-complete message.
   - Scope:
@@ -15,8 +19,6 @@ TODO (Near-term):
     - After terminal event emission, no additional progress update is delivered for that run.
     - User-visible last message is always terminal status for the run.
     - Regression test covers out-of-order event delivery scenario.
-
-Backlog:
 
 - Multi-room sessions per repo (room mapping redesign, open question).
   - Goal: support multiple chat rooms working on the same repo concurrently, with one default room plus additional dedicated spin-off rooms.
