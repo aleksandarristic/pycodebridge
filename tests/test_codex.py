@@ -19,8 +19,8 @@ def test_parse_event_error_message():
 def test_runner_build_args_include_approval_policy():
     runner = Runner("codex", "workspace-write", {}, "on-request")
     args = runner.build_start_args("/tmp/repo", "hello", "", "")
-    assert "-c" in args
-    assert 'sandbox_mode="workspace-write"' in args
+    assert "--sandbox" in args
+    assert "workspace-write" in args
     assert 'approval_policy="on-request"' in args
     assert "exec" in args
 

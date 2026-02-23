@@ -2656,13 +2656,14 @@ class Router:
                 if cd_idx + 1 < len(retry):
                     insert_at = cd_idx + 2
             retry[insert_at:insert_at] = ["--sandbox", sandbox_value]
-        if approval_value and "-a" not in retry:
+        if approval_value and "approval_policy=" not in " ".join(retry):
             insert_at = len(retry)
             if "--sandbox" in retry:
                 sb_idx = retry.index("--sandbox")
                 if sb_idx + 1 < len(retry):
                     insert_at = sb_idx + 2
-            retry[insert_at:insert_at] = ["-a", approval_value]
+            quoted = approval_value.replace("\\", "\\\\").replace('"', '\\"')
+            retry[insert_at:insert_at] = ["-c", f'approval_policy="{quoted}"']
         return retry
 
     def _parse_config_override(self, token: str) -> tuple[str, str]:

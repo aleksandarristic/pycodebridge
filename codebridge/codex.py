@@ -192,7 +192,7 @@ class Runner:
     def _base_exec_args(self, repo_path: str) -> list[str]:
         args: list[str] = []
         if self.sandbox:
-            args += ["-c", f"sandbox_mode={_toml_string(self.sandbox)}"]
+            args += ["--sandbox", self.sandbox]
         if self.ask_for_approval:
             args += ["-c", f"approval_policy={_toml_string(self.ask_for_approval)}"]
         if self.network_access and self.sandbox == "workspace-write":

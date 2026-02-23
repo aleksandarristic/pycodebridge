@@ -1864,8 +1864,8 @@ def test_router_compat_retry_args_preserves_resume_context_sandbox_and_approval(
         "/workspace/code_root/ProbablyFine",
         "--sandbox",
         "workspace-write",
-        "-a",
-        "on-request",
+        "-c",
+        'approval_policy="on-request"',
         "hi there",
     ]
 
@@ -1893,8 +1893,8 @@ def test_router_compat_retry_args_preserves_sandbox_from_config_override(tmp_pat
         "/workspace/code_root/ProbablyFine",
         "--sandbox",
         "workspace-write",
-        "-a",
-        "on-request",
+        "-c",
+        'approval_policy="on-request"',
         "fix it",
     ]
 
