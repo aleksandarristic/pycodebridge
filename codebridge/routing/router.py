@@ -2609,18 +2609,55 @@ class Router:
 
     def _compat_retry_args(self, args: list[str]) -> list[str]:
         retry: list[str] = []
+        sandbox_value = ""
+        has_sandbox_flag = False
         i = 0
         while i < len(args):
             token = args[i]
             if token == "resume":
                 i += 2
                 continue
-            if token in {"-a", "--model", "-c"}:
+            if token == "--sandbox":
+                if i + 1 < len(args):
+                    has_sandbox_flag = True
+                    retry.extend([token, args[i + 1]])
+                    i += 2
+                    continue
+                i += 1
+                continue
+            if token in {"-a", "--model"}:
                 i += 2
+                continue
+            if token == "-c":
+                if i + 1 < len(args):
+                    key, value = self._parse_config_override(args[i + 1])
+                    if key == "sandbox_mode" and value:
+                        sandbox_value = value
+                    i += 2
+                    continue
+                i += 1
                 continue
             retry.append(token)
             i += 1
+        if sandbox_value and not has_sandbox_flag:
+            insert_at = len(retry)
+            if "--cd" in retry:
+                cd_idx = retry.index("--cd")
+                if cd_idx + 1 < len(retry):
+                    insert_at = cd_idx + 2
+            retry[insert_at:insert_at] = ["--sandbox", sandbox_value]
         return retry
+
+    def _parse_config_override(self, token: str) -> tuple[str, str]:
+        raw = (token or "").strip()
+        if "=" not in raw:
+            return "", ""
+        key, value = raw.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == '"' and value[-1] == '"':
+            value = value[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+        return key, value
 
     def _append_codex_error_log(
         self,

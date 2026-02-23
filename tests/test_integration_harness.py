@@ -1868,6 +1868,33 @@ def test_router_compat_retry_args_drops_resume_and_optional_flags(tmp_path):
     ]
 
 
+def test_router_compat_retry_args_preserves_sandbox_from_config_override(tmp_path):
+    router, _ = _build_router(tmp_path)
+    args = [
+        "-c",
+        'sandbox_mode="workspace-write"',
+        "-c",
+        'approval_policy="on-request"',
+        "exec",
+        "--json",
+        "--cd",
+        "/workspace/code_root/ProbablyFine",
+        "resume",
+        "thread_123",
+        "fix it",
+    ]
+    out = router._compat_retry_args(args)
+    assert out == [
+        "exec",
+        "--json",
+        "--cd",
+        "/workspace/code_root/ProbablyFine",
+        "--sandbox",
+        "workspace-write",
+        "fix it",
+    ]
+
+
 def test_router_writes_codex_error_log(tmp_path):
     router, _ = _build_router(tmp_path)
     router._append_codex_error_log(
