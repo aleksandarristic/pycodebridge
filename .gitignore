@@ -16,8 +16,7 @@ screenshots
 # ignore project management specific instructions
 instructions/
 
-# iognore AGENTS.md
-AGENTS.md
+# ignore agent instruction docs
 GEMINI.md
 
 # ignore agent specific directories
