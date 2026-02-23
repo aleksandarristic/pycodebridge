@@ -27,26 +27,26 @@ class AuditHelper:
         if entry:
             try:
                 entry.append_codex_line(line)
-            except Exception:
-                pass
+            except Exception as exc:
+                self._logger.warning("audit.append_codex_failed", extra={"error": str(exc)})
 
     def append_output(self, entry: Optional[Entry], msg: str) -> None:
         if entry:
             try:
                 entry.append_discord_out(msg)
-            except Exception:
-                pass
+            except Exception as exc:
+                self._logger.warning("audit.append_output_failed", extra={"error": str(exc)})
 
     def append_stderr(self, entry: Optional[Entry], msg: str) -> None:
         if entry:
             try:
                 entry.append_stderr(msg)
-            except Exception:
-                pass
+            except Exception as exc:
+                self._logger.warning("audit.append_stderr_failed", extra={"error": str(exc)})
 
     def close(self, entry: Optional[Entry]) -> None:
         if entry:
             try:
                 entry.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                self._logger.warning("audit.close_failed", extra={"error": str(exc)})

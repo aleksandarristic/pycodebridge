@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -9,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 SAFE_SEG_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+_LOG = logging.getLogger(__name__)
 
 
 @dataclass
@@ -58,8 +60,8 @@ class Entry:
                 try:
                     f.flush()
                     f.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    _LOG.warning("audit.entry.close_failed path=%s error=%s", getattr(f, "name", "unknown"), exc)
 
 
 @dataclass
@@ -155,7 +157,8 @@ class Logger:
                             summaries.append(
                                 Summary(seq, ch, sess, thread_id, req, thread_dir, started_at, ended_at)
                             )
-                        except Exception:
+                        except Exception as exc:
+                            _LOG.warning("audit.summaries.read_failed path=%s error=%s", path, exc)
                             continue
 
         summaries.sort(key=lambda s: s.seq, reverse=True)
@@ -201,8 +204,8 @@ def _next_seq(entry_dir: str) -> str:
             with open(latest_path, "r", encoding="utf-8") as f:
                 val = int(f.read().strip() or 0)
                 next_val = val + 1
-        except Exception:
-            pass
+        except Exception as exc:
+            _LOG.warning("audit.next_seq_latest_read_failed path=%s error=%s", latest_path, exc)
     if next_val == 1:
         for fname in os.listdir(entry_dir):
             if fname.endswith(".request.json"):
