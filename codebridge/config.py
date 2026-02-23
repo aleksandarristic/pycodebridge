@@ -139,12 +139,12 @@ class GitConfig:
 
 
 @dataclass
-@dataclass
 class FilesConfig:
     """File transfer configuration."""
     max_upload_mb: int = DEFAULT_MAX_UPLOAD_MB
 
 
+@dataclass
 class RepoBootstrapConfig:
     """Repo bootstrap configuration for create/spec flows."""
     agents_template: str = ""

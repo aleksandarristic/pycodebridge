@@ -354,8 +354,3 @@ def _reasoning_args(reasoning_effort: str) -> list[str]:
     if not effort:
         return []
     return ["-c", f"model_reasoning_effort={_toml_string(effort)}"]
-
-
-def _toml_string(value: str) -> str:
-    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{escaped}"'

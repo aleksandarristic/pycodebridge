@@ -1,4 +1,6 @@
 
+import dataclasses
+
 from codebridge import config as cfgmod
 
 
@@ -374,6 +376,10 @@ def test_load_config_invalid_boolean_string_fails(tmp_path, monkeypatch):
         assert False, "expected ValueError"
     except ValueError as exc:
         assert "runtime.show_reasoning_details" in str(exc)
+
+
+def test_repo_bootstrap_config_is_dataclass():
+    assert dataclasses.is_dataclass(cfgmod.RepoBootstrapConfig)
 
 
 def test_load_config_git_bootstrap_fields(tmp_path, monkeypatch):

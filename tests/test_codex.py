@@ -1,4 +1,4 @@
-from codebridge.codex import Runner, display_texts, parse_event
+from codebridge.codex import Runner, _toml_string, display_texts, parse_event
 
 
 def test_parse_event_agent_message():
@@ -35,3 +35,11 @@ def test_runner_build_args_skip_workspace_network_override_when_not_workspace_wr
     runner = Runner("codex", "read-only", {}, "on-request", network_access=True)
     args = runner.build_start_args("/tmp/repo", "hello", "", "")
     assert "sandbox_workspace_write.network_access=true" not in args
+
+
+def test_toml_string_escapes_control_chars():
+    rendered = _toml_string('a"b\nc\\d')
+    assert rendered.startswith('"')
+    assert rendered.endswith('"')
+    assert "\\n" in rendered
+    assert "\n" not in rendered
