@@ -121,6 +121,79 @@ class SessionService:
         self._state.update(mutator)
         return removed
 
+    async def migrate_channel_scope(self, from_channel_id: str, to_channel_id: str) -> bool:
+        """Move runtime and persisted state from one channel scope key to another."""
+        if not from_channel_id or not to_channel_id or from_channel_id == to_channel_id:
+            return False
+        changed = False
+
+        async with self._lock:
+            from_active = self._active.pop(from_channel_id, None)
+            if from_active is not None:
+                target = self._active.setdefault(to_channel_id, {})
+                for session, proc in from_active.items():
+                    if session not in target:
+                        target[session] = proc
+                changed = True
+
+            from_activity = self._activity.pop(from_channel_id, None)
+            if from_activity is not None:
+                target_activity = self._activity.setdefault(to_channel_id, {})
+                for session, ts in from_activity.items():
+                    if session not in target_activity:
+                        target_activity[session] = ts
+                changed = True
+
+            pending_prefix = f"{from_channel_id}:"
+            for key in list(self._pending.keys()):
+                if not key.startswith(pending_prefix):
+                    continue
+                suffix = key[len(pending_prefix) :]
+                target_key = f"{to_channel_id}:{suffix}"
+                conflict = self._pending.pop(key)
+                if target_key not in self._pending:
+                    self._pending[target_key] = conflict
+                changed = True
+
+        snapshot = self._state.load()
+        if from_channel_id not in snapshot.channels and from_channel_id not in snapshot.runtime_options_channels:
+            return changed
+
+        state_changed = False
+
+        def mutator(fs):
+            nonlocal state_changed
+            from_ch = fs.channels.get(from_channel_id)
+            if from_ch is not None:
+                to_ch = fs.channels.get(to_channel_id)
+                if to_ch is None:
+                    fs.channels[to_channel_id] = from_ch
+                else:
+                    for session, sess in from_ch.sessions.items():
+                        if session not in to_ch.sessions:
+                            to_ch.sessions[session] = sess
+                    for user_id, sticky_session in from_ch.sticky.items():
+                        if user_id not in to_ch.sticky:
+                            to_ch.sticky[user_id] = sticky_session
+                    fs.channels[to_channel_id] = to_ch
+                fs.channels.pop(from_channel_id, None)
+                state_changed = True
+
+            from_opts = fs.runtime_options_channels.pop(from_channel_id, None)
+            if from_opts is not None:
+                to_opts = fs.runtime_options_channels.get(to_channel_id)
+                if to_opts is None:
+                    fs.runtime_options_channels[to_channel_id] = dict(from_opts)
+                else:
+                    for key, value in from_opts.items():
+                        if key not in to_opts:
+                            to_opts[key] = value
+                    fs.runtime_options_channels[to_channel_id] = to_opts
+                state_changed = True
+
+        self._state.update(mutator)
+        return changed or state_changed
+
     def update_state(
         self,
         channel_id: str,

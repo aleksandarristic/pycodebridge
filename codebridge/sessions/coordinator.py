@@ -46,6 +46,12 @@ class SessionCoordinator:
         _, job_id, _ = await self._queue.enqueue(channel_id, record.session, record.job)
         return job_id
 
+    async def migrate_channel_scope(self, from_channel_id: str, to_channel_id: str) -> bool:
+        """Move queue + session state from one channel scope key to another."""
+        queue_changed = await self._queue.rekey_channel(from_channel_id, to_channel_id)
+        session_changed = await self._sessions.migrate_channel_scope(from_channel_id, to_channel_id)
+        return queue_changed or session_changed
+
     async def set_active(self, channel_id: str, session: str, proc: Any) -> None:
         await self._sessions.set_active(channel_id, session, proc)
 

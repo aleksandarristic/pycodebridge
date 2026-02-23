@@ -86,3 +86,41 @@ def test_session_service_update_state_preserves_existing_repo_context_on_empty_u
     assert sess.repo_name == "repo"
     assert sess.repo_path == "/tmp/repo"
     assert sess.thread_id == "thread-1"
+
+
+def test_session_service_migrate_channel_scope_moves_runtime_and_state(tmp_path):
+    store = Store(str(tmp_path))
+    cfg = config.Config()
+    service = SessionService(store, cfg)
+    service.update_state("legacy-thread", "default", "repo", "/tmp/repo", "thread-1", "", "")
+    store.update(lambda fs: fs.runtime_options_channels.__setitem__("legacy-thread", {"run_heartbeat_seconds": 42}))
+
+    async def run():
+        proc = object()
+        conflict = PendingConflict(
+            repo_name="repo",
+            session="default",
+            thread_id="thread-1",
+            user_id="user",
+            expires_at=time.time() + 60,
+        )
+        await service.set_active("legacy-thread", "default", proc)
+        service.update_activity("legacy-thread", "default")
+        await service.set_pending_conflict("legacy-thread", "default", conflict)
+
+        changed = await service.migrate_channel_scope("legacy-thread", "discord:parent:thread-1")
+        assert changed is True
+        assert await service.get_active("legacy-thread", "default") is None
+        assert await service.get_active("discord:parent:thread-1", "default") is proc
+        assert service.get_activity("legacy-thread", "default") is None
+        assert service.get_activity("discord:parent:thread-1", "default") is not None
+        assert await service.consume_pending("legacy-thread", "default") is None
+        assert await service.consume_pending("discord:parent:thread-1", "default") is not None
+
+    asyncio.run(run())
+    state = store.load()
+    assert "legacy-thread" not in state.channels
+    assert "discord:parent:thread-1" in state.channels
+    assert state.channels["discord:parent:thread-1"].sessions["default"].repo_name == "repo"
+    assert "legacy-thread" not in state.runtime_options_channels
+    assert state.runtime_options_channels["discord:parent:thread-1"]["run_heartbeat_seconds"] == 42

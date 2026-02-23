@@ -97,6 +97,26 @@ class Manager:
         async with self._lock:
             return self._last_jobs.get(channel_id)
 
+    async def rekey_channel(self, from_channel_id: str, to_channel_id: str) -> bool:
+        """Move queue worker/last-job state to a new channel id."""
+        if not from_channel_id or not to_channel_id or from_channel_id == to_channel_id:
+            return False
+        changed = False
+        async with self._lock:
+            self._prune_workers_locked()
+            from_ref = self._workers.get(from_channel_id)
+            to_ref = self._workers.get(to_channel_id)
+            if from_ref is not None and to_ref is None:
+                self._workers[to_channel_id] = from_ref
+                self._workers.pop(from_channel_id, None)
+                changed = True
+            if from_channel_id in self._last_jobs:
+                if to_channel_id not in self._last_jobs:
+                    self._last_jobs[to_channel_id] = self._last_jobs[from_channel_id]
+                self._last_jobs.pop(from_channel_id, None)
+                changed = True
+        return changed
+
     def _prune_workers_locked(self) -> None:
         for channel_id, ref in list(self._workers.items()):
             if ref.task.done():

@@ -59,6 +59,7 @@ _UNLOCK_STATUS_TOKENS = {"status", "state"}
 _UNLOCK_SCOPE_DEFAULT = "default"
 _UNLOCK_SCOPE_GH = "gh"
 _RESET_ALL_CONFIRM_TTL_SECONDS = 30
+_DISCORD_LEADING_MENTION_RE = re.compile(r"^(?:<@!?\d+>\s*)+")
 _READ_ONLY_COMMANDS = {
     "budget",
     "help",
@@ -138,6 +139,7 @@ class Router:
         if event.author_is_bot:
             return
         event = normalize_event_context(event)
+        await self._migrate_legacy_thread_scope(event)
         lock_emoji = ""
         if self._totp_enabled(event):
             lock_emoji = "🔓" if self._totp_is_unlocked(event, _UNLOCK_SCOPE_DEFAULT) else "🔒"
@@ -188,6 +190,11 @@ class Router:
             return
         prefix = self._transport_prefix(event)
         content = (event.content or "").strip()
+        had_leading_mention = False
+        if event.platform == "discord":
+            content, had_leading_mention = self._strip_discord_leading_mention(content)
+            if had_leading_mention and not content:
+                return
         shortcut_cmdline = self._shortcut_cmdline(content)
         if event.attachments:
             if self._totp_enabled(event):
@@ -207,6 +214,9 @@ class Router:
             if not ok:
                 return
         if await self.handle_pending_upload_response(event, sink, repo_name, pending_content):
+            return
+        if had_leading_mention and event.platform_thread_id and not content.startswith(prefix) and not shortcut_cmdline:
+            # In Discord threads, require explicit command syntax after a bot mention.
             return
         if not content.startswith(prefix) and not shortcut_cmdline:
             relay_session, ambiguous = await self.pending_input_session(event)
@@ -352,6 +362,79 @@ class Router:
     async def handle_dm_message(self, event: MessageEvent, sink: ResponseSink) -> None:
         """Handle an incoming DM admin message."""
         await dm_admin_handlers.handle_dm_message(self, event, sink)
+
+    async def _migrate_legacy_thread_scope(self, event: MessageEvent) -> None:
+        """Rekey legacy Discord thread scope to canonical room key when needed."""
+        if event.platform != "discord" or event.is_dm or not event.platform_thread_id:
+            return
+        legacy_channel_id = event.platform_thread_id
+        canonical_channel_id = event.channel_id
+        if not legacy_channel_id or not canonical_channel_id or legacy_channel_id == canonical_channel_id:
+            return
+        changed = await self.coordinator.migrate_channel_scope(legacy_channel_id, canonical_channel_id)
+        if not self._move_channel_runtime_maps(legacy_channel_id, canonical_channel_id):
+            if not changed:
+                return
+        self.logger.info(
+            "routing.thread_scope_rekey",
+            extra={
+                "legacy_channel_id": legacy_channel_id,
+                "canonical_channel_id": canonical_channel_id,
+                "thread_id": event.platform_thread_id,
+            },
+        )
+
+    def _move_channel_runtime_maps(self, from_channel_id: str, to_channel_id: str) -> bool:
+        """Move router runtime channel maps to a canonical key."""
+        if not from_channel_id or not to_channel_id or from_channel_id == to_channel_id:
+            return False
+        changed = False
+
+        from_usage = self._usage.pop(from_channel_id, None)
+        if from_usage is not None:
+            target_usage = self._usage.setdefault(to_channel_id, {})
+            for session, stats in from_usage.items():
+                if session not in target_usage:
+                    target_usage[session] = stats
+            changed = True
+
+        from_pending = self._awaiting_input.pop(from_channel_id, None)
+        if from_pending is not None:
+            target_pending = self._awaiting_input.setdefault(to_channel_id, {})
+            for session, expires_at in from_pending.items():
+                if session not in target_pending:
+                    target_pending[session] = expires_at
+            changed = True
+
+        from_budget_usage = self._budget_usage_channel.pop(from_channel_id, None)
+        if from_budget_usage is not None:
+            self._budget_usage_channel[to_channel_id] = self._budget_usage_channel.get(to_channel_id, 0) + from_budget_usage
+            changed = True
+
+        from_budget_thresholds = self._budget_thresholds_channel.pop(from_channel_id, None)
+        if from_budget_thresholds is not None:
+            self._budget_thresholds_channel.setdefault(to_channel_id, from_budget_thresholds)
+            changed = True
+
+        from_runtime_opts = self._runtime_options_channels.pop(from_channel_id, None)
+        if from_runtime_opts is not None:
+            target_runtime_opts = self._runtime_options_channels.setdefault(to_channel_id, {})
+            for key, value in from_runtime_opts.items():
+                if key not in target_runtime_opts:
+                    target_runtime_opts[key] = value
+            changed = True
+        return changed
+
+    def _strip_discord_leading_mention(self, content: str) -> tuple[str, bool]:
+        """Strip one or more leading Discord mention tokens."""
+        raw = (content or "").strip()
+        if not raw:
+            return "", False
+        match = _DISCORD_LEADING_MENTION_RE.match(raw)
+        if not match:
+            return raw, False
+        remainder = raw[match.end() :].lstrip(" \t,;:-")
+        return remainder, True
 
     def _shortcut_cmdline(self, content: str) -> str:
         """Translate top-level shortcut commands into canonical !c command lines."""

@@ -593,6 +593,93 @@ def test_integration_discord_parent_channel_remains_backward_compatible_with_thr
     assert thread_room in state.channels
 
 
+def test_integration_discord_thread_stop_rekeys_legacy_thread_scope(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    room_key = "discord:chan-parent:thread-a"
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    proc = _FakeProc()
+    router.update_state("thread-a", "default", "repo", str(repo), "thread-legacy", "", "")
+
+    async def run():
+        await router.set_active("thread-a", "default", proc)
+        await router.handle_message(
+            _discord_event(
+                "!c stop",
+                "topic-a",
+                channel_id="thread-a",
+                platform_thread_id="thread-a",
+                parent_channel_id="chan-parent",
+                parent_channel_name="codex-repo",
+            ),
+            sink,
+        )
+
+    asyncio.run(run())
+
+    assert proc.stopped is True
+    assert proc.interrupted is True
+    state = router.state.load()
+    assert room_key in state.channels
+    assert "thread-a" not in state.channels
+
+
+def test_integration_discord_thread_mention_without_command_is_ignored(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    router.cfg.discord.allow_plain_prompts = True
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(
+            _discord_event(
+                "<@123456789> please take over",
+                "topic-a",
+                channel_id="thread-a",
+                platform_thread_id="thread-a",
+                parent_channel_id="chan-parent",
+                parent_channel_name="codex-repo",
+            ),
+            sink,
+        )
+
+    asyncio.run(run())
+    assert runner.calls == []
+    assert sink.sent == []
+
+
+def test_integration_discord_thread_mention_with_prefix_runs_command(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(
+            _discord_event(
+                "<@123456789> !c start",
+                "topic-a",
+                channel_id="thread-a",
+                platform_thread_id="thread-a",
+                parent_channel_id="chan-parent",
+                parent_channel_name="codex-repo",
+            ),
+            sink,
+        )
+        await asyncio.sleep(0)
+
+    asyncio.run(run())
+    assert any(args and args[0] == "start" for args in runner.calls)
+
+
 def test_integration_bang_stop_interrupts_active_prompt(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()

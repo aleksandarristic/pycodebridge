@@ -73,3 +73,29 @@ def test_queue_worker_prunes_after_idle():
         assert len(mgr._workers) == 0
 
     asyncio.run(run())
+
+
+def test_queue_rekey_channel_moves_worker_and_last_job():
+    async def run():
+        mgr = Manager()
+        gate = asyncio.Event()
+
+        async def blocker():
+            await gate.wait()
+
+        _, _, fut = await mgr.enqueue("legacy-thread", "default", blocker)
+        await asyncio.sleep(0)
+
+        changed = await mgr.rekey_channel("legacy-thread", "discord:parent:legacy-thread")
+        assert changed is True
+        assert await mgr.snapshot("legacy-thread") == []
+        snapshot = await mgr.snapshot("discord:parent:legacy-thread")
+        assert len(snapshot) == 1
+        assert snapshot[0].status == "running"
+
+        assert await mgr.last_job("legacy-thread") is None
+        assert await mgr.last_job("discord:parent:legacy-thread") is not None
+        gate.set()
+        await fut
+
+    asyncio.run(run())
