@@ -495,8 +495,7 @@ def _expand_path(val: str) -> str:
         return ""
     expanded = os.path.expandvars(val)
     expanded = _expand_percent_vars(expanded)
-    if expanded.startswith("~"):
-        expanded = os.path.join(os.path.expanduser("~"), expanded.lstrip("~"))
+    expanded = os.path.expanduser(expanded)
     return expanded
 
 

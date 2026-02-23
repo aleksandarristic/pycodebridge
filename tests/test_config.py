@@ -36,6 +36,20 @@ def test_load_config_expands_paths(tmp_path, monkeypatch):
     assert cfg.discord.prefix == cfgmod.DEFAULT_PREFIX
 
 
+def test_expand_path_uses_expanduser_for_tilde_variants(monkeypatch):
+    monkeypatch.setattr(
+        cfgmod.os.path,
+        "expanduser",
+        lambda value: {
+            "~/logs": "/home/current/logs",
+            "~other/work": "/home/other/work",
+        }.get(value, value),
+    )
+
+    assert cfgmod._expand_path("~/logs") == "/home/current/logs"
+    assert cfgmod._expand_path("~other/work") == "/home/other/work"
+
+
 def test_load_config_totp_enabled_requires_secret_env(tmp_path, monkeypatch):
     code_root = tmp_path / "code"
     data_dir = tmp_path / "data"
