@@ -97,3 +97,20 @@ def test_handle_health_reports_expected_sections(tmp_path, monkeypatch):
     assert "Health:" in text
     assert "Codex version: 0.123.0" in text
     assert "Queue: 1 running, 1 queued" in text
+    assert "Runtime uid:gid:" in text
+    assert "Env sanity: code_root=missing, state_dir=missing, log_dir=missing" in text
+
+
+def test_path_access_status_reports_ro_when_not_writable(tmp_path, monkeypatch):
+    target = tmp_path / "root"
+    target.mkdir()
+
+    def _fake_access(path, mode):
+        _ = mode
+        return str(path) != str(target)
+
+    monkeypatch.setattr(system_helpers.os, "access", _fake_access)
+
+    assert system_helpers._path_access_status("") == "missing"
+    assert system_helpers._path_access_status(str(tmp_path / "missing")) == "missing"
+    assert system_helpers._path_access_status(str(target)) == "ok(ro)"

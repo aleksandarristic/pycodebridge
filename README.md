@@ -42,7 +42,7 @@ Quick start:
    - `STATE_DIR_HOST=/absolute/path/to/pycodebridge-state`
    - `CODEX_AUTH_HOST=/absolute/path/to/codex-auth-dir` (optional; defaults to `./.docker-codex-auth`)
    - `GH_CONFIG_HOST=/absolute/path/to/gh-config-dir` (optional; defaults to `./.docker-gh-config` in Compose)
-   - `HOST_UID=$(id -u)` and `HOST_GID=$(id -g)` (recommended for Compose on Linux)
+   - `HOST_UID=$(id -u)` and `HOST_GID=$(id -g)` (required for Compose)
    - To reuse existing host Codex login in Compose, set `CODEX_AUTH_HOST=$HOME/.codex`
    - If `STATE_DIR_HOST` is omitted, default is `./.docker-state`
 3) Preflight only: `./run_docker.sh --check`

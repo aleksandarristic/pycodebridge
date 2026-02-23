@@ -3,7 +3,7 @@ services:
     build: .
     image: pycodebridge:local
     container_name: pycodebridge
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    user: "${HOST_UID:?Set HOST_UID in .env to your host uid (run: id -u)}:${HOST_GID:?Set HOST_GID in .env to your host gid (run: id -g)}"
     restart: unless-stopped
     env_file:
       - .env

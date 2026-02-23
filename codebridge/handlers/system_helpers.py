@@ -106,9 +106,11 @@ async def handle_health(router: "Router", sink: ResponseSink, repo_path: str) ->
     code_root = router.cfg.codex.code_root or ""
     state_dir = router.cfg.state.data_dir or ""
     log_dir = router.cfg.state.log_dir or ""
-    code_root_ok = bool(code_root and os.path.isdir(code_root))
-    state_dir_ok = bool(state_dir and os.path.isdir(state_dir))
-    log_dir_ok = bool(log_dir and os.path.isdir(log_dir))
+    code_root_status = _path_access_status(code_root)
+    state_dir_status = _path_access_status(state_dir)
+    log_dir_status = _path_access_status(log_dir)
+    uid = os.getuid() if hasattr(os, "getuid") else -1
+    gid = os.getgid() if hasattr(os, "getgid") else -1
 
     last_error = _read_last_codex_error_summary(getattr(router, "_codex_error_log_path", ""))
     if not last_error:
@@ -121,16 +123,22 @@ async def handle_health(router: "Router", sink: ResponseSink, repo_path: str) ->
         f"- Queue: {running} running, {queued} queued across {channel_count} channel(s)",
         f"- Tracked sessions: {tracked_sessions} across {tracked_channels} channel(s)",
         f"- Last codex error: {last_error}",
-        (
-            "- Env sanity: "
-            f"code_root={'ok' if code_root_ok else 'missing'}, "
-            f"state_dir={'ok' if state_dir_ok else 'missing'}, "
-            f"log_dir={'ok' if log_dir_ok else 'missing'}"
-        ),
+        f"- Runtime uid:gid: {uid}:{gid}",
+        f"- Env sanity: code_root={code_root_status}, state_dir={state_dir_status}, log_dir={log_dir_status}",
     ]
     if current_err and not current:
         lines.append("- Note: failed to query `codex --version`.")
     await router.reply(sink, "\n".join(lines))
+
+
+def _path_access_status(path: str) -> str:
+    """Return concise path access status for health output."""
+    if not path:
+        return "missing"
+    if not os.path.isdir(path):
+        return "missing"
+    writable = os.access(path, os.W_OK)
+    return "ok(rw)" if writable else "ok(ro)"
 
 
 def _read_last_codex_error_summary(path: str) -> str:
