@@ -38,8 +38,13 @@
   - `.task-management/BUGS.md` for bug backlog items.
   - `.task-management/DONE.md` for completed tasks.
   - `.task-management/REMOVED.md` for dropped/cancelled tasks.
+- Task ID scope is global across all task management files above; IDs are stable and never reused.
 - Every task must have a stable ID in format `TASK-####`.
-- IDs persist when tasks move between TODO/BACKLOG/BUGS/DONE/REMOVED and are never reused.
+- IDs persist when tasks move between TODO/BACKLOG/BUGS/DONE/REMOVED.
+- Use `.task-management/TASK_COUNTER.md` as the source of truth for task ID allocation.
+  - The counter stores the last assigned task ID only.
+  - Next task ID is computed by incrementing the counter by one.
+  - Whenever a new task is created in any task file, update the counter in the same change.
 - Completed tasks are removed from TODO, BACKLOG, or BUGS and appended to DONE.
 - Removed tasks are removed from TODO, BACKLOG, or BUGS and appended to REMOVED with reason.
 
