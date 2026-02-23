@@ -10,6 +10,7 @@ def test_render_config_text_includes_core_fields():
     cfg.codex.network_access = True
     cfg.codex.model = "gpt-test"
     cfg.codex.model_reasoning_effort = "medium"
+    cfg.state.session_idle_ttl_seconds = 7200
     cfg.git.enabled = True
     cfg.git.user_name = "Dev"
     cfg.git.user_email = "dev@example.com"
@@ -35,6 +36,7 @@ def test_render_config_text_includes_core_fields():
     assert "network_access: True" in text
     assert "model: gpt-test" in text
     assert "model_reasoning_effort: medium" in text
+    assert "session_idle_ttl_seconds: 7200" in text
     assert "git_bootstrap_enabled: True" in text
     assert "git_user_name_set: True" in text
     assert "git_user_email_set: True" in text

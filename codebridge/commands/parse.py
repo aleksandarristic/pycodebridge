@@ -16,12 +16,13 @@ def parse_session_and_prompt(rest: str) -> tuple[str, str]:
 
 def parse_choose(rest: str) -> tuple[str, str]:
     """Parse a choose command into (choice, session)."""
+    valid = {"resume", "replace", "continue", "new", "start", "cancel"}
     parts = rest.split()
     if not parts:
         return "", ""
     if len(parts) == 1:
         return parts[0], ""
-    if len(parts) >= 2 and parts[1] in {"resume", "replace", "cancel"}:
+    if len(parts) >= 2 and parts[1].lower() in valid:
         return parts[1], parts[0]
     return parts[0], ""
 

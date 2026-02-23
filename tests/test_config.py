@@ -478,3 +478,64 @@ def test_load_config_git_bootstrap_fields(tmp_path, monkeypatch):
     assert cfg.git.allow_dangerous_ops is True
     assert cfg.git.require_confirmation_for_dangerous_ops is True
     assert cfg.git.dangerous_confirmation_token == "--really-do-it"
+
+
+def test_load_config_session_idle_ttl_seconds(tmp_path, monkeypatch):
+    code_root = tmp_path / "code"
+    data_dir = tmp_path / "data"
+    code_root.mkdir()
+    data_dir.mkdir()
+
+    monkeypatch.setenv("CODE_ROOT", str(code_root))
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        """
+        discord:
+          guild_id: "123"
+          allowed_user_ids: ["1"]
+        codex:
+          code_root: "$CODE_ROOT"
+        state:
+          data_dir: "%DATA_DIR%"
+          log_dir: "%DATA_DIR%/logs"
+          session_idle_ttl_seconds: 7200
+        """,
+        encoding="utf-8",
+    )
+
+    cfg = cfgmod.load(str(cfg_path))
+    assert cfg.state.session_idle_ttl_seconds == 7200
+
+
+def test_load_config_session_idle_ttl_seconds_validation(tmp_path, monkeypatch):
+    code_root = tmp_path / "code"
+    data_dir = tmp_path / "data"
+    code_root.mkdir()
+    data_dir.mkdir()
+
+    monkeypatch.setenv("CODE_ROOT", str(code_root))
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        """
+        discord:
+          guild_id: "123"
+          allowed_user_ids: ["1"]
+        codex:
+          code_root: "$CODE_ROOT"
+        state:
+          data_dir: "%DATA_DIR%"
+          log_dir: "%DATA_DIR%/logs"
+          session_idle_ttl_seconds: 999999999
+        """,
+        encoding="utf-8",
+    )
+
+    try:
+        cfgmod.load(str(cfg_path))
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "state.session_idle_ttl_seconds" in str(exc)

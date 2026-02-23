@@ -33,6 +33,8 @@ class PendingConflict:
     thread_id: str
     user_id: str
     expires_at: float
+    reason: str = "start_conflict"
+    prompt: str = ""
 
 
 @dataclass

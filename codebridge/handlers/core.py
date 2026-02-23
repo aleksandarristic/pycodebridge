@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 import os
 import time
 from typing import TYPE_CHECKING
@@ -53,9 +54,14 @@ async def handle_start(
                 thread_id=thread_id,
                 user_id=event.author_id,
                 expires_at=time.time() + router.cfg.state.conflict_ttl_seconds,
+                reason="start_conflict",
             ),
         )
-        await router.reply(sink, f"Session '{session}' already exists for this channel.\nChoose one:\n!c choose resume\n!c choose replace\n!c choose cancel")
+        await router.reply(
+            sink,
+            f"Session '{session}' already exists for this channel.\n"
+            "Choose one:\n!c choose continue\n!c choose new\n!c choose cancel",
+        )
         return
 
     model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)
@@ -78,11 +84,40 @@ async def handle_resume(
     repo_path: str,
     session: str,
     prompt: str,
+    skip_idle_ttl_check: bool = False,
 ) -> None:
     """Resume a Codex session with a prompt."""
     channel_id = event.channel_id
     session = normalize_session(session)
     state = router.state.load()
+    idle_ttl_seconds = max(0, int(getattr(router.cfg.state, "session_idle_ttl_seconds", 0) or 0))
+    sess = state.channels.get(channel_id).sessions.get(session) if state.channels.get(channel_id) else None
+    if sess and idle_ttl_seconds > 0 and not skip_idle_ttl_check:
+        idle_seconds = _session_idle_seconds(sess.last_used_at or sess.created_at)
+        if idle_seconds >= idle_ttl_seconds:
+            thread_id = sess.thread_id
+            await router.coordinator.set_pending_conflict(
+                channel_id,
+                session,
+                PendingConflict(
+                    repo_name=repo_name,
+                    session=session,
+                    thread_id=thread_id,
+                    user_id=event.author_id,
+                    expires_at=time.time() + router.cfg.state.conflict_ttl_seconds,
+                    reason="session_expired",
+                    prompt=(prompt or "").strip(),
+                ),
+            )
+            await router.reply(
+                sink,
+                (
+                    f"Session '{session}' is inactive (idle {router._format_duration(idle_seconds)}, "
+                    f"TTL {router._format_duration(idle_ttl_seconds)}).\n"
+                    "Choose one:\n!c choose continue\n!c choose new\n!c choose cancel"
+                ),
+            )
+            return
     thread_id = existing_thread(state, channel_id, session)
     model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)
     if thread_id:
@@ -254,19 +289,67 @@ async def handle_choose(
     if not conflict:
         await router.reply(sink, "No pending conflict.")
         return
-    choice = choice.lower()
+    choice = (choice or "").strip().lower()
+    aliases = {"continue": "resume", "new": "replace", "start": "replace"}
+    choice = aliases.get(choice, choice)
     if choice == "resume":
-        await router.reply(sink, f"Resuming existing session '{conflict.session}'...")
-        await router.handle_resume(event, sink, repo_name, repo_path, conflict.session, "Resumed.")
+        resume_prompt = (conflict.prompt or "").strip() or "Resumed."
+        await router.reply(sink, f"Continuing session '{conflict.session}'...")
+        await router.handle_resume(
+            event,
+            sink,
+            repo_name,
+            repo_path,
+            conflict.session,
+            resume_prompt,
+            skip_idle_ttl_check=True,
+        )
         return
     if choice == "replace":
-        await router.reply(sink, f"Replacing session '{conflict.session}' with new start...")
-        await router.handle_start(event, sink, repo_name, repo_path, conflict.session)
+        state = router.state.load()
+        model, reasoning = _session_model_reasoning_from_state(router, state, event.channel_id, conflict.session)
+        start_prompt = (
+            (conflict.prompt or "").strip()
+            if conflict.reason == "session_expired"
+            else router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name)
+        ) or router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name)
+        args = router.runner.build_start_args(repo_path, start_prompt, model, reasoning)
+
+        async def job() -> None:
+            await router.run_codex(event, sink, repo_name, repo_path, conflict.session, model, reasoning, args)
+
+        pos, job_id, _ = await router.coordinator.enqueue(event.channel_id, conflict.session, job)
+        router.logger.info(
+            "enqueue.start_replace",
+            extra={
+                "channel_id": event.channel_id,
+                "repo": repo_name,
+                "session": conflict.session,
+                "job": job_id,
+                "pos": pos,
+                "reason": conflict.reason,
+            },
+        )
+        await router.reply(sink, f"Starting a new session in '{conflict.session}'...")
         return
     if choice == "cancel":
         await router.reply(sink, "Cancelled.")
         return
-    await router.reply(sink, "Unknown choice. Use resume|replace|cancel.")
+    await router.reply(sink, "Unknown choice. Use continue|new|cancel.")
+
+
+def _session_idle_seconds(timestamp: str) -> int:
+    raw = (timestamp or "").strip()
+    if not raw:
+        return -1
+    try:
+        dt = datetime.strptime(raw, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except Exception:
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except Exception:
+            return -1
+    return max(0, int((datetime.now(timezone.utc) - dt).total_seconds()))
 
 
 async def handle_stop(router: "Router", sink: ResponseSink, session: str) -> None:

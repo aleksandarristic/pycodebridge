@@ -14,6 +14,7 @@ def render_config_text(cfg: Config) -> str:
         f"network_access: {cfg.codex.network_access}\n"
         f"model: {cfg.codex.model}\n"
         f"model_reasoning_effort: {cfg.codex.model_reasoning_effort}\n"
+        f"session_idle_ttl_seconds: {cfg.state.session_idle_ttl_seconds}\n"
         f"git_bootstrap_enabled: {cfg.git.enabled}\n"
         f"git_user_name_set: {bool((cfg.git.user_name or '').strip())}\n"
         f"git_user_email_set: {bool((cfg.git.user_email or '').strip())}\n"

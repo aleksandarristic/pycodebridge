@@ -18,6 +18,7 @@ DEFAULT_TOKEN_ENV = "DISCORD_TOKEN"
 DEFAULT_TELEGRAM_TOKEN_ENV = "TELEGRAM_TOKEN"
 DEFAULT_LOCK_TIMEOUT_SECONDS = 600
 DEFAULT_CONFLICT_TTL_SECONDS = 60
+DEFAULT_SESSION_IDLE_TTL_SECONDS = 0
 DEFAULT_TRANSPORT_ADAPTER = "discord"
 DEFAULT_AUDIT_REDACT = False
 DEFAULT_MAX_UPLOAD_MB = 200
@@ -94,6 +95,7 @@ class StateConfig:
     data_dir: str = ""
     lock_timeout_seconds: int = DEFAULT_LOCK_TIMEOUT_SECONDS
     conflict_ttl_seconds: int = DEFAULT_CONFLICT_TTL_SECONDS
+    session_idle_ttl_seconds: int = DEFAULT_SESSION_IDLE_TTL_SECONDS
     log_dir: str = ""
 
 
@@ -275,6 +277,9 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.state.data_dir = state.get("data_dir", cfg.state.data_dir)
     cfg.state.lock_timeout_seconds = int(state.get("lock_timeout_seconds", cfg.state.lock_timeout_seconds))
     cfg.state.conflict_ttl_seconds = int(state.get("conflict_ttl_seconds", cfg.state.conflict_ttl_seconds))
+    cfg.state.session_idle_ttl_seconds = int(
+        state.get("session_idle_ttl_seconds", cfg.state.session_idle_ttl_seconds)
+    )
     cfg.state.log_dir = state.get("log_dir", cfg.state.log_dir)
 
     runtime = raw.get("runtime", {}) or {}
@@ -384,6 +389,8 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.state.lock_timeout_seconds = DEFAULT_LOCK_TIMEOUT_SECONDS
     if cfg.state.conflict_ttl_seconds <= 0:
         cfg.state.conflict_ttl_seconds = DEFAULT_CONFLICT_TTL_SECONDS
+    if cfg.state.session_idle_ttl_seconds < 0:
+        cfg.state.session_idle_ttl_seconds = DEFAULT_SESSION_IDLE_TTL_SECONDS
     if not cfg.runtime.log_level:
         cfg.runtime.log_level = DEFAULT_LOG_LEVEL
     if not cfg.runtime.health_path:
@@ -449,6 +456,8 @@ def _validate(cfg: Config) -> None:
         raise ValueError("runtime.run_heartbeat_seconds must be between 1 and 86400")
     if cfg.runtime.run_completion_min_seconds < 1 or cfg.runtime.run_completion_min_seconds > 86400:
         raise ValueError("runtime.run_completion_min_seconds must be between 1 and 86400")
+    if cfg.state.session_idle_ttl_seconds < 0 or cfg.state.session_idle_ttl_seconds > 31536000:
+        raise ValueError("state.session_idle_ttl_seconds must be between 0 and 31536000")
 
     if cfg.transport.adapter.lower() not in {"discord", "slack", "telegram"}:
         raise ValueError("transport.adapter must be discord, slack, or telegram (additional adapters not yet supported)")

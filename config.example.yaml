@@ -40,6 +40,7 @@ state:
   data_dir: "/home/you/.discord-codex-bridge"
   lock_timeout_seconds: 600
   conflict_ttl_seconds: 60
+  session_idle_ttl_seconds: 0  # disabled when 0; otherwise prompt continue/new after idle TTL
   log_dir: "/home/you/.discord-codex-bridge/logs"
 
 runtime:

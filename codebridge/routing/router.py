@@ -445,9 +445,19 @@ class Router:
         repo_path: str,
         session: str,
         prompt: str,
+        skip_idle_ttl_check: bool = False,
     ) -> None:
         """Resume a Codex session with a prompt."""
-        await core_handlers.handle_resume(self, event, sink, repo_name, repo_path, session, prompt)
+        await core_handlers.handle_resume(
+            self,
+            event,
+            sink,
+            repo_name,
+            repo_path,
+            session,
+            prompt,
+            skip_idle_ttl_check=skip_idle_ttl_check,
+        )
 
     async def handle_create_repo(self, event: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str) -> None:
         """Create a new repo directory and git init."""
