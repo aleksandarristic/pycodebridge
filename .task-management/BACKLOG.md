@@ -33,3 +33,24 @@ Rules:
 - [TASK-0004] Role-based permissions model (Discord-role driven access tiers).
 - [TASK-0005] Knowledge shortcuts/macros for repeatable repo workflows.
 - [TASK-0006] Web-based/dashboard features (status/admin web surface, browser ops views).
+- [TASK-0007] Parametrize TOTP requirements in config for command groups.
+  - Goal: allow configuration of TOTP enforcement for privileged commands rather than hard-coding behavior.
+  - Scope:
+    - Add config controls for TOTP requirements on `!git` commands.
+    - Add config controls for TOTP requirements on `!gh` commands.
+    - Add config controls for other commands that currently require TOTP even when a user session is unlocked.
+  - Acceptance criteria:
+    - Operators can enable/disable TOTP requirements per configured command group.
+    - Existing defaults remain backward compatible unless config is explicitly changed.
+    - Help/docs clearly describe the new config knobs and default behavior.
+    - Add targeted tests for command authorization behavior with TOTP required vs not required.
+- [TASK-0008] Broaden known `!git` command coverage (for example: `add`, `fetch`).
+  - Goal: expand the allowlisted/known `!git` subcommands so common workflows are supported without manual workarounds.
+  - Scope:
+    - Add missing high-utility subcommands (including `add` and `fetch`) to known command handling.
+    - Ensure parsing/validation and security gates remain consistent with existing `!git` behavior.
+    - Update user-facing help/docs for the expanded command set.
+  - Acceptance criteria:
+    - New subcommands are accepted and routed correctly via `!git`.
+    - Unsupported/dangerous commands remain blocked by policy.
+    - Add targeted tests covering added commands and rejection behavior.
