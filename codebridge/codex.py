@@ -190,14 +190,13 @@ class Runner:
         self.network_access = bool(network_access)
 
     def _base_exec_args(self, repo_path: str) -> list[str]:
-        args: list[str] = []
+        args: list[str] = ["exec", "--json", "--cd", repo_path]
         if self.sandbox:
             args += ["--sandbox", self.sandbox]
         if self.ask_for_approval:
             args += ["-c", f"approval_policy={_toml_string(self.ask_for_approval)}"]
         if self.network_access and self.sandbox == "workspace-write":
             args += ["-c", "sandbox_workspace_write.network_access=true"]
-        args += ["exec", "--json", "--cd", repo_path]
         return args
 
     def build_start_args(self, repo_path: str, prompt: str, model: str, reasoning_effort: str) -> list[str]:
