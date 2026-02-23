@@ -20,18 +20,98 @@ Backlog:
     - User-visible last message is always terminal status for the run.
     - Regression test covers out-of-order event delivery scenario.
 
-- Multi-room sessions per repo (room mapping redesign, open question).
-  - Goal: support multiple chat rooms working on the same repo concurrently, with one default room plus additional dedicated spin-off rooms.
-  - Desired UX:
-    - Keep a canonical/default room per repo.
-    - Allow creating a new room for a new session on the same repo using a similar room name pattern.
-    - Allow parallel workstreams in different rooms while targeting the same repo safely.
-  - Open question:
-    - How should room-to-repo/session mapping evolve (naming convention, metadata binding, lifecycle/cleanup, and conflict handling)?
-  - Initial considerations:
-    - Avoid collisions with existing `codex-<repo>` mapping.
-    - Preserve auth/permissions and command behavior across default vs spin-off rooms.
-    - Define how room creation/binding commands should work in Discord and Telegram.
+- Multi-room sessions per repo (spec draft).
+  - Goal:
+    - Support multiple chat rooms for the same repo concurrently, with one canonical room plus additional spin-out rooms.
+    - Keep command/auth behavior transport-agnostic and predictable.
+  - Non-goals (v1):
+    - No automatic channel/topic creation by the bot.
+    - No Slack support beyond scaffold.
+    - No change to Codex subprocess sandbox/auth semantics.
+  - Room model:
+    - Introduce a transport-agnostic `room` abstraction.
+    - `room_key = "<platform>:<channel_id>[:<platform_thread_id>]"`.
+    - `room` maps to one `repo_name` and has independent session namespace/queue/sticky selections.
+    - Existing behavior remains valid where `room_key == <platform>:<channel_id>`.
+  - Canonical vs spin-out:
+    - Canonical room for repo: primary mapped room (`codex-<repo>` in Discord/Telegram group-title routing, or DM binding target in DMs).
+    - Spin-out room: any additional room explicitly bound to the same repo.
+    - Multiple spin-out rooms may coexist per repo.
+  - Binding and naming:
+    - Keep current regex-based mapping for backward compatibility.
+    - Add optional room suffix parsing for mapped channels:
+      - Canonical: `codex-<repo>`
+      - Spin-out: `codex-<repo>--<room>`
+      - `<room>` uses the same safe token charset as sessions (`[A-Za-z0-9._-]{1,64}`).
+    - If suffix parsing is disabled or absent, behavior is unchanged.
+    - Telegram topics and Discord threads use metadata-first mapping:
+      - If a room is explicitly bound, metadata wins over title/name regex.
+      - This avoids relying on thread/topic names matching `codex-*`.
+  - Commands (v1):
+    - Add `!c room status`:
+      - Shows current room key, bound repo, room type (canonical/spin-out), active sessions, queue depth.
+    - Add `!c room bind <repo> [room-name]`:
+      - Binds current room to repo; optional `room-name` labels spin-out metadata.
+      - In canonical `codex-<repo>` rooms, bind is idempotent.
+    - Add `!c room unbind`:
+      - Clears explicit binding for current room only (not canonical regex mapping).
+    - Add `!c room list [repo]`:
+      - Lists known rooms for repo (or current repo), with last activity and active/idle state.
+    - Keep existing `!c session ...` semantics unchanged but scoped to current room.
+  - Routing precedence:
+    - Resolve repo for a message in this order:
+      - Explicit room binding (`room_key -> repo`) if present.
+      - Existing DM binding (DM only).
+      - Existing channel-name regex.
+      - Otherwise unmapped (ignore or existing fallback behavior).
+    - Session/sticky/queue keys use `room_key` instead of raw `channel_id`.
+  - State schema changes:
+    - Add top-level `rooms` map:
+      - `rooms[room_key] = { repo_name, room_name, is_canonical, created_at, last_used_at }`.
+    - Migrate existing `channels` entries to room-key namespace without data loss:
+      - Legacy key `channel_id` becomes `discord:<channel_id>` or `telegram:<channel_id>` when platform is known at access time.
+      - Maintain legacy read fallback for one release window.
+    - Keep `channels` structure initially for backward compatibility; progressively rename internals to `rooms`.
+  - Conflict and safety rules:
+    - Session names are unique per room, not global per repo.
+    - Queue isolation is per room; no cross-room blocking by default.
+    - High-risk commands (`reset`, `kill`, `/quit`) only affect current room unless explicit cross-room command is introduced later.
+    - Repo filesystem collisions are expected/allowed; user guidance should recommend branch/worktree isolation for parallel edits.
+  - Auth/permissions:
+    - Preserve current allowlist + TOTP behavior.
+    - Unlock scopes remain user+room scoped (replacing user+channel where needed).
+    - Command auth tags remain unchanged.
+  - Transport behavior:
+    - Discord:
+      - Support canonical/spin-out private text channels immediately.
+      - Support private/public threads via explicit `room bind` even if thread name does not match regex.
+    - Telegram:
+      - Support group chats by title regex as today.
+      - Support supergroup topics as independent rooms via `platform_thread_id` when bound.
+      - DMs continue to use bind model; room-key includes platform and channel id.
+  - Observability:
+    - Audit paths include room key (safe-segment encoded) to prevent collisions.
+    - `status`, `ps`, and logs include room metadata when present.
+  - Migration plan:
+    - Phase 1:
+      - Add room-key resolver + state fallback; no command changes required.
+    - Phase 2:
+      - Add `room` commands and explicit bindings.
+    - Phase 3:
+      - Add optional suffix parsing and docs updates.
+    - Phase 4:
+      - Remove legacy fallback once state has been rewritten and validated.
+  - Acceptance criteria:
+    - Canonical room (`codex-<repo>`) behavior remains backward compatible.
+    - Two rooms bound to same repo can run sessions concurrently without queue/session interference.
+    - `status` and `ps` clearly identify room context.
+    - Discord thread or Telegram topic can be bound and used even if its visible name does not match `codex-*`.
+    - Existing state loads and is transparently usable after upgrade (no manual migration required).
+    - Regression tests cover:
+      - repo resolution precedence (binding > DM > regex),
+      - room-scoped queue/session isolation,
+      - TOTP unlock scoping with room keys,
+      - backward-compatible legacy state read path.
 
 - Compose + global skill defaults for cross-repo persistence (deferred).
   - Goal: define and document a non-`AGENTS.md` channel for durable operator defaults across repos/sessions.
