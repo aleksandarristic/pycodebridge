@@ -1,3 +1,18 @@
+"""End-to-end router integration harness.
+
+This file exercises the Router as a whole using transport-level MessageEvent
+inputs and fake sink/runner collaborators. The focus is behavior contracts:
+
+- command routing and shortcut normalization
+- session lifecycle and run-control semantics
+- Discord/Telegram transport context behavior (threads, replies)
+- TOTP gating and unlock scope behavior
+- persistence-facing side effects (state, options, audit summaries)
+
+Use this harness when validating changes that cross command boundaries or when
+router behavior depends on multiple subsystems at once.
+"""
+
 import asyncio
 import base64
 from datetime import datetime, timedelta, timezone
@@ -219,6 +234,7 @@ def _totp_code(secret_b32: str, step_offset: int = 0) -> str:
 
 
 def _build_router(tmp_path, *, totp_enabled: bool = False, runner=None):
+    """Construct a Router wired to test doubles and temp-backed state."""
     cfg = cfgmod.Config()
     cfg.discord.allowed_user_ids = ["user"]
     cfg.telegram.allowed_user_ids = ["user"]
@@ -247,6 +263,11 @@ def _discord_event(
     parent_channel_id: str = "",
     parent_channel_name: str = "",
 ) -> MessageEvent:
+    """Build a Discord channel or thread event.
+
+    When platform_thread_id is provided, this simulates a Discord thread event
+    with parent channel metadata available on raw_event.channel.
+    """
     if platform_thread_id:
         parent_id = parent_channel_id or "parent-chan"
         parent_name = parent_channel_name or "codex-repo"
@@ -308,6 +329,10 @@ def _telegram_channel_event(content: str, channel_name: str, channel_id: str = "
         is_dm=False,
     )
 
+
+# ---------------------------------------------------------------------------
+# Core lifecycle and room/thread scoping
+# ---------------------------------------------------------------------------
 
 def test_integration_start_stop(tmp_path):
     repo = tmp_path / "repo"
@@ -568,6 +593,10 @@ def test_integration_bang_stop_interrupts_active_prompt(tmp_path):
     assert runner.last_proc.interrupted is True
 
 
+# ---------------------------------------------------------------------------
+# Transport privacy and identity gating
+# ---------------------------------------------------------------------------
+
 def test_integration_ignores_public_discord_repo_channel(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -602,6 +631,10 @@ def test_transport_user_allowed_discord_denies_when_allowlist_empty(tmp_path):
 
     assert router._transport_user_allowed(event) is False
 
+
+# ---------------------------------------------------------------------------
+# Repo/session/run-control flows and command shortcuts
+# ---------------------------------------------------------------------------
 
 def test_integration_start_with_case_variant_repo_dir(tmp_path):
     repo = tmp_path / "ProbablyFine"
@@ -1074,6 +1107,10 @@ def test_integration_run_heartbeat_message(tmp_path, monkeypatch):
     assert any("Still running in session 'default'" in t for t in texts)
 
 
+# ---------------------------------------------------------------------------
+# Runtime options, lifecycle persistence, and operator visibility commands
+# ---------------------------------------------------------------------------
+
 def test_integration_options_show_and_set_runtime(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -1217,6 +1254,10 @@ def test_integration_cfg_set_returns_hint(tmp_path):
     assert any("Use `!cfg` to show effective config." in t for t in texts)
     assert any("!opts set <key> <value>" in t for t in texts)
 
+
+# ---------------------------------------------------------------------------
+# Session expiration, budgets, and audit command surfaces
+# ---------------------------------------------------------------------------
 
 def test_integration_session_prune_removes_idle_sessions(tmp_path):
     repo = tmp_path / "repo"
@@ -1445,6 +1486,10 @@ def test_integration_audit_show_find_and_bundle(tmp_path):
     assert all(not os.path.exists(path) for path in bundle_paths)
 
 
+# ---------------------------------------------------------------------------
+# Help rendering, chunking, and transport-specific reply behavior
+# ---------------------------------------------------------------------------
+
 def test_integration_misc_shortcuts_dispatch(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -1663,6 +1708,10 @@ def test_integration_telegram_threaded_reply(tmp_path):
     assert sink.sent
     assert sink.sent[0][1] == "7"
 
+
+# ---------------------------------------------------------------------------
+# TOTP authorization model (default scope, gh scope, lock state, cooldowns)
+# ---------------------------------------------------------------------------
 
 def test_totp_required_for_state_changing_and_gh(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
@@ -2105,6 +2154,10 @@ def test_totp_rate_limit_lock_and_cooldown(tmp_path, monkeypatch):
     assert "security.totp_unlock" in event_names
     assert "security.totp_success" in event_names
 
+
+# ---------------------------------------------------------------------------
+# Regression tests for local router helper behavior
+# ---------------------------------------------------------------------------
 
 def test_router_dm_binding_is_normalized(tmp_path):
     router, _ = _build_router(tmp_path)
