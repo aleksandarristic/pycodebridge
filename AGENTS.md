@@ -31,6 +31,18 @@
 - Run bridge directly: `./.venv/bin/python -m cmd.bridge -config config.yaml`
 - Optional preflight wrapper: `./run.sh --check`
 
+## Task management
+- Task files live in `.task-management/`:
+  - `.task-management/TODO.md` for immediate work only.
+  - `.task-management/BACKLOG.md` for deferred work.
+  - `.task-management/BUGS.md` for bug backlog items.
+  - `.task-management/DONE.md` for completed tasks.
+  - `.task-management/REMOVED.md` for dropped/cancelled tasks.
+- Every task must have a stable ID in format `TASK-####`.
+- IDs persist when tasks move between TODO/BACKLOG/BUGS/DONE/REMOVED and are never reused.
+- Completed tasks are removed from TODO, BACKLOG, or BUGS and appended to DONE.
+- Removed tasks are removed from TODO, BACKLOG, or BUGS and appended to REMOVED with reason.
+
 ## Done criteria
 - Behavior change is implemented and covered by tests (or explicit reason given if coverage is not possible).
 - Relevant/changed-area tests pass locally (full suite not required by default).
