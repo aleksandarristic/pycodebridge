@@ -15,8 +15,8 @@ from codebridge.codex import Options
 from codebridge.routing.router import Router
 from codebridge.sessions.coordinator import SessionCoordinator
 from codebridge.sessions.state import Store
-from codebridge.totp import TotpAttemptLimiter
-from codebridge.transport import Attachment, Capabilities, MessageEvent
+from codebridge.security.totp import TotpAttemptLimiter
+from codebridge.platform.transport import Attachment, Capabilities, MessageEvent
 
 
 class _FakeEntry:

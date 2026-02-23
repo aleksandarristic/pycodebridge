@@ -10,12 +10,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from codebridge import config as cfgmod
-from codebridge import logging as logmod
-from codebridge.audit import Logger as AuditLogger
+from codebridge.observability import logging as logmod
+from codebridge.observability.audit import Logger as AuditLogger
 from codebridge.codex import Runner
-from codebridge.discord_bot import build_client
+from codebridge.platform.discord_bot import build_client
 from codebridge.services.health import start_health_server
-from codebridge.telegram_bot import build_application, run_polling
+from codebridge.platform.telegram_bot import build_application, run_polling
 from codebridge.routing.router import Router
 from codebridge.sessions.coordinator import SessionCoordinator
 from codebridge.sessions.state import Store
@@ -60,7 +60,7 @@ async def main() -> None:
     state_store = Store(cfg.state.data_dir, cfg.state.lock_timeout_seconds)
     redactor = None
     if cfg.audit.redact:
-        from codebridge.audit import Redactor
+        from codebridge.observability.audit import Redactor
 
         redactor = Redactor(cfg.audit.redact_patterns)
     audit_logger = AuditLogger(cfg.state.log_dir, redactor=redactor)

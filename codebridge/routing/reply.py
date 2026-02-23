@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .helpers import forbidden_message
-from ..transport import ResponseSink
+from ..platform.transport import ResponseSink
 from ..util.ansi import strip_control_codes
 from ..util.chunk import chunk_text
 

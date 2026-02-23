@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Optional
 
 from ..commands import registry as command_registry
 from ..commands import help as help_renderer
-from ..audit import Entry
+from ..observability.audit import Entry
 from ..routing.helpers import (
     DEFAULT_SESSION,
     HELPER_TIMEOUT,
@@ -20,7 +20,7 @@ from ..routing.helpers import (
     run_limited_command,
 )
 from ..sessions.state import utc_now_iso
-from ..transport import Capabilities, MessageEvent, ResponseSink
+from ..platform.transport import Capabilities, MessageEvent, ResponseSink
 from ..util import path as pathutil
 
 if TYPE_CHECKING:

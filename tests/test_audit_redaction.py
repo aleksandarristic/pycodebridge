@@ -1,4 +1,4 @@
-from codebridge.audit import Redactor
+from codebridge.observability.audit import Redactor
 
 
 def test_redactor_default_patterns():

@@ -1,5 +1,5 @@
 from codebridge.routing.reply import send_forbidden, send_reply
-from codebridge.transport import Capabilities, ResponseSink
+from codebridge.platform.transport import Capabilities, ResponseSink
 
 
 class _FakeSink(ResponseSink):

@@ -6,7 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from ..routing.helpers import TESTS_TIMEOUT, build_tree, run_limited_command, trim_output
-from ..transport import ResponseSink
+from ..platform.transport import ResponseSink
 from ..util.ansi import strip_control_codes
 from ..util.chunk import chunk_text
 

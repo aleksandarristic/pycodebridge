@@ -20,7 +20,7 @@ from ..routing.helpers import (
     normalize_session,
     session_exists,
 )
-from ..transport import MessageEvent, ResponseSink
+from ..platform.transport import MessageEvent, ResponseSink
 from ..util import path as pathutil
 
 CommandHandler = Callable[[Any, MessageEvent, ResponseSink, str, str, str], Awaitable[None]]

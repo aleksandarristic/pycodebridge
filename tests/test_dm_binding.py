@@ -3,7 +3,7 @@ import asyncio
 from codebridge import config as cfgmod
 from codebridge.handlers import dm_admin
 from codebridge.sessions.state import Store
-from codebridge.transport import Capabilities, MessageEvent
+from codebridge.platform.transport import Capabilities, MessageEvent
 
 
 class _FakeSink:

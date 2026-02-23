@@ -1,6 +1,6 @@
 import asyncio
 
-from codebridge.transport import MessageEvent, null_typing
+from codebridge.platform.transport import MessageEvent, null_typing
 
 
 def test_message_event_fields():

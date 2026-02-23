@@ -1,7 +1,7 @@
 from codebridge.adapters.discord import DiscordResponseSink
 from codebridge.adapters.telegram import TelegramResponseSink
 from codebridge.adapters.slack import SlackResponseSink
-from codebridge.transport import Capabilities
+from codebridge.platform.transport import Capabilities
 
 
 class _FakeChannel:

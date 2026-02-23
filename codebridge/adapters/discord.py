@@ -6,7 +6,7 @@ from typing import Dict
 
 import discord
 
-from ..transport import Attachment, Capabilities, MessageEvent, ResponseSink, null_typing
+from ..platform.transport import Attachment, Capabilities, MessageEvent, ResponseSink, null_typing
 
 
 class DiscordAdapter:

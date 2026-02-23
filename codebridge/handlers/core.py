@@ -20,7 +20,7 @@ from ..routing.helpers import (
     run_limited_command,
     session_exists,
 )
-from ..transport import MessageEvent, ResponseSink
+from ..platform.transport import MessageEvent, ResponseSink
 
 if TYPE_CHECKING:
     from ..routing.router import Router

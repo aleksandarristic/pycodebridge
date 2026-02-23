@@ -6,7 +6,7 @@ from codebridge.codex import Options
 from codebridge.routing.router import Router
 from codebridge.sessions.coordinator import SessionCoordinator
 from codebridge.sessions.state import Store
-from codebridge.transport import Capabilities, MessageEvent
+from codebridge.platform.transport import Capabilities, MessageEvent
 
 
 class _FakeEntry:

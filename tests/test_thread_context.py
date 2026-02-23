@@ -1,5 +1,5 @@
 from codebridge.routing.router import _ThreadContextSink
-from codebridge.transport import Capabilities
+from codebridge.platform.transport import Capabilities
 
 
 class _FakeSink:

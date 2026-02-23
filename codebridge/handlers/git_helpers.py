@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from ..commands.parse import parse_log_count
 from ..routing.helpers import find_unsafe_git_flag, has_forbidden_flags, run_limited_command, trim_output
-from ..transport import ResponseSink
+from ..platform.transport import ResponseSink
 from ..util.ansi import strip_control_codes
 from ..util.chunk import chunk_text
 

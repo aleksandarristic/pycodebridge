@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from ..transport import Capabilities, MessageEvent, ResponseSink, null_typing
+from ..platform.transport import Capabilities, MessageEvent, ResponseSink, null_typing
 
 
 class SlackAdapter:

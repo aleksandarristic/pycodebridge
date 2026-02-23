@@ -1,5 +1,5 @@
 
-from codebridge.audit import Logger
+from codebridge.observability.audit import Logger
 
 
 def test_audit_start_and_summaries(tmp_path):

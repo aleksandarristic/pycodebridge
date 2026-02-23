@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import asyncio
 
-from codebridge.discord_bot import BridgeClient
+from codebridge.platform.discord_bot import BridgeClient
 
 
 class _FakeRouter:

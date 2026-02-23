@@ -1,4 +1,4 @@
-from codebridge.audit_helpers import AuditHelper
+from codebridge.observability.audit_helpers import AuditHelper
 
 
 class _FakeEntry:

@@ -8,7 +8,7 @@ from typing import Awaitable, Callable, Dict
 
 from .. import config as cfgmod
 from ..routing.helpers import PendingUpload, UPLOAD_TTL_SECONDS
-from ..transport import MessageEvent, ResponseSink
+from ..platform.transport import MessageEvent, ResponseSink
 from ..util import path as pathutil
 
 

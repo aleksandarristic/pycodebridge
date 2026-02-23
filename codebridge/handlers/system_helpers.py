@@ -9,7 +9,7 @@ import shutil
 from typing import TYPE_CHECKING
 
 from ..routing.helpers import HELPER_TIMEOUT, run_limited_command
-from ..transport import ResponseSink
+from ..platform.transport import ResponseSink
 
 if TYPE_CHECKING:
     from ..routing.router import Router

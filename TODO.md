@@ -5,7 +5,16 @@ Current status:
   (`routing/`, `commands/`, `sessions/`, `services/`) with backward-compatible top-level shims and updated docs.
 
 TODO (Near-term):
-- (none)
+- Final-message ordering hardening for run lifecycle output.
+  - Goal: prevent stale/intermediate progress updates from appearing after a run-complete message.
+  - Scope:
+    - Emit a single authoritative terminal event for each run (success/failure/cancelled).
+    - Suppress or ignore late progress events once terminal state is set.
+    - Add clear run-state metadata so transports can order/filter consistently.
+  - Acceptance criteria:
+    - After terminal event emission, no additional progress update is delivered for that run.
+    - User-visible last message is always terminal status for the run.
+    - Regression test covers out-of-order event delivery scenario.
 
 Backlog:
 

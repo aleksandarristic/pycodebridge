@@ -7,7 +7,7 @@ import mimetypes
 import os
 from typing import Any
 
-from ..transport import Attachment, Capabilities, MessageEvent, ResponseSink, null_typing
+from ..platform.transport import Attachment, Capabilities, MessageEvent, ResponseSink, null_typing
 
 
 class TelegramAdapter:

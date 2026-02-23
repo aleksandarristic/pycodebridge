@@ -15,12 +15,12 @@ import tempfile
 import zipfile
 
 from .. import config as cfgmod
-from ..audit import Entry, Logger as AuditLogger
-from ..audit_helpers import AuditHelper
+from ..observability.audit import Entry, Logger as AuditLogger
+from ..observability.audit_helpers import AuditHelper
 from ..codex import Event, Options, Runner, display_texts, parse_event
 from ..sessions.coordinator import SessionCoordinator
 from ..sessions.state import Store, utc_now_iso
-from ..transport import Capabilities, MessageEvent, ResponseSink, null_typing
+from ..platform.transport import Capabilities, MessageEvent, ResponseSink, null_typing
 from ..util import path as pathutil
 from ..handlers import core as core_handlers
 from ..handlers import dm_admin as dm_admin_handlers
@@ -35,7 +35,7 @@ from .reply import send_forbidden, send_reply
 from ..util.ansi import strip_control_codes
 from ..util.chunk import chunk_text
 from ..util.prompt import needs_user_input
-from ..totp import TotpAttemptLimiter, verify_totp
+from ..security.totp import TotpAttemptLimiter, verify_totp
 from ..services import git_bootstrap
 from ..commands import help as help_renderer
 from .helpers import (

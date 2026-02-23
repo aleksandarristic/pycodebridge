@@ -6,8 +6,8 @@ from __future__ import annotations
 from telegram import Update
 from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageHandler, filters
 
-from .adapters.telegram import TelegramAdapter
-from .routing.router import Router
+from ..adapters.telegram import TelegramAdapter
+from ..routing.router import Router
 
 
 def build_application(router: Router, token: str) -> Application:
