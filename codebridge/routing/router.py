@@ -2611,6 +2611,7 @@ class Router:
         retry: list[str] = []
         sandbox_value = ""
         has_sandbox_flag = False
+        approval_value = ""
         i = 0
         while i < len(args):
             token = args[i]
@@ -2625,7 +2626,14 @@ class Router:
                     continue
                 i += 1
                 continue
-            if token in {"-a", "--model"}:
+            if token == "-a":
+                if i + 1 < len(args):
+                    approval_value = args[i + 1]
+                    i += 2
+                    continue
+                i += 1
+                continue
+            if token == "--model":
                 i += 2
                 continue
             if token == "-c":
@@ -2633,6 +2641,8 @@ class Router:
                     key, value = self._parse_config_override(args[i + 1])
                     if key == "sandbox_mode" and value:
                         sandbox_value = value
+                    if key == "approval_policy" and value:
+                        approval_value = value
                     i += 2
                     continue
                 i += 1
@@ -2646,6 +2656,13 @@ class Router:
                 if cd_idx + 1 < len(retry):
                     insert_at = cd_idx + 2
             retry[insert_at:insert_at] = ["--sandbox", sandbox_value]
+        if approval_value and "-a" not in retry:
+            insert_at = len(retry)
+            if "--sandbox" in retry:
+                sb_idx = retry.index("--sandbox")
+                if sb_idx + 1 < len(retry):
+                    insert_at = sb_idx + 2
+            retry[insert_at:insert_at] = ["-a", approval_value]
         return retry
 
     def _parse_config_override(self, token: str) -> tuple[str, str]:

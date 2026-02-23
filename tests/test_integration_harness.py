@@ -1837,7 +1837,7 @@ def test_router_dm_binding_is_normalized(tmp_path):
     assert router.get_dm_binding(event) == "probablyfine"
 
 
-def test_router_compat_retry_args_drops_resume_and_optional_flags(tmp_path):
+def test_router_compat_retry_args_preserves_resume_context_sandbox_and_approval(tmp_path):
     router, _ = _build_router(tmp_path)
     args = [
         "exec",
@@ -1864,6 +1864,8 @@ def test_router_compat_retry_args_drops_resume_and_optional_flags(tmp_path):
         "/workspace/code_root/ProbablyFine",
         "--sandbox",
         "workspace-write",
+        "-a",
+        "on-request",
         "hi there",
     ]
 
@@ -1891,6 +1893,8 @@ def test_router_compat_retry_args_preserves_sandbox_from_config_override(tmp_pat
         "/workspace/code_root/ProbablyFine",
         "--sandbox",
         "workspace-write",
+        "-a",
+        "on-request",
         "fix it",
     ]
 
