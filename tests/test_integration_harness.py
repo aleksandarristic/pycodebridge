@@ -837,6 +837,27 @@ def test_integration_options_set_requires_totp_when_enabled(tmp_path, monkeypatc
     assert any("Runtime option updated: run_heartbeat_seconds=90" in t for t in texts)
 
 
+def test_integration_options_set_allowed_when_unlocked(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)}", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c options set run_heartbeat_seconds 90", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("TOTP unlock active for 1h" in t for t in texts)
+    assert any("Runtime option updated: run_heartbeat_seconds=90" in t for t in texts)
+    assert not any("TOTP required for 'options'" in t for t in texts)
+
+
 def test_integration_options_persist_across_router_restart(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()

@@ -1859,7 +1859,9 @@ class Router:
     def _totp_required_for_command(self, event: MessageEvent, cmd: str, rest: str) -> bool:
         token = self._canonical_command(cmd)
         if token == "options":
-            return not self._options_show_requested(rest)
+            if self._options_show_requested(rest):
+                return False
+            return not self._totp_is_unlocked(event)
         if token == "lock":
             if self._lock_status_requested(rest):
                 return False
