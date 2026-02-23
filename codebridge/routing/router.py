@@ -34,6 +34,7 @@ from ..services.file_transfer import FileTransferService
 from .reply import send_forbidden, send_reply
 from ..util.ansi import strip_control_codes
 from ..util.chunk import chunk_text
+from ..util.coerce import parse_bool
 from ..util.prompt import needs_user_input
 from ..security.totp import TotpAttemptLimiter, verify_totp
 from ..services import git_bootstrap
@@ -1918,7 +1919,7 @@ class Router:
                 raise ValueError(f"{key} must be between 1 and 86400.")
             return parsed
         if key == "show_reasoning_details":
-            return bool(value)
+            return parse_bool(value)
         raise ValueError(f"Unknown option key: {key}")
 
     def _load_runtime_options_from_state(self) -> None:

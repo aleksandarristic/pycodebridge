@@ -84,3 +84,31 @@ def test_state_load_normalizes_repo_names(tmp_path):
     state = store.load()
     assert state.channels["chan"].sessions["default"].repo_name == "probablyfine"
     assert state.dm_bindings["discord:dm-1"] == "probablyfine"
+
+
+def test_state_load_normalizes_runtime_boolean_strings(tmp_path):
+    path = tmp_path / "state.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "runtime_options_global": {"show_reasoning_details": "false"},
+                "runtime_options_channels": {
+                    "chan": {
+                        "show_reasoning_details": "0",
+                        "run_heartbeat_seconds": 120,
+                    },
+                    "chan2": {
+                        "show_reasoning_details": "definitely",
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    store = Store(str(tmp_path))
+    state = store.load()
+    assert state.runtime_options_global["show_reasoning_details"] is False
+    assert state.runtime_options_channels["chan"]["show_reasoning_details"] is False
+    assert state.runtime_options_channels["chan"]["run_heartbeat_seconds"] == 120
+    assert "chan2" not in state.runtime_options_channels

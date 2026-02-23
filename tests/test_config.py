@@ -286,6 +286,96 @@ def test_load_config_runtime_health_fields(tmp_path, monkeypatch):
     assert cfg.runtime.show_reasoning_details is False
 
 
+def test_load_config_boolean_string_values(tmp_path, monkeypatch):
+    code_root = tmp_path / "code"
+    data_dir = tmp_path / "data"
+    code_root.mkdir()
+    data_dir.mkdir()
+
+    monkeypatch.setenv("CODE_ROOT", str(code_root))
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        """
+        discord:
+          guild_id: "123"
+          allowed_user_ids: ["1"]
+          allow_plain_prompts: "false"
+          dm_admin_enabled: "false"
+          totp_enabled: "false"
+        telegram:
+          allow_plain_prompts: "false"
+        codex:
+          code_root: "$CODE_ROOT"
+          network_access: "false"
+        state:
+          data_dir: "%DATA_DIR%"
+          log_dir: "%DATA_DIR%/logs"
+        runtime:
+          show_reasoning_details: "false"
+        audit:
+          redact: "false"
+        git:
+          enabled: "false"
+          apply_on_startup: "false"
+          apply_to_existing_repos: "false"
+          apply_on_repo_create_clone_copy: "false"
+          local_fallback_on_global_failure: "false"
+          allow_dangerous_ops: "false"
+          require_confirmation_for_dangerous_ops: "false"
+        """,
+        encoding="utf-8",
+    )
+    cfg = cfgmod.load(str(cfg_path))
+    assert cfg.discord.allow_plain_prompts is False
+    assert cfg.discord.dm_admin_enabled is False
+    assert cfg.discord.totp_enabled is False
+    assert cfg.telegram.allow_plain_prompts is False
+    assert cfg.codex.network_access is False
+    assert cfg.runtime.show_reasoning_details is False
+    assert cfg.audit.redact is False
+    assert cfg.git.enabled is False
+    assert cfg.git.apply_on_startup is False
+    assert cfg.git.apply_to_existing_repos is False
+    assert cfg.git.apply_on_repo_create_clone_copy is False
+    assert cfg.git.local_fallback_on_global_failure is False
+    assert cfg.git.allow_dangerous_ops is False
+    assert cfg.git.require_confirmation_for_dangerous_ops is False
+
+
+def test_load_config_invalid_boolean_string_fails(tmp_path, monkeypatch):
+    code_root = tmp_path / "code"
+    data_dir = tmp_path / "data"
+    code_root.mkdir()
+    data_dir.mkdir()
+
+    monkeypatch.setenv("CODE_ROOT", str(code_root))
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        """
+        discord:
+          guild_id: "123"
+          allowed_user_ids: ["1"]
+        codex:
+          code_root: "$CODE_ROOT"
+        state:
+          data_dir: "%DATA_DIR%"
+          log_dir: "%DATA_DIR%/logs"
+        runtime:
+          show_reasoning_details: "maybe"
+        """,
+        encoding="utf-8",
+    )
+    try:
+        cfgmod.load(str(cfg_path))
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "runtime.show_reasoning_details" in str(exc)
+
+
 def test_load_config_git_bootstrap_fields(tmp_path, monkeypatch):
     code_root = tmp_path / "code"
     data_dir = tmp_path / "data"

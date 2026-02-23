@@ -3,9 +3,11 @@
 import os
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import yaml
+
+from .util.coerce import parse_bool
 
 DEFAULT_PREFIX = "!c"
 DEFAULT_CHANNEL_REGEX = r"^codex-([A-Za-z0-9._-]+)$"
@@ -220,10 +222,19 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.discord.max_discord_message_chars = int(
         discord.get("max_discord_message_chars", cfg.discord.max_discord_message_chars)
     )
-    cfg.discord.allow_plain_prompts = bool(discord.get("allow_plain_prompts", cfg.discord.allow_plain_prompts))
-    cfg.discord.dm_admin_enabled = bool(discord.get("dm_admin_enabled", cfg.discord.dm_admin_enabled))
+    cfg.discord.allow_plain_prompts = _coerce_bool(
+        discord.get("allow_plain_prompts", cfg.discord.allow_plain_prompts),
+        "discord.allow_plain_prompts",
+    )
+    cfg.discord.dm_admin_enabled = _coerce_bool(
+        discord.get("dm_admin_enabled", cfg.discord.dm_admin_enabled),
+        "discord.dm_admin_enabled",
+    )
     cfg.discord.dm_admin_user_ids = list(discord.get("dm_admin_user_ids", cfg.discord.dm_admin_user_ids) or [])
-    cfg.discord.totp_enabled = bool(discord.get("totp_enabled", cfg.discord.totp_enabled))
+    cfg.discord.totp_enabled = _coerce_bool(
+        discord.get("totp_enabled", cfg.discord.totp_enabled),
+        "discord.totp_enabled",
+    )
     cfg.discord.totp_secret_env = discord.get("totp_secret_env", cfg.discord.totp_secret_env)
     cfg.discord.totp_window = int(discord.get("totp_window", cfg.discord.totp_window))
     cfg.discord.totp_max_failures = int(discord.get("totp_max_failures", cfg.discord.totp_max_failures))
@@ -237,15 +248,24 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.telegram.allowed_user_ids = list(telegram.get("allowed_user_ids", cfg.telegram.allowed_user_ids) or [])
     cfg.telegram.prefix = telegram.get("prefix", cfg.telegram.prefix)
     cfg.telegram.channel_name_regex = telegram.get("channel_name_regex", cfg.telegram.channel_name_regex)
-    cfg.telegram.allow_plain_prompts = bool(telegram.get("allow_plain_prompts", cfg.telegram.allow_plain_prompts))
+    cfg.telegram.allow_plain_prompts = _coerce_bool(
+        telegram.get("allow_plain_prompts", cfg.telegram.allow_plain_prompts),
+        "telegram.allow_plain_prompts",
+    )
 
     codex = raw.get("codex", {}) or {}
     cfg.codex.binary = codex.get("binary", cfg.codex.binary)
     cfg.codex.code_root = codex.get("code_root", cfg.codex.code_root)
     cfg.codex.sandbox = codex.get("sandbox", cfg.codex.sandbox)
     cfg.codex.ask_for_approval = codex.get("ask_for_approval", cfg.codex.ask_for_approval)
-    cfg.codex.network_access = bool(codex.get("network_access", cfg.codex.network_access))
-    cfg.codex.json = bool(codex.get("json", cfg.codex.json))
+    cfg.codex.network_access = _coerce_bool(
+        codex.get("network_access", cfg.codex.network_access),
+        "codex.network_access",
+    )
+    cfg.codex.json = _coerce_bool(
+        codex.get("json", cfg.codex.json),
+        "codex.json",
+    )
     cfg.codex.start_prompt = codex.get("start_prompt", cfg.codex.start_prompt)
     cfg.codex.model = codex.get("model", cfg.codex.model)
     cfg.codex.model_reasoning_effort = codex.get("model_reasoning_effort", cfg.codex.model_reasoning_effort)
@@ -267,12 +287,16 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.runtime.run_completion_min_seconds = int(
         runtime.get("run_completion_min_seconds", cfg.runtime.run_completion_min_seconds)
     )
-    cfg.runtime.show_reasoning_details = bool(
-        runtime.get("show_reasoning_details", cfg.runtime.show_reasoning_details)
+    cfg.runtime.show_reasoning_details = _coerce_bool(
+        runtime.get("show_reasoning_details", cfg.runtime.show_reasoning_details),
+        "runtime.show_reasoning_details",
     )
 
     audit = raw.get("audit", {}) or {}
-    cfg.audit.redact = bool(audit.get("redact", cfg.audit.redact))
+    cfg.audit.redact = _coerce_bool(
+        audit.get("redact", cfg.audit.redact),
+        "audit.redact",
+    )
     cfg.audit.redact_patterns = list(audit.get("redact_patterns", cfg.audit.redact_patterns) or [])
 
     files = raw.get("files", {}) or {}
@@ -282,22 +306,37 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.transport.adapter = transport.get("adapter", cfg.transport.adapter)
 
     git = raw.get("git", {}) or {}
-    cfg.git.enabled = bool(git.get("enabled", cfg.git.enabled))
+    cfg.git.enabled = _coerce_bool(
+        git.get("enabled", cfg.git.enabled),
+        "git.enabled",
+    )
     cfg.git.user_name = git.get("user_name", cfg.git.user_name)
     cfg.git.user_email = git.get("user_email", cfg.git.user_email)
     cfg.git.credential_helper = git.get("credential_helper", cfg.git.credential_helper)
     cfg.git.global_config_path = git.get("global_config_path", cfg.git.global_config_path)
-    cfg.git.apply_on_startup = bool(git.get("apply_on_startup", cfg.git.apply_on_startup))
-    cfg.git.apply_to_existing_repos = bool(git.get("apply_to_existing_repos", cfg.git.apply_to_existing_repos))
-    cfg.git.apply_on_repo_create_clone_copy = bool(
-        git.get("apply_on_repo_create_clone_copy", cfg.git.apply_on_repo_create_clone_copy)
+    cfg.git.apply_on_startup = _coerce_bool(
+        git.get("apply_on_startup", cfg.git.apply_on_startup),
+        "git.apply_on_startup",
     )
-    cfg.git.local_fallback_on_global_failure = bool(
-        git.get("local_fallback_on_global_failure", cfg.git.local_fallback_on_global_failure)
+    cfg.git.apply_to_existing_repos = _coerce_bool(
+        git.get("apply_to_existing_repos", cfg.git.apply_to_existing_repos),
+        "git.apply_to_existing_repos",
     )
-    cfg.git.allow_dangerous_ops = bool(git.get("allow_dangerous_ops", cfg.git.allow_dangerous_ops))
-    cfg.git.require_confirmation_for_dangerous_ops = bool(
-        git.get("require_confirmation_for_dangerous_ops", cfg.git.require_confirmation_for_dangerous_ops)
+    cfg.git.apply_on_repo_create_clone_copy = _coerce_bool(
+        git.get("apply_on_repo_create_clone_copy", cfg.git.apply_on_repo_create_clone_copy),
+        "git.apply_on_repo_create_clone_copy",
+    )
+    cfg.git.local_fallback_on_global_failure = _coerce_bool(
+        git.get("local_fallback_on_global_failure", cfg.git.local_fallback_on_global_failure),
+        "git.local_fallback_on_global_failure",
+    )
+    cfg.git.allow_dangerous_ops = _coerce_bool(
+        git.get("allow_dangerous_ops", cfg.git.allow_dangerous_ops),
+        "git.allow_dangerous_ops",
+    )
+    cfg.git.require_confirmation_for_dangerous_ops = _coerce_bool(
+        git.get("require_confirmation_for_dangerous_ops", cfg.git.require_confirmation_for_dangerous_ops),
+        "git.require_confirmation_for_dangerous_ops",
     )
     cfg.git.dangerous_confirmation_token = str(
         git.get("dangerous_confirmation_token", cfg.git.dangerous_confirmation_token)
@@ -333,7 +372,7 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.codex.sandbox = DEFAULT_SANDBOX
     if cfg.codex.ask_for_approval is None:
         cfg.codex.ask_for_approval = ""
-    cfg.codex.network_access = bool(cfg.codex.network_access)
+    cfg.codex.network_access = _coerce_bool(cfg.codex.network_access, "codex.network_access")
     if not cfg.codex.start_prompt:
         cfg.codex.start_prompt = DEFAULT_START_PROMPT
     if cfg.codex.env is None:
@@ -355,8 +394,8 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.runtime.run_heartbeat_seconds = 120
     if cfg.runtime.run_completion_min_seconds <= 0:
         cfg.runtime.run_completion_min_seconds = 300
-    cfg.runtime.show_reasoning_details = bool(cfg.runtime.show_reasoning_details)
-    cfg.audit.redact = bool(cfg.audit.redact)
+    cfg.runtime.show_reasoning_details = _coerce_bool(cfg.runtime.show_reasoning_details, "runtime.show_reasoning_details")
+    cfg.audit.redact = _coerce_bool(cfg.audit.redact, "audit.redact")
     if cfg.files.max_upload_mb <= 0:
         cfg.files.max_upload_mb = DEFAULT_MAX_UPLOAD_MB
     if not cfg.transport.adapter:
@@ -378,6 +417,14 @@ def _expand_paths(cfg: Config) -> None:
     cfg.state.log_dir = _expand_path(cfg.state.log_dir)
     cfg.git.global_config_path = _expand_path(cfg.git.global_config_path)
     cfg.repo_bootstrap.agents_template = _expand_path(cfg.repo_bootstrap.agents_template)
+
+
+def _coerce_bool(value: Any, field: str) -> bool:
+    """Parse a strict boolean from bool/int/string values."""
+    try:
+        return parse_bool(value)
+    except ValueError as exc:
+        raise ValueError(f"{field} must be a boolean") from exc
 
 
 def _validate(cfg: Config) -> None:

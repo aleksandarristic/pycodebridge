@@ -10,6 +10,8 @@ from filelock import FileLock
 from ..util import path as pathutil
 
 CURRENT_VERSION = 1
+_BOOL_TRUE = {"1", "true", "yes", "on"}
+_BOOL_FALSE = {"0", "false", "no", "off"}
 
 
 @dataclass
@@ -238,5 +240,21 @@ def _normalize_runtime_option_value(key: str, value: Any) -> Any:
             return parsed
         return None
     if token == "show_reasoning_details":
-        return bool(value)
+        return _normalize_bool(value)
+    return None
+
+
+def _normalize_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        if value in (0, 1):
+            return bool(value)
+        return None
+    if isinstance(value, str):
+        token = value.strip().lower()
+        if token in _BOOL_TRUE:
+            return True
+        if token in _BOOL_FALSE:
+            return False
     return None
