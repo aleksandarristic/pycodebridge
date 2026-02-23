@@ -198,6 +198,7 @@ async def dm_create_repo(
     _, err = await run_limited_command(repo_path, ["git", "init"])
     if err:
         return err
+    await router.bootstrap_repo_git_config(repo_path)
     try:
         router.seed_agents_template(repo_path)
     except Exception as exc:
@@ -231,6 +232,7 @@ async def dm_clone_repo(
     _, err = await run_limited_command(os.path.dirname(repo_path), ["git", "clone", clone_url, repo_path], timeout=HELPER_TIMEOUT * 2)
     if err:
         return err
+    await router.bootstrap_repo_git_config(repo_path)
     await dm_reply(router, sink, entry, f"Clone complete: {clone_url} -> {repo_path}. Use `#codex-{repo_name}` for prompts.")
     router.logger.info("dm.bind.clonerepo", extra={"platform": event.platform, "user_id": event.author_id, "repo": repo_name})
     router.logger.info("dm.clonerepo.ok", extra={"user_id": event.author_id, "repo": repo_name, "url": clone_url, "path": repo_path})
@@ -262,6 +264,7 @@ async def dm_copy_repo(
     _, err = await run_limited_command(dst_path, ["git", "init"])
     if err:
         return err
+    await router.bootstrap_repo_git_config(dst_path)
     await dm_reply(router, sink, entry, f"Copied repo to {dst_path}. Continue in #codex-{to_name}")
     router.logger.info("dm.bind.copyrepo", extra={"platform": event.platform, "user_id": event.author_id, "repo": to_name})
     router.logger.info("dm.copyrepo.ok", extra={"user_id": event.author_id, "repo": from_name, "target": dst_path})
