@@ -1057,6 +1057,9 @@ def test_integration_audit_show_find_and_bundle(tmp_path):
     assert any("Audit matches for `start`" in t for t in texts)
     assert any("Audit bundle ready" in t for t in texts)
     assert any(name == "audit-000001.zip" for _, name, _, _ in sink.files)
+    bundle_paths = [path for path, name, _, _ in sink.files if name == "audit-000001.zip"]
+    assert bundle_paths
+    assert all(not os.path.exists(path) for path in bundle_paths)
 
 
 def test_integration_misc_shortcuts_dispatch(tmp_path):

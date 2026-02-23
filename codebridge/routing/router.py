@@ -832,7 +832,13 @@ class Router:
             await self.reply_forbidden(sink, "Unable to create audit bundle.")
             return
         filename = f"audit-{summary.seq}.zip"
-        await sink.send_file(bundle_path, filename)
+        try:
+            await sink.send_file(bundle_path, filename)
+        finally:
+            try:
+                os.remove(bundle_path)
+            except Exception:
+                pass
         await self.reply(sink, f"Audit bundle ready: `{filename}`")
 
     def _audit_find_summary_by_seq(self, channel_id: str, seq: str):
