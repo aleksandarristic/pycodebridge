@@ -12,7 +12,8 @@ Rules:
 
 - [TASK-0010] Discord thread bootstrap message leaks into parent channel on thread creation.
   - Symptom:
-    - Creating a Discord thread in a channel (example title: `Tasks`) and sending `Hi` in the new thread causes bridge replies to appear in the parent channel instead of staying isolated to the thread.
+    - Creating a Discord thread in a channel (example title: `Tasks`) and sending the first message (example: `Hi`) in the new thread causes bridge replies to appear in the parent channel instead of staying isolated to the thread.
+    - The leak appears limited to the first thread message/bootstrap path; follow-up messages in the same thread may route correctly.
     - Observed parent-channel output included the thread title, user text, and Codex bootstrap/prompt messages, for example:
       - `CodeBridge Codex asks: Hi. What do you want to work on in pycodebridge?`
       - `CodeBridge I'll check the task-management files and summarize current tasks ...`
@@ -20,7 +21,8 @@ Rules:
     - In a Discord channel, create a new thread.
     - Name the thread `Tasks`.
     - Send `Hi` as the first message in that thread.
-    - Observe that bridge responses are posted in the parent channel feed.
+    - Observe that bootstrap reply messages are posted in the parent channel feed.
+    - Send a second message in the same thread and confirm whether routing returns to the thread (current report: often yes).
   - Expected:
     - Thread messages and all bridge responses remain scoped to the created thread context only.
     - Parent channel should not receive mirrored bootstrap/session output from thread-local conversation starts.
@@ -29,7 +31,7 @@ Rules:
     - Risks exposing thread work context to unintended channel participants.
     - Creates confusion about active session location and reply target.
   - Investigation scope:
-    - Verify Discord adapter/router reply-target resolution for newly created threads during first-message bootstrap.
+    - Verify Discord adapter/router reply-target resolution for newly created threads specifically during first-message bootstrap/initial session creation.
     - Check whether session mapping initializes against parent channel ID before thread ID is finalized.
     - Add/expand targeted tests for first-message routing behavior in newly created Discord threads.
   - Acceptance criteria:
