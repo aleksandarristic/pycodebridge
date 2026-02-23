@@ -42,7 +42,80 @@ _DM_COMMAND_ALIASES = {
     "opts": "options",
 }
 
-_DM_SHORTCUT_COMMANDS = {"config", "gh", "health", "help", "lock", "options", "status", "unlock", "updates"}
+_DM_SHORTCUT_COMMANDS = {
+    "answer",
+    "approve",
+    "bind",
+    "clone",
+    "config",
+    "copy",
+    "create",
+    "deleterepo",
+    "deny",
+    "gh",
+    "health",
+    "help",
+    "lock",
+    "options",
+    "renamerepo",
+    "repo",
+    "repos",
+    "reset",
+    "sessions",
+    "status",
+    "unbind",
+    "unlock",
+    "updates",
+    "use",
+}
+
+
+def _dm_shortcut_cmdline(content: str) -> str:
+    """Translate DM-only top-level shortcuts into canonical command text."""
+    raw = (content or "").strip()
+    if not raw.startswith("!"):
+        return ""
+    lower = raw.lower()
+
+    def _tail(prefix: str) -> str:
+        return raw[len(prefix) :].strip()
+
+    dm_mapping = (
+        ("!commands", "help"),
+        ("!repos", "repos"),
+        ("!sessions", "sessions"),
+        ("!status", "status"),
+        ("!config", "config"),
+        ("!updates", "updates"),
+        ("!create", "create"),
+        ("!new", "create"),
+        ("!createrepo", "create"),
+        ("!clone", "clone"),
+        ("!clonerepo", "clone"),
+        ("!copy", "copy"),
+        ("!cp", "copy"),
+        ("!copyrepo", "copy"),
+        ("!deleterepo", "deleterepo"),
+        ("!delete", "deleterepo"),
+        ("!del", "deleterepo"),
+        ("!renamerepo", "renamerepo"),
+        ("!rename", "renamerepo"),
+        ("!ren", "renamerepo"),
+        ("!reset", "reset"),
+        ("!lk", "lock"),
+        ("!bind", "bind"),
+        ("!use", "use"),
+        ("!repo", "repo"),
+        ("!unbind", "unbind"),
+        ("!answer", "answer"),
+        ("!reply", "answer"),
+        ("!approve", "approve"),
+        ("!deny", "deny"),
+    )
+    for bang, cmd in dm_mapping:
+        if lower == bang or lower.startswith(bang + " "):
+            return (cmd + " " + _tail(bang)).strip()
+    return ""
 
 
 def _require_dangerous_confirmation_token(router: "Router", rest: str) -> tuple[bool, str]:
@@ -346,6 +419,8 @@ async def _prepare_dm_content(
 ) -> tuple[str, bool]:
     """Apply DM shortcuts and handle pending upload path prompts."""
     shortcut_cmdline = router._shortcut_cmdline(content)
+    if not shortcut_cmdline:
+        shortcut_cmdline = _dm_shortcut_cmdline(content)
     if shortcut_cmdline:
         shortcut_head = shortcut_cmdline.split(maxsplit=1)[0].lower()
         if shortcut_head in _DM_SHORTCUT_COMMANDS:

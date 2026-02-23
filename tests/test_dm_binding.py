@@ -229,7 +229,7 @@ def test_dm_binding_flow(tmp_path):
     sink = _FakeSink("dm-1")
     event = MessageEvent(
         platform="telegram",
-        content="!c bind repo",
+        content="!bind repo",
         channel_id="dm-1",
         channel_name="",
         author_id="user",
@@ -241,7 +241,7 @@ def test_dm_binding_flow(tmp_path):
         await dm_admin.handle_dm_message(router, event, sink)
         event_status = MessageEvent(
             platform="telegram",
-            content="!c status",
+            content="!status",
             channel_id="dm-1",
             channel_name="",
             author_id="user",
@@ -251,7 +251,7 @@ def test_dm_binding_flow(tmp_path):
         await dm_admin.handle_dm_message(router, event_status, sink)
         event_unbind = MessageEvent(
             platform="telegram",
-            content="!c unbind",
+            content="!unbind",
             channel_id="dm-1",
             channel_name="",
             author_id="user",
@@ -699,7 +699,7 @@ def test_dm_admin_reset_all_executes_for_discord_admin_after_yes_confirmation(tm
     sink = _FakeSink("dm-1")
     event = MessageEvent(
         platform="discord",
-        content="!c reset all",
+        content="!reset all",
         channel_id="dm-1",
         channel_name="",
         author_id="user",
@@ -725,6 +725,58 @@ def test_dm_admin_reset_all_executes_for_discord_admin_after_yes_confirmation(tm
     assert router.reset_all_calls == 1
     assert any("Are you sure you want to reset all sessions" in msg for msg in sink.sent)
     assert any("Reset all sessions:" in msg for msg in sink.sent)
+
+
+def test_dm_prepare_content_translates_uncovered_top_level_shortcuts(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.discord.prefix = "!c"
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+    store = Store(cfg.state.data_dir)
+    router = _FakeRouter(cfg, store)
+    sink = _FakeSink("dm-1")
+
+    cases = [
+        ("!repos", "!c repos"),
+        ("!sessions", "!c sessions"),
+        ("!status", "!c status"),
+        ("!config", "!c config"),
+        ("!updates", "!c updates"),
+        ("!create demo", "!c create demo"),
+        ("!new demo", "!c create demo"),
+        ("!clone demo https://github.com/openai/codex.git", "!c clone demo https://github.com/openai/codex.git"),
+        ("!copy from to", "!c copy from to"),
+        ("!del demo", "!c deleterepo demo"),
+        ("!rename from to", "!c renamerepo from to"),
+        ("!reset all", "!c reset all"),
+        ("!bind repo", "!c bind repo"),
+        ("!use repo", "!c use repo"),
+        ("!repo repo fix tests", "!c repo repo fix tests"),
+        ("!unbind", "!c unbind"),
+        ("!answer yes", "!c answer yes"),
+        ("!approve", "!c approve"),
+        ("!deny", "!c deny"),
+        ("!lk status", "!c lock status"),
+        ("!commands", "!c help"),
+    ]
+
+    async def run():
+        for raw, expected in cases:
+            event = MessageEvent(
+                platform="discord",
+                content=raw,
+                channel_id="dm-1",
+                channel_name="",
+                author_id="user",
+                author_is_bot=False,
+                is_dm=True,
+            )
+            content, handled = await dm_admin._prepare_dm_content(router, event, sink, raw, "!c")
+            assert handled is False
+            assert content == expected
+
+    asyncio.run(run())
 
 
 def test_dm_admin_reset_all_requires_all_keyword(tmp_path):

@@ -39,7 +39,7 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
 ## DM admin troubleshooting
 - Ensure `discord.dm_admin_enabled: true` in `config.yaml`.
 - Confirm your user ID is listed in `discord.allowed_user_ids` or `discord.dm_admin_user_ids`.
-- DM the bot directly (not a server channel) and include the `!c` prefix.
+- DM the bot directly (not a server channel) and use either `!c ...` or top-level `!...` command forms.
 - Verify Message Content intent is enabled and saved in the Developer Portal.
 
 ## Channels and access

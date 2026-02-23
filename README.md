@@ -104,6 +104,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `log_dir` (required) — directory for audit logs and `bridge.log`.
 - `lock_timeout_seconds` (default `600`) — stale lock timeout.
 - `conflict_ttl_seconds` (default `60`) — conflict prompt TTL.
+- `session_idle_ttl_seconds` (default `0`) — when >0, sessions idle longer than this require explicit `continue` or `new` before resuming.
 
 ### `runtime`
 - `log_level` (default `info`) — `debug|info|warn|error`.
@@ -185,7 +186,7 @@ TOTP required for GitHub CLI unless gh scope is unlocked:
 TOTP required unless the chat is unlocked:
 - `!c start [session]`
 - `!c resume [session] <prompt>`
-- `!c choose [session] resume|replace|cancel`
+- `!c choose [session] continue|new|cancel`
 - `!c use <session>` (alias `select`)
 - `!c model [session] <id> [reasoning]`
 - `!c thread [session] <id>`
@@ -247,6 +248,7 @@ Security:
 
 Sessions:
 - `start` (alias: `run`), `resume` (alias: `rs`), `choose` (alias: `pick`) `[unlock/default]`
+  - `choose` accepts `continue|new|cancel` (`resume|replace` still supported as aliases).
 - `use` (alias: `select`), `model` (alias: `mdl`), `models` (alias: `mdls`), `thread` (alias: `tid`), `reset`, `spec` (alias: `plan`) (`models` is `[open]`, others `[unlock/default]`)
 
 Repo lifecycle:
@@ -288,7 +290,7 @@ Passthrough:
 - When Codex emits a question/approval prompt (`Codex asks: ...`), a plain reply in the same channel/DM is relayed to the active session input automatically (or use `!c answer ...` explicitly).
 
 ## DM admin commands (optional)
-Enable with `discord.dm_admin_enabled: true`. Commands require the same `!c` prefix in DMs (Discord only).
+Enable with `discord.dm_admin_enabled: true`. `!c` command forms always work in DMs (Discord only), and top-level `!<command>` forms are also supported for DM commands (for example `!repos`, `!bind <repo>`, `!reset all`).
 Repo names passed to DM commands are normalized to lowercase (for example, `ProbablyFine` becomes `probablyfine`).
 
 - `!c help`
