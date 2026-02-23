@@ -54,3 +54,16 @@ Rules:
     - New subcommands are accepted and routed correctly via `!git`.
     - Unsupported/dangerous commands remain blocked by policy.
     - Add targeted tests covering added commands and rejection behavior.
+
+- [TASK-0011] Discord-only transport surface; remove Telegram/Slack wiring while preserving modular transport architecture.
+  - Goal: keep Discord as the only active/supported transport and remove Telegram/Slack runtime/docs surface, without coupling router/handler logic to Discord-specific types.
+  - Scope:
+    - Remove Telegram/Slack runtime entrypoint wiring and adapter-selection paths from startup flow.
+    - Remove Telegram/Slack user docs and configuration examples from primary docs/config templates.
+    - Keep transport abstractions (`MessageEvent`, `ResponseSink`, capability contracts, router boundaries) intact so future transports can be dropped in with new adapters.
+    - Clean up/adjust targeted tests to reflect Discord-only support while retaining modular interface coverage.
+  - Acceptance criteria:
+    - Bridge runs only with Discord transport configuration; Telegram/Slack are not documented as active options.
+    - Transport-agnostic interfaces remain in place and continue to be used across router/handlers/services.
+    - Updated docs clearly describe Discord-only support and how future transport adapters can be reintroduced.
+    - Targeted tests for startup/config/docs-linked behavior pass.
