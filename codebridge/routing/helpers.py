@@ -22,6 +22,7 @@ TESTS_TIMEOUT = 120.0
 HELPER_OUTPUT_LIMIT = 128 * 1024
 UPLOAD_TIMEOUT = 60.0
 UPLOAD_TTL_SECONDS = 300
+COPY_CHUNK_SIZE = 1024 * 1024
 
 
 @dataclass
@@ -272,9 +273,12 @@ def copy_file(src: str, dst: str) -> None:
     """Copy a file to a destination path, creating directories."""
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     with open(src, "rb") as fsrc:
-        data = fsrc.read()
-    with open(dst, "wb") as fdst:
-        fdst.write(data)
+        with open(dst, "wb") as fdst:
+            while True:
+                chunk = fsrc.read(COPY_CHUNK_SIZE)
+                if not chunk:
+                    break
+                fdst.write(chunk)
 
 
 def trim_output(text: str, max_lines: int, max_bytes: int) -> str:
