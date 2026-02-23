@@ -19,7 +19,10 @@ async def handle_git(router: "Router", sink: ResponseSink, repo_path: str, rest:
     """Run safe git helper commands."""
     fields = shlex.split(rest) if rest else []
     if not fields:
-        await router.reply(sink, "Usage: !c git <status|log|branches|branch|show|diff|remote|pull|commit|push|merge> [args]")
+        await router.reply(
+            sink,
+            "Usage: !c git <status|log|branches|branch|show|diff|remote|fetch|pull|add|commit|push|merge> [args]",
+        )
         return
     sub = fields[0].lower()
     args = fields[1:]
@@ -55,11 +58,18 @@ async def handle_git(router: "Router", sink: ResponseSink, repo_path: str, rest:
         wrap_diff = True
     elif sub == "remote":
         git_args = ["remote"] + args
+    elif sub == "fetch":
+        if has_forbidden_flags(args):
+            await router.reply_forbidden(sink, "Forbidden flags detected (--force/-f/--rebase/--squash).")
+            return
+        git_args = ["fetch"] + args
     elif sub == "pull":
         if has_forbidden_flags(args):
             await router.reply_forbidden(sink, "Forbidden flags detected (--force/-f/--rebase/--squash).")
             return
         git_args = ["pull", "--no-rebase"] + args
+    elif sub == "add":
+        git_args = ["add"] + args
     elif sub == "commit":
         if not args:
             await router.reply_forbidden(sink, "Usage: !c git commit <message>")

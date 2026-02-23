@@ -177,6 +177,7 @@ TOTP always required (high-risk in channel):
 - `!c create` (aliases: `createrepo`, `new`)
 - `!c clone <url>` (alias: `clonerepo`)
 - `!c copy <newname>` (aliases: `copyrepo`, `cp`)
+- High-risk git remote mutations: `!c git remote set-url ...`, `!c git remote add ...`, `!c git remote remove ...`, `!c git remote rename ...`, `!c git remote set-head ...`
 - Upload flows (attachment submit and upload-path response)
 
 TOTP required for GitHub CLI unless gh scope is unlocked:
@@ -219,7 +220,7 @@ TOTP required unless the chat is unlocked:
 - `!c download <path>`
 - `!c logs [session] [n]`
 - Shortcut: `!log [n]` (maps to `!c logs [n]`)
-- `!c git <status|log|branches|branch|show|diff|remote|pull|commit|push|merge>`
+- `!c git <status|log|branches|branch|show|diff|remote|fetch|pull|add|commit|push|merge>`
 - Shortcut: `!git ...` (maps to `!c git ...`)
 - Any other prompt-style `!c ...` command that is not in the read-only list
 - Plain prompts in mapped channels when `allow_plain_prompts: true`

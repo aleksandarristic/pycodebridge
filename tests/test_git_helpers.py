@@ -100,3 +100,57 @@ def test_git_helper_branch_delete_is_guarded(monkeypatch):
         assert "local branch delete" in router.forbidden[0]
 
     asyncio.run(run())
+
+
+def test_git_helper_add_routes_command(monkeypatch):
+    async def run():
+        router = _Router()
+        sink = _Sink()
+        seen: list[str] = []
+
+        async def _fake_run(repo_path: str, args: list[str], timeout: float = 30.0, env=None):
+            _ = (repo_path, timeout, env)
+            seen.extend(args)
+            return "ok", None
+
+        monkeypatch.setattr(git_helpers, "run_limited_command", _fake_run)
+        await git_helpers.handle_git(router, sink, "/tmp/repo", "add README.md")
+        assert not router.forbidden
+        assert seen == ["git", "add", "README.md"]
+
+    asyncio.run(run())
+
+
+def test_git_helper_fetch_routes_command(monkeypatch):
+    async def run():
+        router = _Router()
+        sink = _Sink()
+        seen: list[str] = []
+
+        async def _fake_run(repo_path: str, args: list[str], timeout: float = 30.0, env=None):
+            _ = (repo_path, timeout, env)
+            seen.extend(args)
+            return "ok", None
+
+        monkeypatch.setattr(git_helpers, "run_limited_command", _fake_run)
+        await git_helpers.handle_git(router, sink, "/tmp/repo", "fetch origin")
+        assert not router.forbidden
+        assert seen == ["git", "fetch", "origin"]
+
+    asyncio.run(run())
+
+
+def test_git_helper_unknown_subcommand_rejected(monkeypatch):
+    async def run():
+        router = _Router()
+        sink = _Sink()
+
+        async def _fake_run(repo_path: str, args: list[str], timeout: float = 30.0, env=None):
+            _ = (repo_path, args, timeout, env)
+            return "ok", None
+
+        monkeypatch.setattr(git_helpers, "run_limited_command", _fake_run)
+        await git_helpers.handle_git(router, sink, "/tmp/repo", "rebase main")
+        assert router.forbidden == ["Unknown git subcommand."]
+
+    asyncio.run(run())

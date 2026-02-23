@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import os
 import re
+import shlex
 import subprocess
 import time
 from contextlib import asynccontextmanager
@@ -2018,6 +2019,8 @@ class Router:
         if token == "unlock" and self._unlock_status_requested(rest):
             return False
         if token == "git":
+            if self._git_command_is_high_risk(rest):
+                return True
             return not self._totp_is_unlocked(event)
         if token == "gh":
             return not self._totp_is_unlocked(event, _UNLOCK_SCOPE_GH)
@@ -2035,6 +2038,22 @@ class Router:
         if cmd == "unlock" and not self._unlock_status_requested(rest):
             return True
         return False
+
+    def _git_command_is_high_risk(self, rest: str) -> bool:
+        raw = (rest or "").strip()
+        if not raw:
+            return False
+        try:
+            fields = shlex.split(raw)
+        except ValueError:
+            fields = raw.split()
+        if not fields:
+            return False
+        sub = fields[0].lower()
+        args = [a.lower() for a in fields[1:]]
+        if sub != "remote" or not args:
+            return False
+        return args[0] in {"set-url", "add", "remove", "rename", "set-head"}
 
     def _unlock_status_requested(self, rest: str) -> bool:
         parts = (rest or "").strip().lower().split()

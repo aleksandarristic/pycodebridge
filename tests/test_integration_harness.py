@@ -2125,6 +2125,50 @@ def test_totp_git_push_allowed_without_totp_when_unlocked(tmp_path, monkeypatch)
     assert not any("Unknown git subcommand." in msg for msg, _, _ in sink.sent)
 
 
+def test_totp_git_remote_set_url_still_requires_totp_when_unlocked(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "codex-repo"), sink)
+        await router.handle_message(
+            _discord_event("!c git remote set-url origin https://github.com/acme/repo.git", "codex-repo"),
+            sink,
+        )
+
+    asyncio.run(run())
+    assert any("TOTP required for 'git'" in msg for msg, _, _ in sink.sent)
+
+
+def test_totp_bang_git_remote_set_url_still_requires_totp_when_unlocked(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "codex-repo"), sink)
+        await router.handle_message(
+            _discord_event("!git remote set-url origin https://github.com/acme/repo.git", "codex-repo"),
+            sink,
+        )
+
+    asyncio.run(run())
+    assert any("TOTP required for 'git'" in msg for msg, _, _ in sink.sent)
+
+
 def test_totp_bang_gh_requires_gh_scope_or_totp(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()

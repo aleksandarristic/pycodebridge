@@ -298,7 +298,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec("tests", "tests", "run pytest -q", "Repo helpers", _cmd_tests, AUTH_UNLOCK, aliases=("test",)),
         CommandSpec(
             "git",
-            "git <status|log|branches|branch|show|diff|remote|pull|commit|push|merge>",
+            "git <status|log|branches|branch|show|diff|remote|fetch|pull|add|commit|push|merge>",
             "git helpers",
             "Repo helpers",
             _cmd_git,

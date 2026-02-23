@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0008] Broaden known `!git` command coverage (for example: `add`, `fetch`).
+  - Completed: 2026-02-23
+  - Notes: Added `add` and `fetch` support to git helpers, updated usage/help/docs, and added targeted tests for new routing plus unknown-subcommand rejection.
+
 - [TASK-0001] Discord threads as isolated session contexts.
   - Completed: 2026-02-23
   - Notes: Finished thread room isolation hardening, legacy thread-key migration for state/runtime/queue, and regressions for thread stop + mention handling in threads.

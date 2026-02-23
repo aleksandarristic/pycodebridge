@@ -42,6 +42,8 @@ COMMAND_DETAILS = {
         "examples": (
             "!c help git",
             "!c git status",
+            "!c git add README.md",
+            "!c git fetch origin",
             "!c git log 5",
             "!git diff HEAD~1..HEAD",
         ),
