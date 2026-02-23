@@ -241,7 +241,7 @@ def _default_redaction_patterns() -> list[str]:
         r"ghp_[A-Za-z0-9]{20,}",
         r"xox[bap]-[A-Za-z0-9-]{10,}",
         r"xapp-[A-Za-z0-9-]{10,}",
-        r"(?i)(token|secret|password)\\s*[:=]\\s*[^\\s]+",
+        r"(?i)(token|secret|password)\s*[:=]\s*[^\s]+",
     ]
 
 
