@@ -1623,7 +1623,6 @@ class Router:
 
         async with self.typing_context(sink):
             args_to_run = list(original_args)
-            attempted_compat_retry = False
             attempted_stale_resume_retry = False
             while True:
                 stderr_tail.clear()
@@ -1728,30 +1727,6 @@ class Router:
                     stderr_lines=stderr_tail,
                     note="non-zero exit",
                 )
-                if not attempted_compat_retry and self._looks_like_cli_usage_error(rc, stderr_tail):
-                    retry_args = self._compat_retry_args(args_to_run)
-                    if retry_args != args_to_run:
-                        attempted_compat_retry = True
-                        args_to_run = retry_args
-                        self.logger.warning(
-                            "codex.retry.compat",
-                            extra={"channel_id": channel_id, "repo": repo_name, "session": session},
-                        )
-                        self._append_codex_error_log(
-                            channel_id=channel_id,
-                            session=session,
-                            repo_name=repo_name,
-                            repo_path=repo_path,
-                            args=retry_args,
-                            return_code=None,
-                            stderr_lines=stderr_tail,
-                            note="compat retry with simplified args",
-                        )
-                        await self.reply(
-                            sink,
-                            "Codex command failed with current flags; retrying with compatibility args.",
-                        )
-                        continue
                 if (
                     not attempted_stale_resume_retry
                     and self._looks_like_missing_rollout_thread_error(stderr_tail)
@@ -2738,12 +2713,6 @@ class Router:
         except ValueError:
             return raw.lower()
 
-    def _looks_like_cli_usage_error(self, return_code: int, stderr_tail: list[str]) -> bool:
-        if return_code != 2:
-            return False
-        text = "\n".join(stderr_tail).lower()
-        return "--help" in text or "usage:" in text or "unexpected argument" in text
-
     def _looks_like_missing_rollout_thread_error(self, stderr_tail: list[str]) -> bool:
         text = "\n".join(stderr_tail).lower()
         return "missing rollout path for thread" in text
@@ -2766,76 +2735,6 @@ class Router:
         if dropped:
             return retry
         return list(args)
-
-    def _compat_retry_args(self, args: list[str]) -> list[str]:
-        retry: list[str] = []
-        sandbox_value = ""
-        has_sandbox_flag = False
-        approval_value = ""
-        i = 0
-        while i < len(args):
-            token = args[i]
-            if token == "resume":
-                i += 2
-                continue
-            if token == "--sandbox":
-                if i + 1 < len(args):
-                    has_sandbox_flag = True
-                    retry.extend([token, args[i + 1]])
-                    i += 2
-                    continue
-                i += 1
-                continue
-            if token == "-a":
-                if i + 1 < len(args):
-                    approval_value = args[i + 1]
-                    i += 2
-                    continue
-                i += 1
-                continue
-            if token == "--model":
-                i += 2
-                continue
-            if token == "-c":
-                if i + 1 < len(args):
-                    key, value = self._parse_config_override(args[i + 1])
-                    if key == "sandbox_mode" and value:
-                        sandbox_value = value
-                    if key == "approval_policy" and value:
-                        approval_value = value
-                    i += 2
-                    continue
-                i += 1
-                continue
-            retry.append(token)
-            i += 1
-        if sandbox_value and not has_sandbox_flag:
-            insert_at = len(retry)
-            if "--cd" in retry:
-                cd_idx = retry.index("--cd")
-                if cd_idx + 1 < len(retry):
-                    insert_at = cd_idx + 2
-            retry[insert_at:insert_at] = ["--sandbox", sandbox_value]
-        if approval_value and "approval_policy=" not in " ".join(retry):
-            insert_at = len(retry)
-            if "--sandbox" in retry:
-                sb_idx = retry.index("--sandbox")
-                if sb_idx + 1 < len(retry):
-                    insert_at = sb_idx + 2
-            quoted = approval_value.replace("\\", "\\\\").replace('"', '\\"')
-            retry[insert_at:insert_at] = ["-c", f'approval_policy="{quoted}"']
-        return retry
-
-    def _parse_config_override(self, token: str) -> tuple[str, str]:
-        raw = (token or "").strip()
-        if "=" not in raw:
-            return "", ""
-        key, value = raw.split("=", 1)
-        key = key.strip()
-        value = value.strip()
-        if len(value) >= 2 and value[0] == '"' and value[-1] == '"':
-            value = value[1:-1].replace('\\"', '"').replace("\\\\", "\\")
-        return key, value
 
     def _append_codex_error_log(
         self,

@@ -2391,66 +2391,37 @@ def test_router_dm_binding_is_normalized(tmp_path):
     assert router.get_dm_binding(event) == "probablyfine"
 
 
-def test_router_compat_retry_args_preserves_resume_context_sandbox_and_approval(tmp_path):
-    router, _ = _build_router(tmp_path)
-    args = [
-        "exec",
-        "--json",
-        "--cd",
-        "/workspace/code_root/ProbablyFine",
-        "--sandbox",
-        "workspace-write",
-        "-a",
-        "on-request",
-        "--model",
-        "bad-model",
-        "-c",
-        'model_reasoning_effort="medium"',
-        "resume",
-        "--last",
-        "hi there",
-    ]
-    out = router._compat_retry_args(args)
-    assert out == [
-        "exec",
-        "--json",
-        "--cd",
-        "/workspace/code_root/ProbablyFine",
-        "--sandbox",
-        "workspace-write",
-        "-c",
-        'approval_policy="on-request"',
-        "hi there",
-    ]
+def test_run_codex_fails_fast_on_usage_error_without_compat_retry(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
 
+    class _UsageErrorRunner:
+        def __init__(self) -> None:
+            self.calls = []
 
-def test_router_compat_retry_args_preserves_sandbox_from_config_override(tmp_path):
-    router, _ = _build_router(tmp_path)
-    args = [
-        "-c",
-        'sandbox_mode="workspace-write"',
-        "-c",
-        'approval_policy="on-request"',
-        "exec",
-        "--json",
-        "--cd",
-        "/workspace/code_root/ProbablyFine",
-        "resume",
-        "thread_123",
-        "fix it",
-    ]
-    out = router._compat_retry_args(args)
-    assert out == [
-        "exec",
-        "--json",
-        "--cd",
-        "/workspace/code_root/ProbablyFine",
-        "--sandbox",
-        "workspace-write",
-        "-c",
-        'approval_policy="on-request"',
-        "fix it",
-    ]
+        async def run(self, opts: Options):
+            self.calls.append(list(opts.args))
+            if opts.on_stderr:
+                await opts.on_stderr("usage: codex exec [OPTIONS] [PROMPT]")
+            if opts.on_stderr:
+                await opts.on_stderr("error: unexpected argument '--bad-flag'")
+            return _ProcDone(2)
+
+    runner = _UsageErrorRunner()
+    router, _ = _build_router(tmp_path, runner=runner)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    event = _discord_event("!c start", "codex-repo")
+    args = ["exec", "--json", "--cd", str(repo), "--bad-flag", "hello"]
+
+    async def run():
+        await router.run_codex(event, sink, "repo", str(repo), "default", "", "", args)
+
+    asyncio.run(run())
+    assert len(runner.calls) == 1
+    assert runner.calls[0] == args
+    assert any("Codex exited with code 2." in msg for msg, _, _ in sink.sent)
+    assert not any("retrying with compatibility args" in msg for msg, _, _ in sink.sent)
 
 
 def test_router_detects_missing_rollout_thread_error(tmp_path):
