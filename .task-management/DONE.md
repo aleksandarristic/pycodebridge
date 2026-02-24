@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0016] Add top-level `!branch` command for branch + clean-state visibility.
+  - Completed: 2026-02-24
+  - Notes: Added a read-only `branch` command (`!c branch` and `!branch`) that summarizes current branch and working tree clean/not-clean status via git helper output, with targeted tests and docs updates.
+
 - [TASK-0015] Universal channel/thread top-level `!<command>` support and stop/interrupt shortcut semantics.
   - Completed: 2026-02-24
   - Notes: Added generic top-level dispatch for all registered channel command names/aliases (`!command`/`!alias`), mapped `!stop` to `stop` (ESC then SIGINT), updated `interrupt` to ESC-only with aliases `int/esc/escape`, and added/updated targeted routing + help/model command tests and docs.
