@@ -137,6 +137,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 
 ## Commands
 Prefix default is `!c`. Channels should be named `codex-<repo>`.
+In mapped repo channels/threads, every registered command and alias also works as top-level `!<command>` / `!<alias>` (for example `!models`, `!model`, `!status`, `!cfg`, `!logs`).
 When `discord.totp.enabled: true`, use `!c unlock <totp> [ttl]` to unlock default commands for your account (`30m`, `1h`, `2h`; default `1h`).
 Use `!c unlock gh <totp> [ttl]` for GitHub CLI commands, or `!c unlock all <totp> [ttl]` to unlock both scopes.
 Use `!c unlock extend [gh|all] <ttl> --totp <code>` to extend active unlock windows.
@@ -149,7 +150,7 @@ Failed/replayed TOTP attempts are rate-limited per user (`platform:user_id`) usi
 TOTP not required (open in channel):
 - `!c help`
 - `!c help <command>`
-- `!help` (top-level shortcut for `!c help`)
+- `!help` (equivalent to `!c help`)
 - `!c status`
 - `!c stats [session]`
 - `!c peek [session]`
@@ -161,7 +162,7 @@ TOTP not required (open in channel):
 - `!c unlock [gh|all] status`
 - `!c lock [gh|all]`
 - `!c lock status [gh|all]`
-- `!unlock ...`, `!ul ...`, `!lock ...` (top-level shortcuts for `!c unlock ...` / `!c lock ...` in mapped repo channels)
+- `!unlock ...`, `!ul ...`, `!lock ...` (equivalent top-level forms for `!c unlock ...` / `!c lock ...`)
 
 TOTP always required (high-risk in channel; controlled by `discord.totp.command_groups.high_risk`):
 - `!c unlock [gh|all] [ttl]`
@@ -187,11 +188,12 @@ TOTP required unless the chat is unlocked:
 - `!c reset [session]`
 - `!c spec [session]`
 - `!c stop [session]`
-- `!c interrupt [session]` (alias: `esc`)
+- `!c interrupt [session]` (aliases: `int`, `esc`, `escape`)
 - `!c kill [session]`
 - `!c /quit [session]`
-- Shortcut: `!stop [session]` (maps to `!c interrupt [session]` in mapped repo channels)
-- Shortcut: `!pause [session]` (maps to `!c interrupt [session]` in mapped repo channels)
+- `!stop [session]` (equivalent to `!c stop [session]`; sends ESC then SIGINT)
+- `!interrupt` / `!int` / `!esc` / `!escape` (equivalent to `!c interrupt`; sends ESC only)
+- `!pause [session]` (alias for `stop`)
 - `!c steer [session] -- <text>` or `!c steer <text>`
 - Shortcut: `!steer <text>` (maps to `!c steer <text>` in mapped repo channels)
 - Shortcut: `!s <text>` (maps to `!c steer <text>` in mapped repo channels)
@@ -228,8 +230,8 @@ Auth tags used by `!c help`:
 General:
 - `help` (alias: `commands`) `[open]`
 - `help <command>` for command-specific details and examples (for example `!c help git`)
-- `status` (alias: `st`), `stats` (alias: `usage`), `peek` (alias: `pk`), `updates` (aliases: `update`, `version`) `[open]`
-- Top-level shortcuts in mapped repo channels: `!st` -> `!c status`, `!u` -> `!c updates`
+- `status` (alias: `st`), `stats` (alias: `usage`), `peek` (alias: `pk`), `updates` (aliases: `update`, `version`, `u`) `[open]`
+- Top-level command forms are available for all command names and aliases (`!<command>` / `!<alias>`).
   - `status` includes contextual `Related:` hints (for example `!c start`, `!ps`, `!w`) when relevant.
   - `status` also shows lock state for your account (`default` and `gh` unlock remaining time).
 - `config` (alias: `cfg`) `[unlock/default]`
@@ -253,9 +255,10 @@ Repo lifecycle:
 - `copy` (aliases: `copyrepo`, `cp`) `[totp]`
 
 Run control:
-- `stop`, `interrupt` (alias: `esc`), `kill`, `/quit`, `steer`, `answer` (alias: `reply`), `approve`, `deny`, `wait` `[unlock/default]`
-- `!stop [session]` is a top-level shortcut for `interrupt` in mapped repo channels.
-- `!pause [session]` is a top-level shortcut for `interrupt` in mapped repo channels.
+- `stop` (alias: `pause`), `interrupt` (aliases: `int`, `esc`, `escape`), `kill`, `/quit`, `steer`, `answer` (alias: `reply`), `approve` (alias: `y`), `deny` (alias: `n`), `wait` (alias: `w`) `[unlock/default]`
+- `stop` sends ESC then SIGINT; `interrupt` sends ESC only.
+- `!stop [session]` is the top-level form for `stop` in mapped repo channels.
+- `!pause [session]` is an alias of `stop`.
 - `!steer <text>` is a top-level shortcut for `steer` in mapped repo channels.
 - `!s <text>` is a shorthand top-level shortcut for `steer` in mapped repo channels.
 - `!s:<session> <text>` is a shorthand top-level shortcut for `steer <session> -- <text>` in mapped repo channels.

@@ -437,7 +437,7 @@ class Router:
         return remainder, True
 
     def _shortcut_cmdline(self, content: str) -> str:
-        """Translate top-level shortcut commands into canonical !c command lines."""
+        """Translate top-level !<command> forms into canonical command lines."""
         raw = (content or "").strip()
         if not raw.startswith("!"):
             return ""
@@ -456,33 +456,8 @@ class Router:
                     return f"{cmd} {session} -- {text}"
                 return cmd
 
-        mapping = {
-            "!st": "status",
-            "!u": "updates",
-            "!diag": "health",
-            "!w": "wait",
-            "!ps": "ps",
-            "!retry": "rerun",
-            "!y": "approve",
-            "!n": "deny",
-        }
-        if lower in mapping:
-            return mapping[lower]
-
-        def _tail(prefix: str) -> str:
-            return raw[len(prefix) :].strip()
-
-        if lower == "!stop" or lower.startswith("!stop "):
-            return ("interrupt " + _tail("!stop")).strip()
-        if lower == "!pause" or lower.startswith("!pause "):
-            return ("interrupt " + _tail("!pause")).strip()
         if lower == "!s":
             return "steer"
-        if lower.startswith("!steer"):
-            if len(raw) == len("!steer"):
-                return "steer"
-            if raw[len("!steer")].isspace():
-                return ("steer " + raw[len("!steer") :].strip()).strip()
         if lower.startswith("!s"):
             if len(raw) == len("!s"):
                 return "steer"
@@ -495,33 +470,18 @@ class Router:
                 return "answer"
             if raw[len("!a")].isspace():
                 return ("answer " + raw[len("!a") :].strip()).strip()
-        if lower == "!git" or lower.startswith("!git "):
-            return ("git " + _tail("!git")).strip()
-        if lower == "!gh" or lower.startswith("!gh "):
-            return ("gh " + _tail("!gh")).strip()
-        if lower == "!cfg" or lower.startswith("!cfg "):
-            return ("config " + _tail("!cfg")).strip()
-        if lower == "!opts" or lower.startswith("!opts "):
-            return ("options " + _tail("!opts")).strip()
-        if lower == "!help" or lower.startswith("!help "):
-            return ("help " + _tail("!help")).strip()
-        if lower == "!options" or lower.startswith("!options "):
-            return ("options " + _tail("!options")).strip()
-        if lower == "!health" or lower.startswith("!health "):
-            return ("health " + _tail("!health")).strip()
-        if lower == "!diag" or lower.startswith("!diag "):
-            return ("health " + _tail("!diag")).strip()
-        if lower == "!unlock" or lower.startswith("!unlock "):
-            return ("unlock " + _tail("!unlock")).strip()
-        if lower == "!ul" or lower.startswith("!ul "):
-            return ("unlock " + _tail("!ul")).strip()
-        if lower == "!lock" or lower.startswith("!lock "):
-            return ("lock " + _tail("!lock")).strip()
-        if lower == "!reset" or lower.startswith("!reset "):
-            return ("reset " + _tail("!reset")).strip()
-        if lower == "!log" or lower.startswith("!log "):
-            return ("logs " + _tail("!log")).strip()
-        return ""
+
+        after_bang = raw[1:].strip()
+        if not after_bang:
+            return ""
+        parts = after_bang.split(maxsplit=1)
+        token = parts[0].strip().lower()
+        if token not in self._command_registry:
+            return ""
+        tail = parts[1].strip() if len(parts) > 1 else ""
+        if tail:
+            return f"{token} {tail}"
+        return token
 
     async def handle_start(self, event: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, session: str) -> None:
         """Start a new Codex session for a channel/session."""

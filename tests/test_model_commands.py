@@ -191,7 +191,7 @@ def test_start_resume_reports_model_and_model_change_is_queued(tmp_path):
             await asyncio.sleep(0.01)
         assert await router.get_active("chan", "default") is not None
 
-        await router.handle_message(_discord_event("!c model gpt-new", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!model gpt-new", "codex-repo"), sink)
         assert any("Queued model change" in s and "gpt-new" in s for s in sink.sent)
         assert router.session_model("chan", "default") == "gpt-default"
 
@@ -206,7 +206,7 @@ def test_start_resume_reports_model_and_model_change_is_queued(tmp_path):
 
         assert any("model gpt-new" in s.lower() for s in sink.sent)
 
-        await router.handle_message(_discord_event("!c models", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!models", "codex-repo"), sink)
         for _ in range(200):
             if any("Available models" in s for s in sink.sent):
                 break

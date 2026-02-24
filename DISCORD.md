@@ -67,7 +67,8 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
    - set `.env`: `DISCORD_TOTP_SECRET=BASE32_SECRET`
    - include codes in protected commands: `--totp 123456`
    - run `!c help` for categorized commands with auth tags: `[open]`, `[unlock/default]`, `[unlock/gh]`, `[totp]`, `[mixed]`
-   - short aliases are supported for common commands (examples: `status/st`, `config/cfg`, `unlock/ul`, `lock/lk`, `create/new`, `copy/cp`, `download/dl`)
+   - all registered channel commands support both `!c <command>` and top-level `!<command>` forms (including aliases)
+   - short aliases are supported for common commands (examples: `status/st`, `updates/u`, `config/cfg`, `unlock/ul`, `lock/lk`, `create/new`, `copy/cp`, `download/dl`, `interrupt/int/esc/escape`, `approve/y`, `deny/n`, `wait/w`)
    - unlock command scopes for your account with a TTL:
      - `!c unlock <totp> [ttl]` for default scope (`30m`, `1h`, `2h`; default `1h`)
      - `!c unlock gh <totp> [ttl]` for GitHub CLI scope

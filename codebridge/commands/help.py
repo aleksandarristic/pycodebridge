@@ -15,25 +15,8 @@ AUTH_LABELS = {
 }
 
 HELP_SHORTCUT_TRIGGERS = {
-    "status": ("!st",),
-    "updates": ("!u",),
-    "health": ("!health", "!diag"),
-    "wait": ("!w",),
-    "ps": ("!ps",),
-    "rerun": ("!retry",),
-    "approve": ("!y",),
-    "deny": ("!n",),
-    "interrupt": ("!stop [session]", "!pause [session]"),
-    "steer": ("!steer <text>", "!s <text>", "!s:<session> <text>"),
+    "steer": ("!s <text>", "!s:<session> <text>"),
     "answer": ("!a <text>", "!a:<session> <text>"),
-    "git": ("!git ...",),
-    "gh": ("!gh ...",),
-    "logs": ("!log [n]",),
-    "unlock": ("!unlock ...", "!ul ..."),
-    "lock": ("!lock ...",),
-    "help": ("!help",),
-    "config": ("!cfg",),
-    "options": ("!options", "!opts"),
 }
 
 COMMAND_DETAILS = {
@@ -157,6 +140,7 @@ def help_triggers(spec: object, prefix: str = "!c") -> list[str]:
         if head == spec.name:
             for alias in heads:
                 out.append(f"{pref} {alias}{tail}".strip())
+                out.append(f"!{alias}{tail}".strip())
         else:
             out.append(f"{pref} {form}".strip())
     for shortcut in HELP_SHORTCUT_TRIGGERS.get(spec.name, ()):

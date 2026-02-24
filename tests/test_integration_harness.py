@@ -667,7 +667,7 @@ def test_integration_discord_thread_mention_with_prefix_runs_command(tmp_path):
     assert any(args and args[0] == "start" for args in runner.calls)
 
 
-def test_integration_bang_stop_interrupts_active_prompt(tmp_path):
+def test_integration_bang_stop_runs_stop_command(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
@@ -686,7 +686,57 @@ def test_integration_bang_stop_interrupts_active_prompt(tmp_path):
 
     asyncio.run(run())
     assert runner.last_proc is not None
+    assert runner.last_proc.stopped is True
     assert runner.last_proc.interrupted is True
+
+
+def test_integration_bang_interrupt_uses_esc_only(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        for _ in range(50):
+            proc = await router.get_active("chan", "default")
+            if proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        await router.handle_message(_discord_event("!interrupt", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert runner.last_proc is not None
+    assert runner.last_proc.stopped is True
+    assert runner.last_proc.interrupted is False
+
+
+def test_integration_interrupt_aliases_dispatch(tmp_path):
+    for trigger in ("!int", "!esc", "!escape"):
+        case_tmp = tmp_path / f"case-{trigger[1:]}"
+        case_tmp.mkdir()
+        repo = case_tmp / f"repo-{trigger[1:]}"
+        repo.mkdir()
+        (repo / ".git").mkdir()
+
+        router, runner = _build_router(case_tmp)
+        sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+        async def run():
+            await router.handle_message(_discord_event("!c start", f"codex-repo-{trigger[1:]}"), sink)
+            for _ in range(50):
+                proc = await router.get_active("chan", "default")
+                if proc is not None:
+                    break
+                await asyncio.sleep(0.01)
+            await router.handle_message(_discord_event(trigger, f"codex-repo-{trigger[1:]}"), sink)
+
+        asyncio.run(run())
+        assert runner.last_proc is not None
+        assert runner.last_proc.stopped is True
+        assert runner.last_proc.interrupted is False
 
 
 # ---------------------------------------------------------------------------

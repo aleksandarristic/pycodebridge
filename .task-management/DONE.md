@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0015] Universal channel/thread top-level `!<command>` support and stop/interrupt shortcut semantics.
+  - Completed: 2026-02-24
+  - Notes: Added generic top-level dispatch for all registered channel command names/aliases (`!command`/`!alias`), mapped `!stop` to `stop` (ESC then SIGINT), updated `interrupt` to ESC-only with aliases `int/esc/escape`, and added/updated targeted routing + help/model command tests and docs.
+
 - [TASK-0011] Discord-only transport surface; remove Telegram/Slack wiring while preserving modular transport architecture.
   - Completed: 2026-02-24
   - Notes: Removed Telegram/Slack adapters and runtime wiring, deleted Telegram/Slack docs, simplified config validation to Discord-only transport, updated examples/architecture/testing docs, and adjusted targeted tests accordingly.
