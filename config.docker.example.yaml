@@ -7,12 +7,18 @@ discord:
   allow_plain_prompts: false
   dm_admin_enabled: false
   dm_admin_user_ids: []
-  totp_enabled: false
-  totp_secret_env: "DISCORD_TOTP_SECRET"
-  totp_window: 1
-  totp_max_failures: 5
-  totp_failure_window_seconds: 300
-  totp_cooldown_seconds: 300
+  totp:
+    enabled: false
+    secret_env: "DISCORD_TOTP_SECRET"
+    window: 1
+    limiter:
+      max_failures: 5
+      failure_window_seconds: 300
+      cooldown_seconds: 300
+    command_groups:
+      git: true
+      gh: true
+      high_risk: true
   max_discord_message_chars: 1800
 
 telegram:

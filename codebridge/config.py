@@ -58,6 +58,9 @@ class DiscordConfig:
     totp_max_failures: int = 5
     totp_failure_window_seconds: int = 300
     totp_cooldown_seconds: int = 300
+    totp_enforce_git: bool = True
+    totp_enforce_gh: bool = True
+    totp_enforce_high_risk: bool = True
 
     _compiled_regex: Optional[re.Pattern] = field(default=None, init=False, repr=False)
 
@@ -233,17 +236,45 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
         "discord.dm_admin_enabled",
     )
     cfg.discord.dm_admin_user_ids = list(discord.get("dm_admin_user_ids", cfg.discord.dm_admin_user_ids) or [])
+    totp = discord.get("totp", {}) or {}
+    limiter = totp.get("limiter", {}) or {}
+    command_groups = totp.get("command_groups", {}) or {}
     cfg.discord.totp_enabled = _coerce_bool(
-        discord.get("totp_enabled", cfg.discord.totp_enabled),
-        "discord.totp_enabled",
+        totp.get("enabled", discord.get("totp_enabled", cfg.discord.totp_enabled)),
+        "discord.totp.enabled",
     )
-    cfg.discord.totp_secret_env = discord.get("totp_secret_env", cfg.discord.totp_secret_env)
-    cfg.discord.totp_window = int(discord.get("totp_window", cfg.discord.totp_window))
-    cfg.discord.totp_max_failures = int(discord.get("totp_max_failures", cfg.discord.totp_max_failures))
+    cfg.discord.totp_secret_env = totp.get(
+        "secret_env",
+        discord.get("totp_secret_env", cfg.discord.totp_secret_env),
+    )
+    cfg.discord.totp_window = int(totp.get("window", discord.get("totp_window", cfg.discord.totp_window)))
+    cfg.discord.totp_max_failures = int(
+        limiter.get("max_failures", discord.get("totp_max_failures", cfg.discord.totp_max_failures))
+    )
     cfg.discord.totp_failure_window_seconds = int(
-        discord.get("totp_failure_window_seconds", cfg.discord.totp_failure_window_seconds)
+        limiter.get(
+            "failure_window_seconds",
+            discord.get("totp_failure_window_seconds", cfg.discord.totp_failure_window_seconds),
+        )
     )
-    cfg.discord.totp_cooldown_seconds = int(discord.get("totp_cooldown_seconds", cfg.discord.totp_cooldown_seconds))
+    cfg.discord.totp_cooldown_seconds = int(
+        limiter.get("cooldown_seconds", discord.get("totp_cooldown_seconds", cfg.discord.totp_cooldown_seconds))
+    )
+    cfg.discord.totp_enforce_git = _coerce_bool(
+        command_groups.get("git", discord.get("totp_enforce_git", cfg.discord.totp_enforce_git)),
+        "discord.totp.command_groups.git",
+    )
+    cfg.discord.totp_enforce_gh = _coerce_bool(
+        command_groups.get("gh", discord.get("totp_enforce_gh", cfg.discord.totp_enforce_gh)),
+        "discord.totp.command_groups.gh",
+    )
+    cfg.discord.totp_enforce_high_risk = _coerce_bool(
+        command_groups.get(
+            "high_risk",
+            discord.get("totp_enforce_high_risk", cfg.discord.totp_enforce_high_risk),
+        ),
+        "discord.totp.command_groups.high_risk",
+    )
 
     telegram = raw.get("telegram", {}) or {}
     cfg.telegram.token_env = telegram.get("token_env", cfg.telegram.token_env)
@@ -364,6 +395,12 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.discord.channel_name_regex = DEFAULT_CHANNEL_REGEX
     if not cfg.discord.max_discord_message_chars:
         cfg.discord.max_discord_message_chars = DEFAULT_MAX_DISCORD_CHARS
+    cfg.discord.totp_enforce_git = _coerce_bool(cfg.discord.totp_enforce_git, "discord.totp.command_groups.git")
+    cfg.discord.totp_enforce_gh = _coerce_bool(cfg.discord.totp_enforce_gh, "discord.totp.command_groups.gh")
+    cfg.discord.totp_enforce_high_risk = _coerce_bool(
+        cfg.discord.totp_enforce_high_risk,
+        "discord.totp.command_groups.high_risk",
+    )
     if not cfg.telegram.token_env:
         cfg.telegram.token_env = DEFAULT_TELEGRAM_TOKEN_ENV
     if not cfg.telegram.prefix:

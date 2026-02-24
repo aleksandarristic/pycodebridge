@@ -1888,6 +1888,32 @@ def test_totp_unlock_still_requires_totp_for_high_risk(tmp_path, monkeypatch):
     assert any("TOTP required for 'gh'" in msg for msg, _, _ in sink.sent)
 
 
+def test_totp_command_group_toggles_control_enforcement(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    event = _discord_event("!c status", "codex-repo")
+
+    assert router._totp_required_for_command(event, "gh", "pr status") is True
+    router.cfg.discord.totp_enforce_gh = False
+    assert router._totp_required_for_command(event, "gh", "pr status") is False
+
+    assert router._totp_required_for_command(event, "git", "status") is True
+    router.cfg.discord.totp_enforce_git = False
+    assert router._totp_required_for_command(event, "git", "status") is False
+    router.cfg.discord.totp_enforce_git = True
+
+    router._set_totp_unlock(event, "default", 3600)
+    assert router._totp_required_for_command(event, "create", "demo-repo") is True
+    router.cfg.discord.totp_enforce_high_risk = False
+    assert router._totp_required_for_command(event, "create", "demo-repo") is False
+
+
 def test_totp_unlock_status_and_lock(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()

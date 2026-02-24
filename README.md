@@ -76,12 +76,16 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `allow_plain_prompts` (default `false`) — treat non-prefixed messages as prompts in matching channels.
 - `dm_admin_enabled` (default `false`) — enable DM admin commands.
 - `dm_admin_user_ids` (default empty) — allowlist for DM admin (falls back to `allowed_user_ids`).
-- `totp_enabled` (default `false`) — require TOTP for protected commands on all platforms.
-- `totp_secret_env` (default `DISCORD_TOTP_SECRET`) — env var containing Base32 TOTP secret.
-- `totp_window` (default `1`) — accepted clock skew window in 30s steps.
-- `totp_max_failures` (default `5`) — invalid/replayed TOTP attempts allowed before lockout (`0` disables lockout).
-- `totp_failure_window_seconds` (default `300`) — rolling window used when counting failed attempts.
-- `totp_cooldown_seconds` (default `300`) — lockout duration after too many failures (`0` disables lockout).
+- `totp.enabled` (default `false`) — require TOTP for protected commands on all platforms.
+- `totp.secret_env` (default `DISCORD_TOTP_SECRET`) — env var containing Base32 TOTP secret.
+- `totp.window` (default `1`) — accepted clock skew window in 30s steps.
+- `totp.limiter.max_failures` (default `5`) — invalid/replayed TOTP attempts allowed before lockout (`0` disables lockout).
+- `totp.limiter.failure_window_seconds` (default `300`) — rolling window used when counting failed attempts.
+- `totp.limiter.cooldown_seconds` (default `300`) — lockout duration after too many failures (`0` disables lockout).
+- `totp.command_groups.git` (default `true`) — enforce TOTP/default-unlock behavior for `git` commands.
+- `totp.command_groups.gh` (default `true`) — enforce TOTP/gh-unlock behavior for `gh` commands.
+- `totp.command_groups.high_risk` (default `true`) — enforce always-TOTP behavior for high-risk commands (unlock mutations, repo create/clone/copy/delete/rename, and lock extend).
+- Legacy flat keys (`totp_enabled`, `totp_secret_env`, `totp_window`, limiter knobs) are still accepted for backward compatibility.
 - `max_discord_message_chars` (default `1800`) — outbound chunk size.
 
 ### `telegram`
@@ -144,7 +148,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 
 ## Commands
 Prefix default is `!c`. Channels should be named `codex-<repo>`.
-When `discord.totp_enabled: true`, use `!c unlock <totp> [ttl]` to unlock default commands for your account (`30m`, `1h`, `2h`; default `1h`).
+When `discord.totp.enabled: true`, use `!c unlock <totp> [ttl]` to unlock default commands for your account (`30m`, `1h`, `2h`; default `1h`).
 Use `!c unlock gh <totp> [ttl]` for GitHub CLI commands, or `!c unlock all <totp> [ttl]` to unlock both scopes.
 Use `!c unlock extend [gh|all] <ttl> --totp <code>` to extend active unlock windows.
 Use `!c unlock [gh|all] status` or `!c lock status [gh|all]` to check remaining time.
@@ -170,7 +174,7 @@ TOTP not required (open in channel):
 - `!c lock status [gh|all]`
 - `!unlock ...`, `!ul ...`, `!lock ...` (top-level shortcuts for `!c unlock ...` / `!c lock ...` in mapped repo channels)
 
-TOTP always required (high-risk in channel):
+TOTP always required (high-risk in channel; controlled by `discord.totp.command_groups.high_risk`):
 - `!c unlock [gh|all] [ttl]`
 - `!c unlock extend [gh|all] <ttl>`
 - `!c lock extend [gh|all] <ttl>`
@@ -180,7 +184,7 @@ TOTP always required (high-risk in channel):
 - High-risk git remote mutations: `!c git remote set-url ...`, `!c git remote add ...`, `!c git remote remove ...`, `!c git remote rename ...`, `!c git remote set-head ...`
 - Upload flows (attachment submit and upload-path response)
 
-TOTP required for GitHub CLI unless gh scope is unlocked:
+TOTP required for GitHub CLI unless gh scope is unlocked (controlled by `discord.totp.command_groups.gh`):
 - `!c gh <args>`
 - `!gh <args>` (shortcut for `!c gh <args>`)
 
@@ -310,7 +314,7 @@ Repo names passed to DM commands are normalized to lowercase (for example, `Prob
 - `!c unlock/ul [gh|all] [status|ttl]`
 - `!c lock/lk [gh|all]`
 
-When `discord.totp_enabled: true`, TOTP is always required in DMs for:
+When `discord.totp.enabled: true`, TOTP is always required in DMs for:
 - `!c unlock [gh|all] [ttl]`
 - `!c unlock extend [gh|all] <ttl>`
 - `!c lock extend [gh|all] <ttl>`

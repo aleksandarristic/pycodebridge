@@ -148,6 +148,89 @@ def test_load_config_totp_limiter_knobs(tmp_path, monkeypatch):
     assert cfg.discord.totp_cooldown_seconds == 180
 
 
+def test_load_config_totp_nested_section_and_command_groups(tmp_path, monkeypatch):
+    code_root = tmp_path / "code"
+    data_dir = tmp_path / "data"
+    code_root.mkdir()
+    data_dir.mkdir()
+
+    monkeypatch.setenv("CODE_ROOT", str(code_root))
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        """
+        discord:
+          guild_id: "123"
+          allowed_user_ids: ["1"]
+          totp:
+            enabled: true
+            secret_env: "DISCORD_TOTP_SECRET"
+            window: 2
+            limiter:
+              max_failures: 7
+              failure_window_seconds: 90
+              cooldown_seconds: 180
+            command_groups:
+              git: false
+              gh: true
+              high_risk: false
+        codex:
+          code_root: "$CODE_ROOT"
+        state:
+          data_dir: "%DATA_DIR%"
+          log_dir: "%DATA_DIR%/logs"
+        """,
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", "JBSWY3DPEHPK3PXP")
+    cfg = cfgmod.load(str(cfg_path))
+    assert cfg.discord.totp_enabled is True
+    assert cfg.discord.totp_secret_env == "DISCORD_TOTP_SECRET"
+    assert cfg.discord.totp_window == 2
+    assert cfg.discord.totp_max_failures == 7
+    assert cfg.discord.totp_failure_window_seconds == 90
+    assert cfg.discord.totp_cooldown_seconds == 180
+    assert cfg.discord.totp_enforce_git is False
+    assert cfg.discord.totp_enforce_gh is True
+    assert cfg.discord.totp_enforce_high_risk is False
+
+
+def test_load_config_totp_command_groups_invalid_bool(tmp_path, monkeypatch):
+    code_root = tmp_path / "code"
+    data_dir = tmp_path / "data"
+    code_root.mkdir()
+    data_dir.mkdir()
+
+    monkeypatch.setenv("CODE_ROOT", str(code_root))
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        """
+        discord:
+          guild_id: "123"
+          allowed_user_ids: ["1"]
+          totp:
+            command_groups:
+              gh: "maybe"
+        codex:
+          code_root: "$CODE_ROOT"
+        state:
+          data_dir: "%DATA_DIR%"
+          log_dir: "%DATA_DIR%/logs"
+        """,
+        encoding="utf-8",
+    )
+
+    try:
+        cfgmod.load(str(cfg_path))
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "discord.totp.command_groups.gh" in str(exc)
+
+
 def test_load_config_totp_limiter_knobs_validation(tmp_path, monkeypatch):
     code_root = tmp_path / "code"
     data_dir = tmp_path / "data"

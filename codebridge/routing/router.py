@@ -2014,18 +2014,22 @@ class Router:
             if self._lock_status_requested(rest):
                 return False
             if self._lock_extend_requested(rest):
-                return True
+                return self.cfg.discord.totp_enforce_high_risk
             return False
         if token == "unlock" and self._unlock_status_requested(rest):
             return False
         if token == "git":
+            if not self.cfg.discord.totp_enforce_git:
+                return False
             if self._git_command_is_high_risk(rest):
-                return True
+                return self.cfg.discord.totp_enforce_high_risk
             return not self._totp_is_unlocked(event)
         if token == "gh":
+            if not self.cfg.discord.totp_enforce_gh:
+                return False
             return not self._totp_is_unlocked(event, _UNLOCK_SCOPE_GH)
         if self._totp_command_is_high_risk(token, rest):
-            return True
+            return self.cfg.discord.totp_enforce_high_risk
         if token in _READ_ONLY_COMMANDS:
             return False
         if self._totp_is_unlocked(event):

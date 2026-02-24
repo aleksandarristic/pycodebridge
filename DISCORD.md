@@ -63,7 +63,7 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
    Keep this out of version control and env var managers that sync publicly.
 6) Optional: enable DM admin with `discord.dm_admin_enabled: true` and add `discord.dm_admin_user_ids` if you want a separate allowlist for DMs.
 7) Optional: enable TOTP for protected commands (all transports):
-   - `discord.totp_enabled: true`
+   - `discord.totp.enabled: true`
    - set `.env`: `DISCORD_TOTP_SECRET=BASE32_SECRET`
    - include codes in protected commands: `--totp 123456`
    - run `!c help` for categorized commands with auth tags: `[open]`, `[unlock/default]`, `[unlock/gh]`, `[totp]`, `[mixed]`
@@ -75,11 +75,12 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
      - `!c unlock [gh|all] status` to check remaining time
      - `!c lock [gh|all]` to clear unlock scope(s) (`!c lock` clears all)
      - while default scope is unlocked, plain chat prompts are accepted even when `allow_plain_prompts` is `false`
-   - limiter defaults: `totp_max_failures: 5`, `totp_failure_window_seconds: 300`, `totp_cooldown_seconds: 300`
-   - lockout key is per user (`platform:user_id`); set `totp_max_failures: 0` to disable lockout
+   - limiter defaults: `totp.limiter.max_failures: 5`, `totp.limiter.failure_window_seconds: 300`, `totp.limiter.cooldown_seconds: 300`
+   - lockout key is per user (`platform:user_id`); set `totp.limiter.max_failures: 0` to disable lockout
+   - command-group toggles: `totp.command_groups.git`, `totp.command_groups.gh`, `totp.command_groups.high_risk`
    - Channel commands that do NOT require TOTP: `help`, `status`, `stats`, `peek`, `updates`, `models`, `show`/`showrepo`, `changes`/`showchanges`, `ps`, `unlock [gh|all] status`, `lock [gh|all]`
-   - Channel commands that always require TOTP: `unlock [gh|all] [ttl]`, `create`/`createrepo`/`new`, `clone`/`clonerepo`, `copy`/`copyrepo`/`cp`
-   - `gh` requires TOTP unless `unlock gh` (or `unlock all`) is active
+   - Channel commands that always require TOTP: `unlock [gh|all] [ttl]`, `create`/`createrepo`/`new`, `clone`/`clonerepo`, `copy`/`copyrepo`/`cp` (when `totp.command_groups.high_risk=true`)
+   - `gh` requires TOTP unless `unlock gh` (or `unlock all`) is active (when `totp.command_groups.gh=true`)
    - Channel commands that require TOTP unless the channel is unlocked: `start`, `resume`, `choose`, `use/select`, `model`, `thread`, `spec`, `stop`, `kill`, `/quit`, `answer`, `approve`, `deny`, `cancel`, `rerun`, `config`, `tests`, `download`, `logs`, `git` (including `!git` shortcut), and plain prompts
    - Upload flows always require TOTP: attachment submit and upload-path response
    - DM commands that always require TOTP: `unlock [gh|all] [ttl]`, `create`/`createrepo`/`new`, `clone`/`clonerepo`, `copy`/`copyrepo`/`cp`, `deleterepo/delete/del`, `renamerepo/rename/ren`, and DM upload flows
