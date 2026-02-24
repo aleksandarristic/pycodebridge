@@ -68,7 +68,7 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
    - include codes in protected commands: `--totp 123456`
    - run `!c help` for categorized commands with auth tags: `[open]`, `[unlock/default]`, `[unlock/gh]`, `[totp]`, `[mixed]`
    - all registered channel commands support both `!c <command>` and top-level `!<command>` forms (including aliases)
-   - short aliases are supported for common commands (examples: `status/st`, `updates/u`, `config/cfg`, `unlock/ul`, `lock/lk`, `create/new`, `copy/cp`, `download/dl`, `interrupt/int/esc/escape`, `approve/y`, `deny/n`, `wait/w`)
+   - short aliases are supported for common commands (examples: `status/st`, `updates/u`, `config/cfg`, `unlock/ul`, `lock/lk`, `create/new`, `copy/cp`, `download/dl`, `interrupt/int/esc/escape`, `approve/y`, `deny/n`, `wait/w`, plus read-only `branch`)
    - unlock command scopes for your account with a TTL:
      - `!c unlock <totp> [ttl]` for default scope (`30m`, `1h`, `2h`; default `1h`)
      - `!c unlock gh <totp> [ttl]` for GitHub CLI scope
@@ -79,7 +79,7 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
    - limiter defaults: `totp.limiter.max_failures: 5`, `totp.limiter.failure_window_seconds: 300`, `totp.limiter.cooldown_seconds: 300`
    - lockout key is per user (`platform:user_id`); set `totp.limiter.max_failures: 0` to disable lockout
    - command-group toggles: `totp.command_groups.git`, `totp.command_groups.gh`, `totp.command_groups.high_risk`
-   - Channel commands that do NOT require TOTP: `help`, `status`, `stats`, `peek`, `updates`, `models`, `show`/`showrepo`, `changes`/`showchanges`, `ps`, `unlock [gh|all] status`, `lock [gh|all]`
+   - Channel commands that do NOT require TOTP: `help`, `status`, `stats`, `peek`, `updates`, `models`, `branch`, `show`/`showrepo`, `changes`/`showchanges`, `ps`, `unlock [gh|all] status`, `lock [gh|all]`
    - Channel commands that always require TOTP: `unlock [gh|all] [ttl]`, `create`/`createrepo`/`new`, `clone`/`clonerepo`, `copy`/`copyrepo`/`cp` (when `totp.command_groups.high_risk=true`)
    - `gh` requires TOTP unless `unlock gh` (or `unlock all`) is active (when `totp.command_groups.gh=true`)
    - Channel commands that require TOTP unless the channel is unlocked: `start`, `resume`, `choose`, `use/select`, `model`, `thread`, `spec`, `stop`, `kill`, `/quit`, `answer`, `approve`, `deny`, `cancel`, `rerun`, `config`, `tests`, `download`, `logs`, `git` (including `!git` shortcut), and plain prompts

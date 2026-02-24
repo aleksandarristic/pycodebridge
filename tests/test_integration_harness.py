@@ -1787,8 +1787,13 @@ def test_integration_misc_shortcuts_dispatch(tmp_path):
         _ = repo_path
         await self.reply(sink_obj, "health-ok")
 
+    async def _fake_handle_branch(self, sink_obj, repo_path: str) -> None:
+        _ = repo_path
+        await self.reply(sink_obj, "branch-ok")
+
     router.handle_updates = MethodType(_fake_handle_updates, router)
     router.handle_health = MethodType(_fake_handle_health, router)
+    router.handle_branch = MethodType(_fake_handle_branch, router)
 
     async def run():
         await router.handle_message(_discord_event("!help", "codex-repo"), sink)
@@ -1796,6 +1801,7 @@ def test_integration_misc_shortcuts_dispatch(tmp_path):
         await router.handle_message(_discord_event("!u", "codex-repo"), sink)
         await router.handle_message(_discord_event("!health", "codex-repo"), sink)
         await router.handle_message(_discord_event("!diag", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!branch", "codex-repo"), sink)
         await router.handle_message(_discord_event("!w", "codex-repo"), sink)
         await router.handle_message(_discord_event("!unlock status", "codex-repo"), sink)
         await router.handle_message(_discord_event("!ul status", "codex-repo"), sink)
@@ -1821,6 +1827,7 @@ def test_integration_misc_shortcuts_dispatch(tmp_path):
     assert any("Related: !c start" in t for t in texts)
     assert any("updates-ok" in t for t in texts)
     assert sum("health-ok" in t for t in texts) >= 2
+    assert any("branch-ok" in t for t in texts)
     assert any("No sessions are waiting for input." in t for t in texts)
     assert any("TOTP default unlock: inactive." in t for t in texts)
     assert any("TOTP gh unlock: inactive." in t for t in texts)
@@ -2058,6 +2065,7 @@ def test_totp_command_group_toggles_control_enforcement(tmp_path, monkeypatch):
     router.cfg.discord.totp_enforce_git = False
     assert router._totp_required_for_command(event, "git", "status") is False
     router.cfg.discord.totp_enforce_git = True
+    assert router._totp_required_for_command(event, "branch", "") is False
 
     router._set_totp_unlock(event, "default", 3600)
     assert router._totp_required_for_command(event, "create", "demo-repo") is True

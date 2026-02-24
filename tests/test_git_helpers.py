@@ -170,3 +170,38 @@ def test_git_helper_reports_success_when_no_output(monkeypatch):
         assert router.messages == ["git fetch completed successfully (no output)."]
 
     asyncio.run(run())
+
+
+def test_branch_helper_reports_clean_branch(monkeypatch):
+    async def run():
+        router = _Router()
+        sink = _Sink()
+        seen: list[str] = []
+
+        async def _fake_run(repo_path: str, args: list[str], timeout: float = 30.0, env=None):
+            _ = (repo_path, timeout, env)
+            seen.extend(args)
+            return "## main...origin/main", None
+
+        monkeypatch.setattr(git_helpers, "run_limited_command", _fake_run)
+        await git_helpers.handle_branch(router, sink, "/tmp/repo")
+        assert seen == ["git", "status", "--short", "--branch"]
+        assert router.messages == ["Current branch: main\nWorking tree: clean"]
+
+    asyncio.run(run())
+
+
+def test_branch_helper_reports_dirty_branch(monkeypatch):
+    async def run():
+        router = _Router()
+        sink = _Sink()
+
+        async def _fake_run(repo_path: str, args: list[str], timeout: float = 30.0, env=None):
+            _ = (repo_path, args, timeout, env)
+            return "## feature/x\n M README.md\n?? notes.txt", None
+
+        monkeypatch.setattr(git_helpers, "run_limited_command", _fake_run)
+        await git_helpers.handle_branch(router, sink, "/tmp/repo")
+        assert router.messages == ["Current branch: feature/x\nWorking tree: not clean"]
+
+    asyncio.run(run())

@@ -156,6 +156,7 @@ TOTP not required (open in channel):
 - `!c peek [session]`
 - `!c updates`
 - `!c models [session]`
+- `!c branch`
 - `!c show` (alias: `showrepo`)
 - `!c changes` (alias: `showchanges`)
 - `!c ps`
@@ -269,7 +270,7 @@ Run control:
   - `wait` responses include `Related:` hints for quick follow-up (`!c answer`, `!a <text>`, `!ps`, `!c status`).
 
 Repo helpers:
-- `show` (aliases: `showrepo`, `tree`), `changes` (alias: `showchanges`) `[open]`
+- `show` (aliases: `showrepo`, `tree`), `changes` (alias: `showchanges`), `branch` `[open]`
 - `tests` (alias: `test`), `download` (alias: `dl`) `[unlock/default]`
 - `git` `[unlock/default]`
   - Dangerous `git` helper operations (force push, branch delete) require opt-in and explicit confirmation token.

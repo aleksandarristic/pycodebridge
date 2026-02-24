@@ -20,6 +20,13 @@ HELP_SHORTCUT_TRIGGERS = {
 }
 
 COMMAND_DETAILS = {
+    "branch": {
+        "details": "Shows the current branch and whether the working tree is clean.",
+        "examples": (
+            "!c branch",
+            "!branch",
+        ),
+    },
     "git": {
         "details": "Runs safe git helper commands from the mapped repository.",
         "examples": (

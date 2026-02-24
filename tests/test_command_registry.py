@@ -83,6 +83,8 @@ def test_command_registry_help_text():
     assert "**`!c createrepo`**" in text
     assert "**`!c new`**" in text
     assert "Repo helpers:" in text
+    assert "**`!c branch`**" in text
+    assert "**`!branch`**" in text
     assert "**`!git <status|log|branches|branch|show|diff|remote|fetch|pull|add|commit|push|merge>`**" in text
     assert "**`!gh <args>`**" in text
     assert "**`!steer <text>`**" in text

@@ -107,6 +107,36 @@ async def handle_git(router: "Router", sink: ResponseSink, repo_path: str, rest:
         await router.reply(sink, chunk)
 
 
+async def handle_branch(router: "Router", sink: ResponseSink, repo_path: str) -> None:
+    """Show current git branch and clean/not-clean state."""
+    out, err = await run_limited_command(repo_path, ["git", "status", "--short", "--branch"])
+    text = strip_control_codes(out)
+    text = trim_output(text, 200, 4000)
+    if err:
+        rendered = f"git branch error: {err}\n{text}"
+    else:
+        branch, is_clean = _summarize_branch_status(text)
+        rendered = f"Current branch: {branch}\nWorking tree: {'clean' if is_clean else 'not clean'}"
+    for chunk in chunk_text(rendered, router.cfg.discord.max_discord_message_chars):
+        await router.reply(sink, chunk)
+
+
+def _summarize_branch_status(text: str) -> tuple[str, bool]:
+    """Parse `git status --short --branch` output into branch + clean flag."""
+    lines = [line.rstrip() for line in (text or "").splitlines() if line.strip()]
+    branch = "unknown"
+    if lines and lines[0].startswith("##"):
+        head = lines[0][2:].strip()
+        if head.startswith("No commits yet on "):
+            branch = head[len("No commits yet on ") :].strip() or "unknown"
+        elif head.startswith("HEAD (no branch)"):
+            branch = "detached HEAD"
+        else:
+            branch = head.split("...", 1)[0].split(" [", 1)[0].strip() or "unknown"
+    changed = [line for line in lines[1:] if not line.startswith("##")]
+    return branch, not changed
+
+
 def _dangerous_git_reason(sub: str, args: list[str]) -> str:
     if sub == "push":
         force_flags = {"-f", "--force", "--force-with-lease"}
