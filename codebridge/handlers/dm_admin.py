@@ -6,8 +6,6 @@ import os
 import time
 from typing import TYPE_CHECKING, Awaitable, Callable, Optional
 
-from ..commands import registry as command_registry
-from ..commands import help as help_renderer
 from ..observability.audit import Entry
 from ..routing.helpers import (
     DEFAULT_SESSION,
@@ -69,6 +67,63 @@ _DM_SHORTCUT_COMMANDS = {
     "use",
 }
 
+_DM_HELP_OVERVIEW_ORDER = (
+    "help",
+    "bind",
+    "use",
+    "repo",
+    "unbind",
+    "status",
+    "answer",
+    "approve",
+    "deny",
+    "gh",
+    "updates",
+    "health",
+    "options",
+    "unlock",
+    "lock",
+)
+
+_DM_ADMIN_HELP_OVERVIEW_ORDER = (
+    "repos",
+    "sessions",
+    "config",
+    "reset",
+    "create",
+    "clone",
+    "copy",
+    "deleterepo",
+    "renamerepo",
+)
+
+_DM_HELP_DETAILS: dict[str, tuple[str, str]] = {
+    "help": ("help [command]", "show DM command help"),
+    "bind": ("bind <repo>", "bind this DM to a repo"),
+    "use": ("use <repo>", "alias for bind"),
+    "repo": ("repo <repo> <prompt>", "run a one-off prompt against a repo"),
+    "unbind": ("unbind", "clear bound repo"),
+    "status": ("status", "show bound repo and current session"),
+    "answer": ("answer [session] -- <text> | answer <text>", "send input to an active Codex session"),
+    "approve": ("approve [session]", "send 'yes' to active session"),
+    "deny": ("deny [session]", "send 'no' to active session"),
+    "gh": ("gh <args>", "run GitHub CLI (bound repo cwd, or code_root if unbound)"),
+    "updates": ("updates", "check Codex CLI update status"),
+    "health": ("health", "show runtime diagnostics"),
+    "options": ("options [show] | options set <name> <value> [local|global]", "show or set runtime options"),
+    "unlock": ("unlock/ul [gh|all] [status|ttl]", "unlock command scopes for your account"),
+    "lock": ("lock/lk [gh|all]", "clear unlock scopes for your account"),
+    "repos": ("repos", "list repos under code_root"),
+    "sessions": ("sessions", "list sessions across channels"),
+    "config": ("config", "show effective config"),
+    "reset": ("reset all", "request reset-all confirmation"),
+    "create": ("create/new <name>", "create repo"),
+    "clone": ("clone <name> <url>", "clone repo"),
+    "copy": ("copy/cp <from> <to>", "copy repo"),
+    "deleterepo": ("deleterepo/del <name>", "delete repo"),
+    "renamerepo": ("renamerepo/ren <from> <to>", "rename repo"),
+}
+
 
 def _dm_shortcut_cmdline(content: str) -> str:
     """Translate DM-only top-level shortcuts into canonical command text."""
@@ -116,6 +171,42 @@ def _dm_shortcut_cmdline(content: str) -> str:
         if lower == bang or lower.startswith(bang + " "):
             return (cmd + " " + _tail(bang)).strip()
     return ""
+
+
+def _normalize_dm_help_token(token: str) -> str:
+    raw = (token or "").strip().lower()
+    if not raw:
+        return ""
+    if raw == "commands":
+        return "help"
+    return _DM_COMMAND_ALIASES.get(raw, raw)
+
+
+def _render_dm_help_index(prefix: str, is_admin: bool) -> str:
+    lines = [
+        "DM Commands:",
+        "",
+        "Repo-bound / session controls:",
+    ]
+    for cmd in _DM_HELP_OVERVIEW_ORDER:
+        usage, desc = _DM_HELP_DETAILS[cmd]
+        lines.append(f"- `{prefix} {usage}` - {desc}")
+    if is_admin:
+        lines.extend(["", "DM admin-only commands:"])
+        for cmd in _DM_ADMIN_HELP_OVERVIEW_ORDER:
+            usage, desc = _DM_HELP_DETAILS[cmd]
+            lines.append(f"- `{prefix} {usage}` - {desc}")
+    return "\n".join(lines)
+
+
+def _render_dm_help_command(prefix: str, cmd: str, is_admin: bool) -> str | None:
+    allowed = set(_DM_HELP_OVERVIEW_ORDER)
+    if is_admin:
+        allowed.update(_DM_ADMIN_HELP_OVERVIEW_ORDER)
+    if cmd not in allowed:
+        return None
+    usage, desc = _DM_HELP_DETAILS[cmd]
+    return f"DM help `{cmd}`:\n- Usage: `{prefix} {usage}`\n- {desc}"
 
 
 def _require_dangerous_confirmation_token(router: "Router", rest: str) -> tuple[bool, str]:
@@ -523,15 +614,16 @@ async def _dispatch_prefixed_dm_command(
         if not (router._transport_user_allowed(event) or is_admin):
             await send_forbidden("You are not allowed to use this bot.")
             return
-        token = rest.strip().lower()
+        token = _normalize_dm_help_token(rest)
         if not token:
-            await send(command_registry.render_help(router._command_specs, prefix=prefix))
+            await send(_render_dm_help_index(prefix, is_admin))
             return
-        spec = router._command_registry.get(token)
-        if not spec:
-            await send_forbidden(help_renderer.help_not_found(token, router._command_registry, prefix))
+        detail = _render_dm_help_command(prefix, token, is_admin)
+        if not detail:
+            unknown = token or rest.strip()
+            await send_forbidden(f"Unknown DM command `{unknown}`. Use `{prefix} help` to list DM commands.")
             return
-        await send(help_renderer.render_help_command(spec, prefix=prefix))
+        await send(detail)
         return
 
     if cmd in admin_commands:

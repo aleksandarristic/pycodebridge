@@ -517,6 +517,8 @@ class Router:
             return ("unlock " + _tail("!ul")).strip()
         if lower == "!lock" or lower.startswith("!lock "):
             return ("lock " + _tail("!lock")).strip()
+        if lower == "!reset" or lower.startswith("!reset "):
+            return ("reset " + _tail("!reset")).strip()
         if lower == "!log" or lower.startswith("!log "):
             return ("logs " + _tail("!log")).strip()
         return ""

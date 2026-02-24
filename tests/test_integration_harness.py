@@ -820,6 +820,94 @@ def test_integration_reset_session_clears_context_and_allows_fresh_start(tmp_pat
     assert not any("already exists" in msg for msg, _, _ in sink.sent)
 
 
+def test_integration_bang_reset_alias_clears_context_and_allows_fresh_start(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        for _ in range(3):
+            await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+            proc = None
+            for _ in range(100):
+                proc = await router.get_active("chan", "default")
+                if proc is not None:
+                    break
+                await asyncio.sleep(0.01)
+            assert proc is not None
+            await router.handle_message(_discord_event("!reset", "codex-repo"), sink)
+            for _ in range(100):
+                if await router.get_active("chan", "default") is None:
+                    break
+                await asyncio.sleep(0.01)
+            assert proc.killed is True
+
+    asyncio.run(run())
+    state = router.state.load()
+    ch = state.channels.get("chan")
+    if ch:
+        assert "default" not in ch.sessions
+    assert any("reset" in msg.lower() for msg, _, _ in sink.sent)
+    assert len([args for args in runner.calls if args and args[0] == "start"]) >= 3
+
+
+def test_integration_bang_reset_alias_works_in_discord_thread_scope(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    room_key = "discord:chan-parent:thread-a"
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(
+            _discord_event(
+                "!c start",
+                "topic-a",
+                channel_id="thread-a",
+                platform_thread_id="thread-a",
+                parent_channel_id="chan-parent",
+                parent_channel_name="codex-repo",
+            ),
+            sink,
+        )
+        proc = None
+        for _ in range(100):
+            proc = await router.get_active(room_key, "default")
+            if proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        assert proc is not None
+
+        await router.handle_message(
+            _discord_event(
+                "!reset",
+                "topic-a",
+                channel_id="thread-a",
+                platform_thread_id="thread-a",
+                parent_channel_id="chan-parent",
+                parent_channel_name="codex-repo",
+            ),
+            sink,
+        )
+        for _ in range(100):
+            if await router.get_active(room_key, "default") is None:
+                break
+            await asyncio.sleep(0.01)
+        assert proc.killed is True
+
+    asyncio.run(run())
+    state = router.state.load()
+    ch = state.channels.get(room_key)
+    if ch:
+        assert "default" not in ch.sessions
+    assert any("reset" in msg.lower() for msg, thread_id, _ in sink.sent if thread_id == "thread-a")
+
+
 def test_integration_resume_and_download(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -1756,9 +1844,10 @@ def test_integration_dm_shortcuts_and_help_details(tmp_path):
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
-    assert any("Commands:" in t for t in texts)
-    assert any("Help: `git`" in t for t in texts)
-    assert any("!help" in t for t in texts)
+    assert any("DM Commands:" in t for t in texts)
+    assert any("`!c gh <args>`" in t for t in texts)
+    assert any("Unknown DM command `git`." in t for t in texts)
+    assert any("`!c bind <repo>`" in t for t in texts)
     assert any("Bound repo: none" in t for t in texts)
     assert any("updates-ok" in t for t in texts)
     assert sum("health-ok" in t for t in texts) >= 2
