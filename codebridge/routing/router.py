@@ -238,6 +238,18 @@ class Router:
                         return
                 await self.handle_answer(event, sink, relay_session, relay_text)
                 return
+            pending_session = self.current_session_for_event(event)
+            pending_conflict = await self.consume_pending(event.channel_id, pending_session)
+            if pending_conflict is not None:
+                pending_conflict.prompt = content.strip() or (pending_conflict.prompt or "").strip()
+                await self.coordinator.set_pending_conflict(event.channel_id, pending_conflict.session, pending_conflict)
+                try:
+                    repo_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, repo_name)
+                except Exception as exc:
+                    await self.reply_forbidden(sink, f"Repo error: {exc}")
+                    return
+                await self.handle_choose(event, sink, repo_name, repo_path, pending_conflict.session, "new")
+                return
             allow_plain = self._transport_allow_plain_prompts(event)
             if self._totp_enabled(event) and self._totp_is_unlocked(event):
                 allow_plain = True
@@ -472,6 +484,8 @@ class Router:
                 return "answer"
             if raw[len("!a")].isspace():
                 return ("answer " + raw[len("!a") :].strip()).strip()
+        if lower in {"!cont", "!continue"}:
+            return "choose continue"
 
         after_bang = raw[1:].strip()
         if not after_bang:

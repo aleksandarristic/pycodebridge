@@ -60,7 +60,7 @@ async def handle_start(
         await router.reply(
             sink,
             f"Session '{session}' already exists for this channel.\n"
-            "Choose one:\n!c choose continue\n!c choose new\n!c choose cancel",
+            "Choose one:\n!c choose continue\n!c choose new",
         )
         return
 
@@ -114,7 +114,7 @@ async def handle_resume(
                 (
                     f"Session '{session}' is inactive (idle {router._format_duration(idle_seconds)}, "
                     f"TTL {router._format_duration(idle_ttl_seconds)}).\n"
-                    "Choose one:\n!c choose continue\n!c choose new\n!c choose cancel"
+                    "Choose one:\n!c choose continue\n!c choose new"
                 ),
             )
             return
@@ -290,7 +290,7 @@ async def handle_choose(
         await router.reply(sink, "No pending conflict.")
         return
     choice = (choice or "").strip().lower()
-    aliases = {"continue": "resume", "new": "replace", "start": "replace"}
+    aliases = {"continue": "resume", "cont": "resume", "new": "replace", "start": "replace"}
     choice = aliases.get(choice, choice)
     if choice == "resume":
         resume_prompt = (conflict.prompt or "").strip() or "Resumed."
@@ -305,37 +305,32 @@ async def handle_choose(
             skip_idle_ttl_check=True,
         )
         return
-    if choice == "replace":
-        state = router.state.load()
-        model, reasoning = _session_model_reasoning_from_state(router, state, event.channel_id, conflict.session)
-        start_prompt = (
-            (conflict.prompt or "").strip()
-            if conflict.reason == "session_expired"
-            else router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name)
-        ) or router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name)
-        args = router.runner.build_start_args(repo_path, start_prompt, model, reasoning)
+    used_fallback_replace = choice != "replace"
+    state = router.state.load()
+    model, reasoning = _session_model_reasoning_from_state(router, state, event.channel_id, conflict.session)
+    start_prompt = (
+        (conflict.prompt or "").strip()
+        if conflict.reason == "session_expired"
+        else router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name)
+    ) or router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name)
+    args = router.runner.build_start_args(repo_path, start_prompt, model, reasoning)
 
-        async def job() -> None:
-            await router.run_codex(event, sink, repo_name, repo_path, conflict.session, model, reasoning, args)
+    async def job() -> None:
+        await router.run_codex(event, sink, repo_name, repo_path, conflict.session, model, reasoning, args)
 
-        pos, job_id, _ = await router.coordinator.enqueue(event.channel_id, conflict.session, job)
-        router.logger.info(
-            "enqueue.start_replace",
-            extra={
-                "channel_id": event.channel_id,
-                "repo": repo_name,
-                "session": conflict.session,
-                "job": job_id,
-                "pos": pos,
-                "reason": conflict.reason,
-            },
-        )
-        await router.reply(sink, f"Starting a new session in '{conflict.session}'...")
-        return
-    if choice == "cancel":
-        await router.reply(sink, "Cancelled.")
-        return
-    await router.reply(sink, "Unknown choice. Use continue|new|cancel.")
+    pos, job_id, _ = await router.coordinator.enqueue(event.channel_id, conflict.session, job)
+    router.logger.info(
+        "enqueue.start_replace_fallback" if used_fallback_replace else "enqueue.start_replace",
+        extra={
+            "channel_id": event.channel_id,
+            "repo": repo_name,
+            "session": conflict.session,
+            "job": job_id,
+            "pos": pos,
+            "reason": conflict.reason,
+        },
+    )
+    await router.reply(sink, f"Starting a new session in '{conflict.session}'...")
 
 
 def _session_idle_seconds(timestamp: str) -> int:

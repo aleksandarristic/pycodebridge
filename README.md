@@ -182,7 +182,8 @@ TOTP required for GitHub CLI unless gh scope is unlocked (controlled by `discord
 TOTP required unless the chat is unlocked:
 - `!c start [session]`
 - `!c resume [session] <prompt>`
-- `!c choose [session] continue|new|cancel`
+- `!c choose [session] continue|new`
+- `!continue` / `!cont` (shortcut for `!c choose continue` when a conflict prompt is pending)
 - `!c use <session>` (alias `select`)
 - `!c model [session] <id> [reasoning]`
 - `!c thread [session] <id>`
@@ -247,7 +248,8 @@ Security:
 
 Sessions:
 - `start` (alias: `run`), `resume` (alias: `rs`), `choose` (alias: `pick`) `[unlock/default]`
-  - `choose` accepts `continue|new|cancel` (`resume|replace` still supported as aliases).
+  - `choose` accepts `continue|new` (`resume|replace` still supported as aliases).
+  - Shortcut: `!continue` / `!cont` maps to `choose continue` while a conflict is pending.
 - `use` (alias: `select`), `model` (alias: `mdl`), `models` (alias: `mdls`), `thread` (alias: `tid`), `reset`, `spec` (alias: `plan`) (`models` is `[open]`, others `[unlock/default]`)
 
 Repo lifecycle:
