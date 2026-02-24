@@ -11,3 +11,4 @@ Rules:
 ## Active tasks
 - `TASK-0012` Remove compat retry fallback in router; execute Codex only with original args and fail fast on non-zero exit without argument mutation/retry.
 - `TASK-0013` Add comprehensive Codex CLI argument-ordering tests that assert bridge arg-building contract (presence and relative order of required flags/arguments across start/resume variants and supported order permutations).
+- `TASK-0014` Make repo bash scripts executable and update `update.sh` to verify (after container startup) that Codex CLI and GitHub CLI are authenticated inside the container, displaying warn-only status (no update failure) with concrete remediation steps when unauthenticated, and add a dry-run mode.
