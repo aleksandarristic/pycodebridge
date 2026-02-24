@@ -1,7 +1,7 @@
 # AGENTS
 
 ## Intent
-- Maintain and evolve the Codex CLI Bridge (`pycodebridge`), a Python service that routes transport messages (Discord/Telegram) to Codex CLI sessions mapped to local git repos.
+- Maintain and evolve the Codex CLI Bridge (`pycodebridge`), a Python service that routes Discord messages to Codex CLI sessions mapped to local git repos.
 - Keep changes safe for long-running bot behavior: favor explicit command handling, predictable state transitions, and transport-agnostic router behavior.
 - Preserve existing architecture boundaries (`router` + handlers + adapters + services) unless a task explicitly calls for refactoring.
 
@@ -10,7 +10,6 @@
 - Add or update tests whenever behavior changes.
 - Keep command UX consistent with existing aliases/help text and auth expectations.
 - Avoid introducing new dependencies unless necessary for the task.
-- Do not treat Slack as fully supported; it is scaffold-only until explicitly implemented.
 
 ## Python environment rule
 - Always run Python-related commands inside the repo virtual environment.
@@ -59,6 +58,4 @@
 - For new features, include a brief recommendation for model and reasoning settings appropriate to task complexity.
 
 ## Notes
-- Supported transports: Discord and Telegram.
-- Telegram uses long polling.
-- Slack remains scaffold-only.
+- Supported transport: Discord.

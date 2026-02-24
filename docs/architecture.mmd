@@ -1,14 +1,8 @@
 flowchart LR
   subgraph Transport
     Discord[Discord] --> DAdapter[Discord adapter]
-    Telegram[Telegram] --> TAdapter[Telegram adapter]
-    Slack[Slack] -. scaffold .-> SAdapter[Slack adapter]
     DAdapter -->|MessageEvent| Router[Router]
-    TAdapter -->|MessageEvent| Router
-    SAdapter -->|MessageEvent| Router
     Router -->|ResponseSink| DAdapter
-    Router -->|ResponseSink| TAdapter
-    Router -->|ResponseSink| SAdapter
   end
 
   Router --> Queue[Queue Manager]

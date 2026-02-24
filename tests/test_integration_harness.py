@@ -5,7 +5,7 @@ inputs and fake sink/runner collaborators. The focus is behavior contracts:
 
 - command routing and shortcut normalization
 - session lifecycle and run-control semantics
-- Discord/Telegram transport context behavior (threads, replies)
+- Discord transport context behavior (threads, replies)
 - TOTP gating and unlock scope behavior
 - persistence-facing side effects (state, options, audit summaries)
 
@@ -259,7 +259,6 @@ def _build_router(tmp_path, *, totp_enabled: bool = False, runner=None):
     """Construct a Router wired to test doubles and temp-backed state."""
     cfg = cfgmod.Config()
     cfg.discord.allowed_user_ids = ["user"]
-    cfg.telegram.allowed_user_ids = ["user"]
     cfg.discord.totp_enabled = totp_enabled
     cfg.discord.totp_secret_env = "DISCORD_TOTP_SECRET"
     cfg.discord.totp_window = 1
@@ -337,18 +336,6 @@ def _discord_dm_event(content: str, channel_id: str = "dm-1") -> MessageEvent:
         author_id="user",
         author_is_bot=False,
         is_dm=True,
-    )
-
-
-def _telegram_channel_event(content: str, channel_name: str, channel_id: str = "chat") -> MessageEvent:
-    return MessageEvent(
-        platform="telegram",
-        content=content,
-        channel_id=channel_id,
-        channel_name=channel_name,
-        author_id="user",
-        author_is_bot=False,
-        is_dm=False,
     )
 
 
@@ -1796,29 +1783,6 @@ def test_integration_dm_help_is_chunked_for_discord_limit(tmp_path):
     assert any("Commands:" in t for t in texts)
 
 
-def test_integration_telegram_threaded_reply(tmp_path):
-    router, _ = _build_router(tmp_path)
-    sink = _FakeSink(Capabilities(threads=True, replies=True, uploads=True, downloads=True, typing=True))
-    event = MessageEvent(
-        platform="telegram",
-        content="hello",
-        channel_id="chat",
-        channel_name="",
-        author_id="user",
-        author_is_bot=False,
-        is_dm=True,
-        message_id="42",
-        platform_thread_id="7",
-    )
-
-    async def run():
-        await router.handle_message(event, sink)
-
-    asyncio.run(run())
-    assert sink.sent
-    assert sink.sent[0][1] == "7"
-
-
 # ---------------------------------------------------------------------------
 # TOTP authorization model (default scope, gh scope, lock state, cooldowns)
 # ---------------------------------------------------------------------------
@@ -2280,24 +2244,6 @@ def test_totp_required_for_config_tests_download_logs_and_upload(tmp_path, monke
     assert any("TOTP required for 'download'" in msg for msg, _, _ in sink.sent)
     assert any("TOTP required for 'logs'" in msg for msg, _, _ in sink.sent)
     assert any("TOTP required for 'upload'" in msg for msg, _, _ in sink.sent)
-
-
-def test_totp_required_on_telegram_platform(tmp_path, monkeypatch):
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    (repo / ".git").mkdir()
-
-    secret = "JBSWY3DPEHPK3PXP"
-    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
-
-    router, _ = _build_router(tmp_path, totp_enabled=True)
-    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-
-    async def run():
-        await router.handle_message(_telegram_channel_event("!c start", "codex-repo"), sink)
-
-    asyncio.run(run())
-    assert any("TOTP required for 'start'" in msg for msg, _, _ in sink.sent)
 
 
 def test_totp_rate_limit_lock_and_cooldown(tmp_path, monkeypatch):

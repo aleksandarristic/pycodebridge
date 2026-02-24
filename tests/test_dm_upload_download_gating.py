@@ -57,7 +57,7 @@ def _event_with_attachment() -> MessageEvent:
         save=lambda path: _save_to(saved, path),
     )
     event = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="",
         channel_id="dm",
         channel_name="",
@@ -155,7 +155,7 @@ def test_upload_sanitizes_attachment_filename_before_save(tmp_path):
         save=lambda path: _save_to(saved, path),
     )
     request = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="",
         channel_id="dm",
         channel_name="",
@@ -165,7 +165,7 @@ def test_upload_sanitizes_attachment_filename_before_save(tmp_path):
         attachments=[attachment],
     )
     response = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="uploads/",
         channel_id="dm",
         channel_name="",

@@ -62,7 +62,7 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
    `DISCORD_TOKEN=YOUR_TOKEN`
    Keep this out of version control and env var managers that sync publicly.
 6) Optional: enable DM admin with `discord.dm_admin_enabled: true` and add `discord.dm_admin_user_ids` if you want a separate allowlist for DMs.
-7) Optional: enable TOTP for protected commands (all transports):
+7) Optional: enable TOTP for protected commands:
    - `discord.totp.enabled: true`
    - set `.env`: `DISCORD_TOTP_SECRET=BASE32_SECRET`
    - include codes in protected commands: `--totp 123456`

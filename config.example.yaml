@@ -21,13 +21,6 @@ discord:
       high_risk: true
   max_discord_message_chars: 1800
 
-telegram:
-  token_env: "TELEGRAM_TOKEN"
-  allowed_user_ids: ["1234567890"]
-  prefix: "!c"
-  channel_name_regex: "^codex-([A-Za-z0-9._-]+)$"
-  allow_plain_prompts: false
-
 codex:
   binary: "codex"
   code_root: "/home/you/Code"
@@ -63,8 +56,6 @@ audit:
 
 transport:
   adapter: "discord"
-  # adapter: "slack"  # scaffold only
-  # adapter: "telegram"  # scaffold only
 
 git:
   enabled: false

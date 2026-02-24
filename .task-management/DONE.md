@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0011] Discord-only transport surface; remove Telegram/Slack wiring while preserving modular transport architecture.
+  - Completed: 2026-02-24
+  - Notes: Removed Telegram/Slack adapters and runtime wiring, deleted Telegram/Slack docs, simplified config validation to Discord-only transport, updated examples/architecture/testing docs, and adjusted targeted tests accordingly.
+
 - [TASK-0007] Parametrize TOTP requirements in config for command groups.
   - Completed: 2026-02-24
   - Notes: Added nested `discord.totp` config with `command_groups` toggles for `git`, `gh`, and `high_risk`, preserved backward compatibility with legacy flat keys, and updated routing enforcement, docs, examples, and targeted tests.

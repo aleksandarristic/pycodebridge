@@ -15,7 +15,6 @@ DEFAULT_MAX_DISCORD_CHARS = 1800
 DEFAULT_SANDBOX = "workspace-write"
 DEFAULT_LOG_LEVEL = "info"
 DEFAULT_TOKEN_ENV = "DISCORD_TOKEN"
-DEFAULT_TELEGRAM_TOKEN_ENV = "TELEGRAM_TOKEN"
 DEFAULT_LOCK_TIMEOUT_SECONDS = 600
 DEFAULT_CONFLICT_TTL_SECONDS = 60
 DEFAULT_SESSION_IDLE_TTL_SECONDS = 0
@@ -61,18 +60,6 @@ class DiscordConfig:
     totp_enforce_git: bool = True
     totp_enforce_gh: bool = True
     totp_enforce_high_risk: bool = True
-
-    _compiled_regex: Optional[re.Pattern] = field(default=None, init=False, repr=False)
-
-
-@dataclass
-class TelegramConfig:
-    """Telegram-related configuration."""
-    token_env: str = DEFAULT_TELEGRAM_TOKEN_ENV
-    allowed_user_ids: List[str] = field(default_factory=list)
-    prefix: str = DEFAULT_PREFIX
-    channel_name_regex: str = DEFAULT_CHANNEL_REGEX
-    allow_plain_prompts: bool = False
 
     _compiled_regex: Optional[re.Pattern] = field(default=None, init=False, repr=False)
 
@@ -160,7 +147,6 @@ class RepoBootstrapConfig:
 class Config:
     """Top-level configuration container."""
     discord: DiscordConfig = field(default_factory=DiscordConfig)
-    telegram: TelegramConfig = field(default_factory=TelegramConfig)
     codex: CodexConfig = field(default_factory=CodexConfig)
     state: StateConfig = field(default_factory=StateConfig)
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
@@ -186,19 +172,8 @@ class Config:
 
     def channel_regex_for(self, platform: str) -> re.Pattern:
         """Compile and return the channel name regex for a platform."""
-        if platform == "telegram":
-            if self.telegram._compiled_regex is None:
-                self.telegram._compiled_regex = re.compile(self.telegram.channel_name_regex)
-            return self.telegram._compiled_regex
+        _ = platform
         return self.channel_regex()
-
-    def telegram_token(self) -> str:
-        """Return the Telegram token from the configured env var."""
-        env_name = self.telegram.token_env or DEFAULT_TELEGRAM_TOKEN_ENV
-        token = os.getenv(env_name, "").strip()
-        if not token:
-            raise ValueError(f"telegram token env {env_name!r} is empty")
-        return token
 
 
 def load(path: str) -> Config:
@@ -274,16 +249,6 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
             discord.get("totp_enforce_high_risk", cfg.discord.totp_enforce_high_risk),
         ),
         "discord.totp.command_groups.high_risk",
-    )
-
-    telegram = raw.get("telegram", {}) or {}
-    cfg.telegram.token_env = telegram.get("token_env", cfg.telegram.token_env)
-    cfg.telegram.allowed_user_ids = list(telegram.get("allowed_user_ids", cfg.telegram.allowed_user_ids) or [])
-    cfg.telegram.prefix = telegram.get("prefix", cfg.telegram.prefix)
-    cfg.telegram.channel_name_regex = telegram.get("channel_name_regex", cfg.telegram.channel_name_regex)
-    cfg.telegram.allow_plain_prompts = _coerce_bool(
-        telegram.get("allow_plain_prompts", cfg.telegram.allow_plain_prompts),
-        "telegram.allow_plain_prompts",
     )
 
     codex = raw.get("codex", {}) or {}
@@ -401,13 +366,6 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.discord.totp_enforce_high_risk,
         "discord.totp.command_groups.high_risk",
     )
-    if not cfg.telegram.token_env:
-        cfg.telegram.token_env = DEFAULT_TELEGRAM_TOKEN_ENV
-    if not cfg.telegram.prefix:
-        cfg.telegram.prefix = DEFAULT_PREFIX
-    if not cfg.telegram.channel_name_regex:
-        cfg.telegram.channel_name_regex = DEFAULT_CHANNEL_REGEX
-
     if not cfg.codex.binary:
         cfg.codex.binary = "codex"
     if not cfg.codex.sandbox:
@@ -496,9 +454,9 @@ def _validate(cfg: Config) -> None:
     if cfg.state.session_idle_ttl_seconds < 0 or cfg.state.session_idle_ttl_seconds > 31536000:
         raise ValueError("state.session_idle_ttl_seconds must be between 0 and 31536000")
 
-    if cfg.transport.adapter.lower() not in {"discord", "slack", "telegram"}:
-        raise ValueError("transport.adapter must be discord, slack, or telegram (additional adapters not yet supported)")
-    if cfg.transport.adapter.lower() == "discord" and not (cfg.discord.guild_id or "").strip():
+    if cfg.transport.adapter.lower() != "discord":
+        raise ValueError("transport.adapter must be discord")
+    if not (cfg.discord.guild_id or "").strip():
         raise ValueError("discord.guild_id is required when transport.adapter is discord")
 
     if len(cfg.discord.allowed_user_ids) == 0:
@@ -518,17 +476,10 @@ def _validate(cfg: Config) -> None:
         secret = os.getenv(env_name, "").strip()
         if not secret:
             raise ValueError(f"discord TOTP secret env {env_name!r} is empty")
-    if cfg.transport.adapter.lower() == "telegram" and len(cfg.telegram.allowed_user_ids) == 0:
-        raise ValueError("telegram.allowed_user_ids must list at least one user")
-
     try:
         cfg.discord._compiled_regex = re.compile(cfg.discord.channel_name_regex)
     except re.error as exc:
         raise ValueError(f"discord.channel_name_regex invalid: {exc}")
-    try:
-        cfg.telegram._compiled_regex = re.compile(cfg.telegram.channel_name_regex)
-    except re.error as exc:
-        raise ValueError(f"telegram.channel_name_regex invalid: {exc}")
 
 
 _PERCENT_VAR_RE = re.compile(r"%([^%]+)%")

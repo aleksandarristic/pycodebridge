@@ -2595,15 +2595,11 @@ class Router:
         self.state.update(lambda fs: fs.dm_bindings.pop(key, None))
 
     def _transport_user_allowed(self, event: MessageEvent) -> bool:
-        if event.platform == "telegram":
-            if not self.cfg.telegram.allowed_user_ids:
-                return True
-            return event.author_id in self.cfg.telegram.allowed_user_ids
-        if event.platform == "discord":
-            if not self.cfg.discord.allowed_user_ids:
-                return False
-            return event.author_id in self.cfg.discord.allowed_user_ids
-        return True
+        if event.platform != "discord":
+            return False
+        if not self.cfg.discord.allowed_user_ids:
+            return False
+        return event.author_id in self.cfg.discord.allowed_user_ids
 
     def _discord_repo_channel_is_private(self, event: MessageEvent) -> bool:
         """Return True when a Discord room is private from @everyone."""
@@ -2649,13 +2645,11 @@ class Router:
         return False
 
     def _transport_prefix(self, event: MessageEvent) -> str:
-        if event.platform == "telegram":
-            return self.cfg.telegram.prefix or "!c"
+        _ = event
         return self.cfg.discord.prefix or "!c"
 
     def _transport_allow_plain_prompts(self, event: MessageEvent) -> bool:
-        if event.platform == "telegram":
-            return self.cfg.telegram.allow_plain_prompts
+        _ = event
         return self.cfg.discord.allow_plain_prompts
 
     async def handle_upload_request(self, event: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str) -> None:

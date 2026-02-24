@@ -60,13 +60,11 @@ class _FakeRouter:
         self._reset_all_confirm_until = {}
 
     def _transport_prefix(self, event: MessageEvent) -> str:
-        if event.platform == "telegram":
-            return self.cfg.telegram.prefix or "!c"
+        _ = event
         return self.cfg.discord.prefix or "!c"
 
     def _transport_user_allowed(self, event: MessageEvent) -> bool:
-        if event.platform == "telegram":
-            return event.author_id in self.cfg.telegram.allowed_user_ids
+        _ = event
         return event.author_id in self.cfg.discord.allowed_user_ids
 
     def _dm_admin_allowed(self, user_id: str) -> bool:
@@ -214,8 +212,8 @@ class _FakeCoordinator:
 
 def test_dm_binding_flow(tmp_path):
     cfg = cfgmod.Config()
-    cfg.telegram.allowed_user_ids = ["user"]
-    cfg.telegram.prefix = "!c"
+    cfg.discord.allowed_user_ids = ["user"]
+    cfg.discord.prefix = "!c"
     cfg.codex.code_root = str(tmp_path)
     cfg.state.data_dir = str(tmp_path / "state")
     cfg.state.log_dir = str(tmp_path / "logs")
@@ -228,7 +226,7 @@ def test_dm_binding_flow(tmp_path):
     router = _FakeRouter(cfg, store)
     sink = _FakeSink("dm-1")
     event = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="!bind repo",
         channel_id="dm-1",
         channel_name="",
@@ -240,7 +238,7 @@ def test_dm_binding_flow(tmp_path):
     async def run():
         await dm_admin.handle_dm_message(router, event, sink)
         event_status = MessageEvent(
-            platform="telegram",
+            platform="discord",
             content="!status",
             channel_id="dm-1",
             channel_name="",
@@ -250,7 +248,7 @@ def test_dm_binding_flow(tmp_path):
         )
         await dm_admin.handle_dm_message(router, event_status, sink)
         event_unbind = MessageEvent(
-            platform="telegram",
+            platform="discord",
             content="!unbind",
             channel_id="dm-1",
             channel_name="",
@@ -269,8 +267,8 @@ def test_dm_binding_flow(tmp_path):
 
 def test_dm_binding_non_prefixed_prompt(tmp_path):
     cfg = cfgmod.Config()
-    cfg.telegram.allowed_user_ids = ["user"]
-    cfg.telegram.prefix = "!c"
+    cfg.discord.allowed_user_ids = ["user"]
+    cfg.discord.prefix = "!c"
     cfg.codex.code_root = str(tmp_path)
     cfg.state.data_dir = str(tmp_path / "state")
     cfg.state.log_dir = str(tmp_path / "logs")
@@ -283,7 +281,7 @@ def test_dm_binding_non_prefixed_prompt(tmp_path):
     router = _FakeRouter(cfg, store)
     sink = _FakeSink("dm-1")
     bind_event = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="!c bind repo",
         channel_id="dm-1",
         channel_name="",
@@ -292,7 +290,7 @@ def test_dm_binding_non_prefixed_prompt(tmp_path):
         is_dm=True,
     )
     prompt_event = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="fix tests",
         channel_id="dm-1",
         channel_name="",
@@ -314,8 +312,8 @@ def test_dm_binding_non_prefixed_prompt(tmp_path):
 
 def test_dm_binding_normalizes_repo_name(tmp_path):
     cfg = cfgmod.Config()
-    cfg.telegram.allowed_user_ids = ["user"]
-    cfg.telegram.prefix = "!c"
+    cfg.discord.allowed_user_ids = ["user"]
+    cfg.discord.prefix = "!c"
     cfg.codex.code_root = str(tmp_path)
     cfg.state.data_dir = str(tmp_path / "state")
     cfg.state.log_dir = str(tmp_path / "logs")
@@ -328,7 +326,7 @@ def test_dm_binding_normalizes_repo_name(tmp_path):
     router = _FakeRouter(cfg, store)
     sink = _FakeSink("dm-1")
     bind_event = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="!c bind ProbablyFine",
         channel_id="dm-1",
         channel_name="",
@@ -337,7 +335,7 @@ def test_dm_binding_normalizes_repo_name(tmp_path):
         is_dm=True,
     )
     prompt_event = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="fix tests",
         channel_id="dm-1",
         channel_name="",
@@ -360,8 +358,8 @@ def test_dm_binding_normalizes_repo_name(tmp_path):
 
 def test_dm_unbound_guidance(tmp_path):
     cfg = cfgmod.Config()
-    cfg.telegram.allowed_user_ids = ["user"]
-    cfg.telegram.prefix = "!c"
+    cfg.discord.allowed_user_ids = ["user"]
+    cfg.discord.prefix = "!c"
     cfg.codex.code_root = str(tmp_path)
     cfg.state.data_dir = str(tmp_path / "state")
     cfg.state.log_dir = str(tmp_path / "logs")
@@ -370,7 +368,7 @@ def test_dm_unbound_guidance(tmp_path):
     router = _FakeRouter(cfg, store)
     sink = _FakeSink("dm-1")
     event = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="hello",
         channel_id="dm-1",
         channel_name="",
@@ -389,8 +387,8 @@ def test_dm_unbound_guidance(tmp_path):
 
 def test_dm_pending_upload_response_short_circuits(tmp_path):
     cfg = cfgmod.Config()
-    cfg.telegram.allowed_user_ids = ["user"]
-    cfg.telegram.prefix = "!c"
+    cfg.discord.allowed_user_ids = ["user"]
+    cfg.discord.prefix = "!c"
     cfg.codex.code_root = str(tmp_path)
     cfg.state.data_dir = str(tmp_path / "state")
     cfg.state.log_dir = str(tmp_path / "logs")
@@ -403,7 +401,7 @@ def test_dm_pending_upload_response_short_circuits(tmp_path):
     router = _FakeRouter(cfg, store)
     sink = _FakeSink("dm-1")
     bind_event = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="!c bind repo",
         channel_id="dm-1",
         channel_name="",
@@ -412,7 +410,7 @@ def test_dm_pending_upload_response_short_circuits(tmp_path):
         is_dm=True,
     )
     upload_response = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="uploads/",
         channel_id="dm-1",
         channel_name="",
@@ -433,8 +431,8 @@ def test_dm_pending_upload_response_short_circuits(tmp_path):
 
 def test_dm_gh_unbound_uses_code_root(tmp_path):
     cfg = cfgmod.Config()
-    cfg.telegram.allowed_user_ids = ["user"]
-    cfg.telegram.prefix = "!c"
+    cfg.discord.allowed_user_ids = ["user"]
+    cfg.discord.prefix = "!c"
     cfg.codex.code_root = str(tmp_path)
     cfg.state.data_dir = str(tmp_path / "state")
     cfg.state.log_dir = str(tmp_path / "logs")
@@ -443,7 +441,7 @@ def test_dm_gh_unbound_uses_code_root(tmp_path):
     router = _FakeRouter(cfg, store)
     sink = _FakeSink("dm-1")
     event = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="!c gh repo list --visibility private --limit 5",
         channel_id="dm-1",
         channel_name="",
@@ -464,8 +462,8 @@ def test_dm_gh_unbound_uses_code_root(tmp_path):
 
 def test_dm_bang_gh_unbound_uses_code_root(tmp_path):
     cfg = cfgmod.Config()
-    cfg.telegram.allowed_user_ids = ["user"]
-    cfg.telegram.prefix = "!c"
+    cfg.discord.allowed_user_ids = ["user"]
+    cfg.discord.prefix = "!c"
     cfg.codex.code_root = str(tmp_path)
     cfg.state.data_dir = str(tmp_path / "state")
     cfg.state.log_dir = str(tmp_path / "logs")
@@ -474,7 +472,7 @@ def test_dm_bang_gh_unbound_uses_code_root(tmp_path):
     router = _FakeRouter(cfg, store)
     sink = _FakeSink("dm-1")
     event = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="!gh repo list --limit 3",
         channel_id="dm-1",
         channel_name="",
@@ -495,8 +493,8 @@ def test_dm_bang_gh_unbound_uses_code_root(tmp_path):
 
 def test_dm_gh_bound_uses_repo_path(tmp_path):
     cfg = cfgmod.Config()
-    cfg.telegram.allowed_user_ids = ["user"]
-    cfg.telegram.prefix = "!c"
+    cfg.discord.allowed_user_ids = ["user"]
+    cfg.discord.prefix = "!c"
     cfg.codex.code_root = str(tmp_path)
     cfg.state.data_dir = str(tmp_path / "state")
     cfg.state.log_dir = str(tmp_path / "logs")
@@ -509,7 +507,7 @@ def test_dm_gh_bound_uses_repo_path(tmp_path):
     router = _FakeRouter(cfg, store)
     sink = _FakeSink("dm-1")
     bind_event = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="!c bind repo",
         channel_id="dm-1",
         channel_name="",
@@ -518,7 +516,7 @@ def test_dm_gh_bound_uses_repo_path(tmp_path):
         is_dm=True,
     )
     gh_event = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="!c gh auth status",
         channel_id="dm-1",
         channel_name="",
@@ -540,8 +538,8 @@ def test_dm_gh_bound_uses_repo_path(tmp_path):
 
 def test_dm_updates_uses_bound_repo_path(tmp_path):
     cfg = cfgmod.Config()
-    cfg.telegram.allowed_user_ids = ["user"]
-    cfg.telegram.prefix = "!c"
+    cfg.discord.allowed_user_ids = ["user"]
+    cfg.discord.prefix = "!c"
     cfg.codex.code_root = str(tmp_path)
     cfg.state.data_dir = str(tmp_path / "state")
     cfg.state.log_dir = str(tmp_path / "logs")
@@ -554,7 +552,7 @@ def test_dm_updates_uses_bound_repo_path(tmp_path):
     router = _FakeRouter(cfg, store)
     sink = _FakeSink("dm-1")
     bind_event = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="!c bind repo",
         channel_id="dm-1",
         channel_name="",
@@ -563,7 +561,7 @@ def test_dm_updates_uses_bound_repo_path(tmp_path):
         is_dm=True,
     )
     updates_event = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="!c updates",
         channel_id="dm-1",
         channel_name="",
@@ -584,8 +582,8 @@ def test_dm_updates_uses_bound_repo_path(tmp_path):
 
 def test_dm_health_uses_bound_repo_path(tmp_path):
     cfg = cfgmod.Config()
-    cfg.telegram.allowed_user_ids = ["user"]
-    cfg.telegram.prefix = "!c"
+    cfg.discord.allowed_user_ids = ["user"]
+    cfg.discord.prefix = "!c"
     cfg.codex.code_root = str(tmp_path)
     cfg.state.data_dir = str(tmp_path / "state")
     cfg.state.log_dir = str(tmp_path / "logs")
@@ -598,7 +596,7 @@ def test_dm_health_uses_bound_repo_path(tmp_path):
     router = _FakeRouter(cfg, store)
     sink = _FakeSink("dm-1")
     bind_event = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="!c bind repo",
         channel_id="dm-1",
         channel_name="",
@@ -607,7 +605,7 @@ def test_dm_health_uses_bound_repo_path(tmp_path):
         is_dm=True,
     )
     health_event = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="!health",
         channel_id="dm-1",
         channel_name="",
@@ -626,8 +624,8 @@ def test_dm_health_uses_bound_repo_path(tmp_path):
 
 def test_dm_answer_command_relays_without_repo_binding(tmp_path):
     cfg = cfgmod.Config()
-    cfg.telegram.allowed_user_ids = ["user"]
-    cfg.telegram.prefix = "!c"
+    cfg.discord.allowed_user_ids = ["user"]
+    cfg.discord.prefix = "!c"
     cfg.codex.code_root = str(tmp_path)
     cfg.state.data_dir = str(tmp_path / "state")
     cfg.state.log_dir = str(tmp_path / "logs")
@@ -636,7 +634,7 @@ def test_dm_answer_command_relays_without_repo_binding(tmp_path):
     router = _FakeRouter(cfg, store)
     sink = _FakeSink("dm-1")
     answer_event = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="!c answer yes",
         channel_id="dm-1",
         channel_name="",
@@ -656,8 +654,8 @@ def test_dm_answer_command_relays_without_repo_binding(tmp_path):
 
 def test_dm_unprefixed_relay_rejects_unauthorized_user(tmp_path):
     cfg = cfgmod.Config()
-    cfg.telegram.allowed_user_ids = ["allowed-user"]
-    cfg.telegram.prefix = "!c"
+    cfg.discord.allowed_user_ids = ["allowed-user"]
+    cfg.discord.prefix = "!c"
     cfg.codex.code_root = str(tmp_path)
     cfg.state.data_dir = str(tmp_path / "state")
     cfg.state.log_dir = str(tmp_path / "logs")
@@ -667,7 +665,7 @@ def test_dm_unprefixed_relay_rejects_unauthorized_user(tmp_path):
     router.pending_session = "default"
     sink = _FakeSink("dm-1")
     event = MessageEvent(
-        platform="telegram",
+        platform="discord",
         content="yes",
         channel_id="dm-1",
         channel_name="",

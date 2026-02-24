@@ -12,14 +12,10 @@ Bridge transport channels (`codex-<repo>`) to Codex CLI sessions in local repos 
 
 ## Integrations
 - Discord (supported): `DISCORD.md`
-- Telegram (supported via long polling): `TELEGRAM.md`
-- Slack (scaffold only): `SLACK.md`
 
 ## Transport capabilities
 Adapters declare capabilities for threads, replies, uploads, downloads, and typing. Router behavior is gated by these flags.
 - Discord: threads ✅, replies ❌, uploads ✅, downloads ✅, typing ✅
-- Telegram: threads ✅ (topics), replies ✅, uploads ✅, downloads ✅, typing ✅ (chat action)
-- Slack: scaffold only (capabilities disabled until implemented)
 
 ## Setup
 Prereqs:
@@ -88,13 +84,6 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - Legacy flat keys (`totp_enabled`, `totp_secret_env`, `totp_window`, limiter knobs) are still accepted for backward compatibility.
 - `max_discord_message_chars` (default `1800`) — outbound chunk size.
 
-### `telegram`
-- `token_env` (default `TELEGRAM_TOKEN`) — environment variable containing bot token.
-- `allowed_user_ids` (default empty) — allowlist for channel commands; if non-empty, ignore others.
-- `prefix` (default `!c`) — command prefix.
-- `channel_name_regex` (default `^codex-([A-Za-z0-9._-]+)$`) — maps chat title to repo name.
-- `allow_plain_prompts` (default `false`) — treat non-prefixed messages as prompts in matching chats.
-
 ### `codex`
 - `binary` (default `codex`) — path/name of Codex CLI.
 - `code_root` (required) — directory containing git repos.
@@ -126,7 +115,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `redact_patterns` (default `[]`) — optional regex patterns to redact.
 
 ### `transport`
-- `adapter` (default `discord`) — transport adapter to use (`discord`/`telegram` supported; `slack` scaffold only).
+- `adapter` (default `discord`) — transport adapter to use (`discord` only).
 
 ### `git`
 - `enabled` (default `false`) — enable automatic git bootstrap configuration.
@@ -360,7 +349,7 @@ Core modules are now grouped by responsibility:
 - `codebridge/sessions/` — session state persistence, active-process tracking, queue/coordinator lifecycle.
 - `codebridge/services/` — file transfer, health endpoint, git bootstrap lifecycle helpers.
 - `codebridge/handlers/` — command handlers that operate behind the router boundary.
-- `codebridge/adapters/` — transport adapter implementations (Discord/Telegram, Slack scaffold).
+- `codebridge/adapters/` — transport adapter implementations (Discord).
 - `codebridge/util/` — shared utility primitives.
 
 Backward-compatible top-level module shims are retained (for example `codebridge/router.py`) and re-export from the new package layout.
@@ -375,5 +364,3 @@ Backward-compatible top-level module shims are retained (for example `codebridge
 ## Docs
 - Architecture diagram (Mermaid): `docs/architecture.mmd`
 - Docker run guide: `DOCKER.md`
-- Slack setup: `SLACK.md`
-- Telegram setup: `TELEGRAM.md`

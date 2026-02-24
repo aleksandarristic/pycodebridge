@@ -57,10 +57,9 @@ When adding tests, place them in the narrowest layer that can prove the behavior
 
 - `tests/test_transport.py`: MessageEvent/ResponseSink protocol-level assumptions.
 - `tests/test_capabilities.py`: capability gating behavior for transport sinks.
-- `tests/test_adapter_contracts.py`: adapter-level invariants shared across transports.
+- `tests/test_adapter_contracts.py`: adapter-level invariants.
 - `tests/test_discord_adapter.py`: discord.py event/sink normalization behavior.
 - `tests/test_discord_bot.py`: Discord bot lifecycle dispatch and guild-lock behaviors.
-- `tests/test_telegram_adapter.py`: Telegram event/sink normalization behavior.
 - `tests/fixtures_adapter_payloads.py`: adapter fixture data used by adapter contract tests.
 
 ### Command helper modules

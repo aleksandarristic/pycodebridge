@@ -435,8 +435,6 @@ def test_load_config_boolean_string_values(tmp_path, monkeypatch):
           allow_plain_prompts: "false"
           dm_admin_enabled: "false"
           totp_enabled: "false"
-        telegram:
-          allow_plain_prompts: "false"
         codex:
           code_root: "$CODE_ROOT"
           network_access: "false"
@@ -462,7 +460,6 @@ def test_load_config_boolean_string_values(tmp_path, monkeypatch):
     assert cfg.discord.allow_plain_prompts is False
     assert cfg.discord.dm_admin_enabled is False
     assert cfg.discord.totp_enabled is False
-    assert cfg.telegram.allow_plain_prompts is False
     assert cfg.codex.network_access is False
     assert cfg.runtime.show_reasoning_details is False
     assert cfg.audit.redact is False
@@ -505,6 +502,39 @@ def test_load_config_invalid_boolean_string_fails(tmp_path, monkeypatch):
         assert False, "expected ValueError"
     except ValueError as exc:
         assert "runtime.show_reasoning_details" in str(exc)
+
+
+def test_load_config_rejects_non_discord_transport(tmp_path, monkeypatch):
+    code_root = tmp_path / "code"
+    data_dir = tmp_path / "data"
+    code_root.mkdir()
+    data_dir.mkdir()
+
+    monkeypatch.setenv("CODE_ROOT", str(code_root))
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        """
+        discord:
+          guild_id: "123"
+          allowed_user_ids: ["1"]
+        codex:
+          code_root: "$CODE_ROOT"
+        state:
+          data_dir: "%DATA_DIR%"
+          log_dir: "%DATA_DIR%/logs"
+        transport:
+          adapter: "telegram"
+        """,
+        encoding="utf-8",
+    )
+
+    try:
+        cfgmod.load(str(cfg_path))
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "transport.adapter must be discord" in str(exc)
 
 
 def test_repo_bootstrap_config_is_dataclass():
