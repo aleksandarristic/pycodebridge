@@ -9,3 +9,5 @@ Rules:
 - When dropping a task, remove it from this file and append it to `.task-management/REMOVED.md`.
 
 ## Active tasks
+- `TASK-0012` Remove compat retry fallback in router; execute Codex only with original args and fail fast on non-zero exit without argument mutation/retry.
+- `TASK-0013` Add comprehensive Codex CLI argument-ordering tests that assert bridge arg-building contract (presence and relative order of required flags/arguments across start/resume variants and supported order permutations).
