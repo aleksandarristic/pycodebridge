@@ -27,7 +27,10 @@ async def handle_gh(router: "Router", sink: ResponseSink, repo_path: str, rest: 
     text = trim_output(text, 300, 6000)
     if err:
         text = f"gh error: {err}\n{text}"
-    text = text.strip() or "(no output)"
+    elif not text.strip():
+        text = "gh command completed successfully (no output)."
+    else:
+        text = text.strip()
     for chunk in chunk_text(text, router.cfg.discord.max_discord_message_chars):
         await router.reply(sink, chunk)
     if not err:

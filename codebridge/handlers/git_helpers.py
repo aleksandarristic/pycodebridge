@@ -101,6 +101,8 @@ async def handle_git(router: "Router", sink: ResponseSink, repo_path: str, rest:
         text = "```diff\n" + text + "\n```"
     if err:
         text = f"git {sub} error: {err}\n{text}"
+    elif not text.strip():
+        text = f"git {sub} completed successfully (no output)."
     for chunk in chunk_text(text, router.cfg.discord.max_discord_message_chars):
         await router.reply(sink, chunk)
 

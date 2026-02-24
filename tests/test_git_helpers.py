@@ -154,3 +154,19 @@ def test_git_helper_unknown_subcommand_rejected(monkeypatch):
         assert router.forbidden == ["Unknown git subcommand."]
 
     asyncio.run(run())
+
+
+def test_git_helper_reports_success_when_no_output(monkeypatch):
+    async def run():
+        router = _Router()
+        sink = _Sink()
+
+        async def _fake_run(repo_path: str, args: list[str], timeout: float = 30.0, env=None):
+            _ = (repo_path, args, timeout, env)
+            return "", None
+
+        monkeypatch.setattr(git_helpers, "run_limited_command", _fake_run)
+        await git_helpers.handle_git(router, sink, "/tmp/repo", "fetch")
+        assert router.messages == ["git fetch completed successfully (no output)."]
+
+    asyncio.run(run())
