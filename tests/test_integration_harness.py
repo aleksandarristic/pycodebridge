@@ -409,6 +409,7 @@ def test_integration_discord_thread_uses_parent_repo_mapping_and_room_scope(tmp_
     (repo / ".git").mkdir()
 
     room_key = "discord:chan-parent:thread-a"
+    thread_session = "topic-a"
     router, runner = _build_router(tmp_path)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
@@ -425,7 +426,7 @@ def test_integration_discord_thread_uses_parent_repo_mapping_and_room_scope(tmp_
             sink,
         )
         for _ in range(100):
-            proc = await router.get_active(room_key, "default")
+            proc = await router.get_active(room_key, thread_session)
             if proc is not None:
                 break
             await asyncio.sleep(0.01)
@@ -456,6 +457,8 @@ def test_integration_discord_sibling_threads_are_isolated(tmp_path):
 
     room_a = "discord:chan-parent:thread-a"
     room_b = "discord:chan-parent:thread-b"
+    session_a = "topic-a"
+    session_b = "topic-b"
     router, _ = _build_router(tmp_path)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
@@ -483,8 +486,8 @@ def test_integration_discord_sibling_threads_are_isolated(tmp_path):
             sink,
         )
         for _ in range(100):
-            proc_a = await router.get_active(room_a, "default")
-            proc_b = await router.get_active(room_b, "default")
+            proc_a = await router.get_active(room_a, session_a)
+            proc_b = await router.get_active(room_b, session_b)
             if proc_a is not None and proc_b is not None:
                 break
             await asyncio.sleep(0.01)
@@ -501,11 +504,11 @@ def test_integration_discord_sibling_threads_are_isolated(tmp_path):
             sink,
         )
         for _ in range(100):
-            if await router.get_active(room_a, "default") is None:
+            if await router.get_active(room_a, session_a) is None:
                 break
             await asyncio.sleep(0.01)
-        assert await router.get_active(room_a, "default") is None
-        assert await router.get_active(room_b, "default") is not None
+        assert await router.get_active(room_a, session_a) is None
+        assert await router.get_active(room_b, session_b) is not None
 
         await router.handle_message(
             _discord_event(
@@ -524,6 +527,49 @@ def test_integration_discord_sibling_threads_are_isolated(tmp_path):
     assert any(thread_id == "thread-b" for _, thread_id, _ in sink.sent)
 
 
+def test_integration_discord_thread_session_name_falls_back_to_default_when_not_normalizable(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    room_key = "discord:chan-parent:thread-a"
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(
+            _discord_event(
+                "!c start",
+                "___",
+                channel_id="thread-a",
+                platform_thread_id="thread-a",
+                parent_channel_id="chan-parent",
+                parent_channel_name="codex-repo",
+            ),
+            sink,
+        )
+        proc = None
+        for _ in range(100):
+            proc = await router.get_active(room_key, "default")
+            if proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        assert proc is not None
+        await router.handle_message(
+            _discord_event(
+                "!c stop",
+                "___",
+                channel_id="thread-a",
+                platform_thread_id="thread-a",
+                parent_channel_id="chan-parent",
+                parent_channel_name="codex-repo",
+            ),
+            sink,
+        )
+
+    asyncio.run(run())
+
+
 def test_integration_discord_parent_channel_remains_backward_compatible_with_thread_rooms(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -531,6 +577,7 @@ def test_integration_discord_parent_channel_remains_backward_compatible_with_thr
 
     parent_channel_id = "chan-parent"
     thread_room = "discord:chan-parent:thread-a"
+    thread_session = "topic-a"
     router, _ = _build_router(tmp_path)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
@@ -549,7 +596,7 @@ def test_integration_discord_parent_channel_remains_backward_compatible_with_thr
         )
         for _ in range(100):
             parent_proc = await router.get_active(parent_channel_id, "default")
-            thread_proc = await router.get_active(thread_room, "default")
+            thread_proc = await router.get_active(thread_room, thread_session)
             if parent_proc is not None and thread_proc is not None:
                 break
             await asyncio.sleep(0.01)
@@ -560,7 +607,7 @@ def test_integration_discord_parent_channel_remains_backward_compatible_with_thr
                 break
             await asyncio.sleep(0.01)
         assert await router.get_active(parent_channel_id, "default") is None
-        assert await router.get_active(thread_room, "default") is not None
+        assert await router.get_active(thread_room, thread_session) is not None
 
         await router.handle_message(
             _discord_event(
@@ -910,6 +957,7 @@ def test_integration_bang_reset_alias_works_in_discord_thread_scope(tmp_path):
     (repo / ".git").mkdir()
 
     room_key = "discord:chan-parent:thread-a"
+    thread_session = "topic-a"
     router, _ = _build_router(tmp_path)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
@@ -927,7 +975,7 @@ def test_integration_bang_reset_alias_works_in_discord_thread_scope(tmp_path):
         )
         proc = None
         for _ in range(100):
-            proc = await router.get_active(room_key, "default")
+            proc = await router.get_active(room_key, thread_session)
             if proc is not None:
                 break
             await asyncio.sleep(0.01)
@@ -945,7 +993,7 @@ def test_integration_bang_reset_alias_works_in_discord_thread_scope(tmp_path):
             sink,
         )
         for _ in range(100):
-            if await router.get_active(room_key, "default") is None:
+            if await router.get_active(room_key, thread_session) is None:
                 break
             await asyncio.sleep(0.01)
         assert proc.killed is True
@@ -954,7 +1002,7 @@ def test_integration_bang_reset_alias_works_in_discord_thread_scope(tmp_path):
     state = router.state.load()
     ch = state.channels.get(room_key)
     if ch:
-        assert "default" not in ch.sessions
+        assert thread_session not in ch.sessions
     assert any("reset" in msg.lower() for msg, thread_id, _ in sink.sent if thread_id == "thread-a")
 
 

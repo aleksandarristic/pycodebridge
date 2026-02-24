@@ -118,6 +118,15 @@ async def _normalize_session_or_reply(router: Any, sink: ResponseSink, session: 
         return None
 
 
+def _current_session(router: Any, message: MessageEvent, default_value: str = DEFAULT_SESSION) -> str:
+    if hasattr(router, "current_session_for_event"):
+        return router.current_session_for_event(message)
+    try:
+        return router.current_session_for_user(message.author_id, message.channel_id, default_value)
+    except TypeError:
+        return router.current_session_for_user(message.author_id, message.channel_id)
+
+
 async def _resolve_session_name(
     router: Any,
     message: MessageEvent,
@@ -128,7 +137,7 @@ async def _resolve_session_name(
 ) -> str | None:
     if not session:
         if default_from_user:
-            session = router.current_session_for_user(message.author_id, message.channel_id)
+            session = _current_session(router, message, default_value)
         else:
             session = default_value
     return await _normalize_session_or_reply(router, sink, session)
@@ -304,6 +313,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             aliases=("showchanges",),
         ),
         CommandSpec("tests", "tests", "run pytest -q", "Repo helpers", _cmd_tests, AUTH_UNLOCK, aliases=("test",)),
+        CommandSpec("branch", "branch", "show current git branch and working tree status", "Repo helpers", _cmd_branch, AUTH_OPEN),
         CommandSpec(
             "git",
             "git <status|log|branches|branch|show|diff|remote|fetch|pull|add|commit|push|merge>",
@@ -442,7 +452,10 @@ async def _cmd_health(router: Any, message: MessageEvent, sink: ResponseSink, re
 
 
 async def _cmd_start(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
-    session_name, _ = parse_session_and_prompt(rest)
+    if not (rest or "").strip():
+        session_name = ""
+    else:
+        session_name, _ = parse_session_and_prompt(rest)
     session_name = await _resolve_session_name(router, message, sink, session_name)
     if not session_name:
         return
@@ -484,7 +497,7 @@ async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, rep
         await router.reply_forbidden(sink, "Usage: !c model [session] <model-id> [reasoning]")
         return
     parts = rest.split()
-    session_name = router.current_session_for_user(message.author_id, message.channel_id)
+    session_name = _current_session(router, message)
     model = ""
     reasoning_raw = ""
     if len(parts) == 1:
@@ -561,7 +574,7 @@ async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, rep
 
 async def _cmd_models(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     parts = rest.split()
-    session_name = router.current_session_for_user(message.author_id, message.channel_id) or DEFAULT_SESSION
+    session_name = _current_session(router, message) or DEFAULT_SESSION
     if parts:
         session_name = parts[0]
     session_name = await _resolve_session_name(router, message, sink, session_name, default_from_user=False)
@@ -763,6 +776,8 @@ async def _cmd_stop(router: Any, message: MessageEvent, sink: ResponseSink, repo
         session = await _normalize_session_or_reply(router, sink, session)
         if not session:
             return
+    else:
+        session = _current_session(router, message)
     await router.handle_stop(sink, session)
 
 
@@ -772,6 +787,8 @@ async def _cmd_kill(router: Any, message: MessageEvent, sink: ResponseSink, repo
         session = await _normalize_session_or_reply(router, sink, session)
         if not session:
             return
+    else:
+        session = _current_session(router, message)
     await router.handle_kill(sink, session)
 
 
@@ -781,6 +798,8 @@ async def _cmd_interrupt(router: Any, message: MessageEvent, sink: ResponseSink,
         session = await _normalize_session_or_reply(router, sink, session)
         if not session:
             return
+    else:
+        session = _current_session(router, message)
     await router.handle_interrupt(sink, session)
 
 
@@ -790,6 +809,8 @@ async def _cmd_quit(router: Any, message: MessageEvent, sink: ResponseSink, repo
         session = await _normalize_session_or_reply(router, sink, session)
         if not session:
             return
+    else:
+        session = _current_session(router, message)
     await router.handle_quit(sink, session)
 
 
@@ -805,7 +826,7 @@ async def _parse_session_text_args(
     if not rest:
         await router.reply_forbidden(sink, usage)
         return None
-    session = router.current_session_for_user(message.author_id, message.channel_id)
+    session = _current_session(router, message)
     text = rest
     if "--" in rest:
         left, right = rest.split("--", 1)
@@ -892,7 +913,7 @@ async def _cmd_approve(router: Any, message: MessageEvent, sink: ResponseSink, r
         if not session:
             return
     else:
-        session = router.current_session_for_user(message.author_id, message.channel_id)
+        session = _current_session(router, message)
     await router.handle_answer(message, sink, session, "yes")
 
 
@@ -903,7 +924,7 @@ async def _cmd_deny(router: Any, message: MessageEvent, sink: ResponseSink, repo
         if not session:
             return
     else:
-        session = router.current_session_for_user(message.author_id, message.channel_id)
+        session = _current_session(router, message)
     await router.handle_answer(message, sink, session, "no")
 
 
@@ -921,6 +942,13 @@ async def _cmd_showchanges(router: Any, message: MessageEvent, sink: ResponseSin
 
 async def _cmd_tests(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     await router.handle_tests(sink, repo_path)
+
+
+async def _cmd_branch(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    if (rest or "").strip():
+        await router.reply_forbidden(sink, "Usage: !c branch")
+        return
+    await router.handle_branch(sink, repo_path)
 
 
 async def _cmd_git(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

@@ -16,6 +16,7 @@ FORBIDDEN_PREFIX = "I'm sorry, Dave. I'm afraid I can't do that."
 DEFAULT_SESSION = "default"
 MAX_SESSIONS_PER_CHANNEL = 3
 SESSION_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_THREAD_SESSION_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 HELPER_TIMEOUT = 30.0
 TESTS_TIMEOUT = 120.0
@@ -68,6 +69,24 @@ def normalize_session(name: str) -> str:
     if not SESSION_RE.match(name):
         raise ValueError("Invalid session name. Use 1-64 characters: letters, numbers, . _ -")
     return name
+
+
+def normalize_thread_session_name(name: str) -> str:
+    """Convert a thread title into a safe session name."""
+    raw = (name or "").strip().lower()
+    if not raw:
+        return DEFAULT_SESSION
+    cleaned = _THREAD_SESSION_RE.sub("-", raw)
+    cleaned = re.sub(r"-{2,}", "-", cleaned).strip("._-")
+    if not cleaned:
+        return DEFAULT_SESSION
+    cleaned = cleaned[:64].rstrip("._-")
+    if not cleaned:
+        return DEFAULT_SESSION
+    try:
+        return normalize_session(cleaned)
+    except ValueError:
+        return DEFAULT_SESSION
 
 
 def pending_key(channel_id: str, session: str) -> str:

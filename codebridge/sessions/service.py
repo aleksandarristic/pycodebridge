@@ -309,7 +309,7 @@ class SessionService:
                 thread_id = sess.thread_id
         self.update_state(channel_id, session, repo_name, repo_path, thread_id, model, reasoning_effort)
 
-    def current_session_for_user(self, user_id: str, channel_id: str) -> str:
+    def current_session_for_user(self, user_id: str, channel_id: str, default_session: str = DEFAULT_SESSION) -> str:
         """Return sticky session selection for a user or default."""
         state = self._state.load()
         ch = state.channels.get(channel_id)
@@ -317,7 +317,7 @@ class SessionService:
             sess = ch.sticky.get(user_id)
             if sess:
                 return sess
-        return "default"
+        return _normalize_session_default(default_session)
 
     def set_sticky(self, channel_id: str, user_id: str, session: str) -> None:
         """Set sticky session selection for a user."""

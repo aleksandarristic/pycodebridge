@@ -173,7 +173,7 @@ async def handle_create_repo(
     await router.reply(sink, f"Created repo at {repo_path}")
     router.logger.info("createrepo.ok", extra={"channel_id": channel_id, "repo": repo_name, "path": repo_path})
 
-    session_name = router.current_session_for_user(event.author_id, channel_id)
+    session_name = router.current_session_for_event(event)
     try:
         session_name = normalize_session(session_name)
     except ValueError as exc:

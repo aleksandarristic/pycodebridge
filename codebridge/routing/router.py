@@ -46,6 +46,7 @@ from .helpers import (
     PendingConflict,
     UsageStats,
     normalize_session,
+    normalize_thread_session_name,
     usage_from_event,
 )
 from .config import render_config_text
@@ -63,6 +64,7 @@ _RESET_ALL_CONFIRM_TTL_SECONDS = 30
 _DISCORD_LEADING_MENTION_RE = re.compile(r"^(?:<@!?\d+>\s*)+")
 _READ_ONLY_COMMANDS = {
     "budget",
+    "branch",
     "help",
     "health",
     "status",
@@ -247,7 +249,7 @@ class Router:
                     "platform": event.platform,
                     "channel_id": event.channel_id,
                     "repo": repo_name,
-                    "session": self.current_session_for_user(event.author_id, event.channel_id),
+                    "session": self.current_session_for_event(event),
                 },
             )
             prompt = content.strip()
@@ -262,7 +264,7 @@ class Router:
             except Exception as exc:
                 await self.reply_forbidden(sink, f"Repo error: {exc}")
                 return
-            session = self.current_session_for_user(event.author_id, event.channel_id)
+            session = self.current_session_for_event(event)
             await self.handle_resume(event, sink, repo_name, repo_path, session, prompt)
             return
 
@@ -305,7 +307,7 @@ class Router:
                 "channel_id": event.channel_id,
                 "repo": repo_name,
                 "cmd": cmd,
-                "session": self.current_session_for_user(event.author_id, event.channel_id),
+                "session": self.current_session_for_event(event),
                 "user_id": event.author_id,
             },
         )
@@ -357,7 +359,7 @@ class Router:
         ):
             return
 
-        await self.handle_resume(event, sink, repo_name, repo_path, DEFAULT_SESSION, cmdline)
+        await self.handle_resume(event, sink, repo_name, repo_path, self.current_session_for_event(event), cmdline)
 
     async def handle_dm_message(self, event: MessageEvent, sink: ResponseSink) -> None:
         """Handle an incoming DM admin message."""
@@ -613,6 +615,10 @@ class Router:
     async def handle_git(self, sink: ResponseSink, repo_path: str, rest: str) -> None:
         """Run safe git helper commands."""
         await git_handlers.handle_git(self, sink, repo_path, rest)
+
+    async def handle_branch(self, sink: ResponseSink, repo_path: str) -> None:
+        """Show current git branch and clean/not-clean state."""
+        await git_handlers.handle_branch(self, sink, repo_path)
 
     async def handle_gh(self, sink: ResponseSink, repo_path: str, rest: str) -> None:
         """Run gh helper commands."""
@@ -1911,7 +1917,7 @@ class Router:
         pending = self._prune_awaiting_input(event.channel_id)
         if not pending:
             return "", False
-        preferred = self.current_session_for_user(event.author_id, event.channel_id) or DEFAULT_SESSION
+        preferred = self.current_session_for_event(event) or DEFAULT_SESSION
         if preferred in pending and await self.get_active(event.channel_id, preferred):
             return preferred, False
         candidates: list[str] = []
@@ -2834,6 +2840,20 @@ class Router:
         """Consume a pending conflict if present and not expired."""
         return await self.coordinator.consume_pending(channel_id, session)
 
-    def current_session_for_user(self, user_id: str, channel_id: str) -> str:
+    def current_session_for_user(self, user_id: str, channel_id: str, default_session: str = DEFAULT_SESSION) -> str:
         """Return sticky session selection for a user or default."""
-        return self.coordinator.current_session_for_user(user_id, channel_id)
+        return self.coordinator.current_session_for_user(user_id, channel_id, default_session)
+
+    def default_session_for_event(self, event: MessageEvent) -> str:
+        """Return implicit default session for this event context."""
+        if event.platform != "discord" or event.is_dm or not event.platform_thread_id:
+            return DEFAULT_SESSION
+        message = event.raw_event
+        channel = getattr(message, "channel", None) if message is not None else None
+        thread_name = str(getattr(channel, "name", "") or "").strip()
+        return normalize_thread_session_name(thread_name)
+
+    def current_session_for_event(self, event: MessageEvent) -> str:
+        """Return sticky session or context-aware default for a message event."""
+        default_session = self.default_session_for_event(event)
+        return self.current_session_for_user(event.author_id, event.channel_id, default_session)

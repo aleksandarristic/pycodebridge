@@ -1,6 +1,12 @@
 import pytest
 
-from codebridge.routing.helpers import normalize_session, parse_github_clone_url, prune_state_for_repo, rename_state_repo
+from codebridge.routing.helpers import (
+    normalize_session,
+    normalize_thread_session_name,
+    parse_github_clone_url,
+    prune_state_for_repo,
+    rename_state_repo,
+)
 from codebridge.sessions.state import ChannelState, FileState, SessionState
 
 
@@ -16,6 +22,12 @@ def test_parse_github_clone_url():
     assert parse_github_clone_url("git@github.com:owner/repo.git") == "https://github.com/owner/repo.git"
     with pytest.raises(ValueError):
         parse_github_clone_url("https://example.com/owner/repo")
+
+
+def test_normalize_thread_session_name():
+    assert normalize_thread_session_name("Sprint 12 / Bug Bash") == "sprint-12-bug-bash"
+    assert normalize_thread_session_name("___") == "default"
+    assert normalize_thread_session_name("") == "default"
 
 
 def test_prune_state_for_repo_matches_case_insensitive_name():

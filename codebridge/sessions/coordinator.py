@@ -114,8 +114,8 @@ class SessionCoordinator:
     def clear_session_thread(self, channel_id: str, session: str) -> bool:
         return self._sessions.clear_session_thread(channel_id, session)
 
-    def current_session_for_user(self, user_id: str, channel_id: str) -> str:
-        return self._sessions.current_session_for_user(user_id, channel_id)
+    def current_session_for_user(self, user_id: str, channel_id: str, default_session: str = "default") -> str:
+        return self._sessions.current_session_for_user(user_id, channel_id, default_session)
 
     def set_sticky(self, channel_id: str, user_id: str, session: str) -> None:
         self._sessions.set_sticky(channel_id, user_id, session)
