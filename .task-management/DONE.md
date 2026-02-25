@@ -12,6 +12,18 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0014] Make repo bash scripts executable and update `update.sh` with auth checks and dry-run support.
+  - Completed: 2026-02-25
+  - Notes: Confirmed repo shell scripts are executable and `update.sh` includes `--dry-run`, `--check`, and warn-only post-start auth checks for Codex CLI and GitHub CLI with remediation guidance. Runtime execution validation is partially environment-blocked here due missing `docker`.
+
+- [TASK-0013] Add comprehensive Codex CLI argument-ordering tests for runner arg-building contract.
+  - Completed: 2026-02-25
+  - Notes: Added matrix coverage for start/resume/resume-last arg construction across model/reasoning/approval/network permutations with order/flag assertions, while preserving existing strict order-contract tests.
+
+- [TASK-0012] Remove compat retry fallback in router and fail fast on non-zero exit.
+  - Completed: 2026-02-25
+  - Notes: Removed stale resume compatibility retry/fallback mutation path from router run execution, deleted obsolete helper logic, and updated integration coverage to enforce single-attempt fail-fast behavior without argument rewriting.
+
 - [TASK-0019] Enforce single-session-per-scope semantics with explicit expiry and stale-session controls.
   - Completed: 2026-02-25
   - Notes: Enforced one logical session per non-DM scope via scoped session resolution, preserved expired-session continue/new decision flow in scope, added `!c purge stale <ttl>` stale cleanup command, and aligned reset semantics with fresh-start behavior in scope. Updated command/docs and added targeted routing/integration coverage.

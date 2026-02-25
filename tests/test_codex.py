@@ -98,6 +98,65 @@ def test_runner_build_resume_last_args_order_contract():
     ]
 
 
+@pytest.mark.parametrize(
+    "variant,model,reasoning,approval,network",
+    [
+        ("start", "", "", "", False),
+        ("start", "gpt-5", "", "on-request", False),
+        ("start", "gpt-5", "high", "on-request", True),
+        ("resume", "", "", "", False),
+        ("resume", "gpt-5", "high", "on-request", True),
+        ("resume_last", "", "medium", "never", True),
+        ("resume_last", "gpt-5", "", "", False),
+    ],
+)
+def test_runner_build_args_relative_order_matrix(variant, model, reasoning, approval, network):
+    runner = Runner("codex", "workspace-write", {}, approval, network_access=network)
+    repo = "/tmp/repo"
+    prompt = "do work"
+    if variant == "start":
+        args = runner.build_start_args(repo, prompt, model, reasoning)
+    elif variant == "resume":
+        args = runner.build_resume_args(repo, "thread_123", prompt, model, reasoning)
+    else:
+        args = runner.build_resume_last_args(repo, prompt, model, reasoning)
+
+    assert args[0:4] == ["exec", "--json", "--cd", repo]
+    assert "--sandbox" in args
+    sandbox_idx = args.index("--sandbox")
+    assert args[sandbox_idx + 1] == "workspace-write"
+
+    if approval:
+        approval_idx = args.index("-c")
+        assert args[approval_idx + 1].startswith("approval_policy=")
+    if network:
+        assert "sandbox_workspace_write.network_access=true" in args
+    else:
+        assert "sandbox_workspace_write.network_access=true" not in args
+
+    if variant == "resume":
+        resume_idx = args.index("resume")
+        assert args[resume_idx + 1] == "thread_123"
+    elif variant == "resume_last":
+        resume_idx = args.index("resume")
+        assert args[resume_idx + 1] == "--last"
+    else:
+        assert "resume" not in args
+
+    if model:
+        model_idx = args.index("--model")
+        assert args[model_idx + 1] == model
+    else:
+        assert "--model" not in args
+
+    if reasoning:
+        assert any(str(token).startswith('model_reasoning_effort=') for token in args)
+    else:
+        assert not any(str(token).startswith('model_reasoning_effort=') for token in args)
+
+    assert args[-1] == prompt
+
+
 def test_runner_build_args_include_workspace_network_override_when_enabled():
     runner = Runner("codex", "workspace-write", {}, "on-request", network_access=True)
     args = runner.build_start_args("/tmp/repo", "hello", "", "")

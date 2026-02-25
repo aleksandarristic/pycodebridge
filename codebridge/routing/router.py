@@ -1824,115 +1824,82 @@ class Router:
 
         async with self.typing_context(sink):
             args_to_run = list(original_args)
-            attempted_stale_resume_retry = False
-            while True:
-                stderr_tail.clear()
-                try:
-                    proc = await self.runner.run(
-                        Options(
-                            repo_path=repo_path,
-                            args=args_to_run,
-                            env=self.cfg.codex.env,
-                            on_jsonl=lambda line: self.on_jsonl(
-                                sink, channel_id, session, repo_name, entry, line, relay_output
-                            ),
-                            on_thread=lambda tid: self.on_thread(
-                                channel_id, session, repo_name, repo_path, model, reasoning_effort, entry, tid
-                            ),
-                            on_output=_capture_output,
-                            on_stderr=_on_stderr,
-                            on_exit=lambda err, rc: self.on_exit(channel_id, session, repo_name, err, rc),
-                        )
-                    )
-                except Exception as exc:
-                    self._append_codex_error_log(
-                        channel_id=channel_id,
-                        session=session,
-                        repo_name=repo_name,
+            stderr_tail.clear()
+            try:
+                proc = await self.runner.run(
+                    Options(
                         repo_path=repo_path,
                         args=args_to_run,
-                        return_code=None,
-                        stderr_lines=stderr_tail,
-                        note=f"failed to start: {exc}",
+                        env=self.cfg.codex.env,
+                        on_jsonl=lambda line: self.on_jsonl(
+                            sink, channel_id, session, repo_name, entry, line, relay_output
+                        ),
+                        on_thread=lambda tid: self.on_thread(
+                            channel_id, session, repo_name, repo_path, model, reasoning_effort, entry, tid
+                        ),
+                        on_output=_capture_output,
+                        on_stderr=_on_stderr,
+                        on_exit=lambda err, rc: self.on_exit(channel_id, session, repo_name, err, rc),
                     )
-                    self._session_log.append(
-                        channel_id,
-                        session or DEFAULT_SESSION,
-                        "run.start_failed",
-                        {"error": str(exc)},
-                        repo_name=repo_name,
-                    )
-                    self._audit_helper.close(entry)
-                    await self.reply_forbidden(sink, f"Codex failed to start: {exc}")
-                    return
+                )
+            except Exception as exc:
+                self._append_codex_error_log(
+                    channel_id=channel_id,
+                    session=session,
+                    repo_name=repo_name,
+                    repo_path=repo_path,
+                    args=args_to_run,
+                    return_code=None,
+                    stderr_lines=stderr_tail,
+                    note=f"failed to start: {exc}",
+                )
+                self._session_log.append(
+                    channel_id,
+                    session or DEFAULT_SESSION,
+                    "run.start_failed",
+                    {"error": str(exc)},
+                    repo_name=repo_name,
+                )
+                self._audit_helper.close(entry)
+                await self.reply_forbidden(sink, f"Codex failed to start: {exc}")
+                return
 
-                await self.set_active(channel_id, session, proc)
-                heartbeat_task: asyncio.Task | None = None
+            await self.set_active(channel_id, session, proc)
+            heartbeat_task: asyncio.Task | None = None
+            if relay_output:
+                heartbeat_task = asyncio.create_task(self._run_heartbeat(sink, session, started_at))
+            try:
+                rc = await proc.wait()
+            finally:
+                if heartbeat_task:
+                    heartbeat_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await heartbeat_task
+                await self.clear_active(channel_id, session)
+
+            if rc == 0:
+                usage_after = self.get_usage(channel_id, session)
+                after_total = usage_after.total_tokens if usage_after else 0
+                delta_total = max(0, after_total - before_total)
+                if delta_total:
+                    self._budget_record_usage(event, channel_id, delta_total)
                 if relay_output:
-                    heartbeat_task = asyncio.create_task(self._run_heartbeat(sink, session, started_at))
-                try:
-                    rc = await proc.wait()
-                finally:
-                    if heartbeat_task:
-                        heartbeat_task.cancel()
-                        with contextlib.suppress(asyncio.CancelledError):
-                            await heartbeat_task
-                    await self.clear_active(channel_id, session)
-
-                if rc == 0:
-                    if (
-                        not attempted_stale_resume_retry
-                        and self._looks_like_missing_rollout_thread_error(stderr_tail)
-                        and self._is_resume_command(args_to_run)
-                        and output_events == 0
-                    ):
-                        retry_args = self._resume_fallback_start_args(args_to_run)
-                        if retry_args != args_to_run:
-                            self.clear_session_thread(channel_id, session)
-                            attempted_stale_resume_retry = True
-                            args_to_run = retry_args
-                            self.logger.warning(
-                                "codex.retry.stale_thread",
-                                extra={"channel_id": channel_id, "repo": repo_name, "session": session},
-                            )
-                            self._append_codex_error_log(
-                                channel_id=channel_id,
-                                session=session,
-                                repo_name=repo_name,
-                                repo_path=repo_path,
-                                args=retry_args,
-                                return_code=None,
-                                stderr_lines=stderr_tail,
-                                note="stale resume thread; retrying with fresh start args",
-                            )
-                            await self.reply(
-                                sink,
-                                "Codex resume thread appears stale; retrying with a fresh start for this prompt.",
-                            )
-                            continue
-                    usage_after = self.get_usage(channel_id, session)
-                    after_total = usage_after.total_tokens if usage_after else 0
-                    delta_total = max(0, after_total - before_total)
-                    if delta_total:
-                        self._budget_record_usage(event, channel_id, delta_total)
-                    if relay_output:
-                        await self._send_run_completion_summary(
-                            sink,
-                            channel_id,
-                            session,
-                            started_at,
-                            output_events,
-                            last_output,
-                        )
-                    self._session_log.append(
+                    await self._send_run_completion_summary(
+                        sink,
                         channel_id,
-                        session or DEFAULT_SESSION,
-                        "run.complete",
-                        {"code": 0, "output_events": output_events},
-                        repo_name=repo_name,
+                        session,
+                        started_at,
+                        output_events,
+                        last_output,
                     )
-                    break
-
+                self._session_log.append(
+                    channel_id,
+                    session or DEFAULT_SESSION,
+                    "run.complete",
+                    {"code": 0, "output_events": output_events},
+                    repo_name=repo_name,
+                )
+            else:
                 self.logger.warning("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "code": rc})
                 self._append_codex_error_log(
                     channel_id=channel_id,
@@ -1944,36 +1911,6 @@ class Router:
                     stderr_lines=stderr_tail,
                     note="non-zero exit",
                 )
-                if (
-                    not attempted_stale_resume_retry
-                    and self._looks_like_missing_rollout_thread_error(stderr_tail)
-                    and self._is_resume_command(args_to_run)
-                ):
-                    retry_args = self._resume_fallback_start_args(args_to_run)
-                    if retry_args != args_to_run:
-                        self.clear_session_thread(channel_id, session)
-                        attempted_stale_resume_retry = True
-                        args_to_run = retry_args
-                        self.logger.warning(
-                            "codex.retry.stale_thread",
-                            extra={"channel_id": channel_id, "repo": repo_name, "session": session},
-                        )
-                        self._append_codex_error_log(
-                            channel_id=channel_id,
-                            session=session,
-                            repo_name=repo_name,
-                            repo_path=repo_path,
-                            args=retry_args,
-                            return_code=None,
-                            stderr_lines=stderr_tail,
-                            note="stale resume thread; retrying with fresh start args",
-                        )
-                        await self.reply(
-                            sink,
-                            "Codex resume thread appears stale; retrying with a fresh start for this prompt.",
-                        )
-                        continue
-
                 detail = f"Codex exited with code {rc}."
                 if stderr_tail:
                     detail += f" Last stderr: {stderr_tail[-1]}"
@@ -1986,7 +1923,6 @@ class Router:
                     {"code": rc, "stderr_tail": list(stderr_tail[-5:])},
                     repo_name=repo_name,
                 )
-                break
             self._audit_helper.close(entry)
         await self._budget_soft_notify_if_needed(event, sink)
 
@@ -2979,29 +2915,6 @@ class Router:
             return pathutil.normalize_repo_name(raw)
         except ValueError:
             return raw.lower()
-
-    def _looks_like_missing_rollout_thread_error(self, stderr_tail: list[str]) -> bool:
-        text = "\n".join(stderr_tail).lower()
-        return "missing rollout path for thread" in text
-
-    def _is_resume_command(self, args: list[str]) -> bool:
-        return "resume" in args
-
-    def _resume_fallback_start_args(self, args: list[str]) -> list[str]:
-        retry: list[str] = []
-        dropped = False
-        i = 0
-        while i < len(args):
-            token = args[i]
-            if token == "resume" and i + 1 < len(args):
-                dropped = True
-                i += 2
-                continue
-            retry.append(token)
-            i += 1
-        if dropped:
-            return retry
-        return list(args)
 
     def _append_codex_error_log(
         self,
