@@ -250,29 +250,6 @@ class _PrefixedSink:
         await self._sink.send_file(path, filename, thread_id=thread_id, reply_to_id=reply_to_id)
 
 
-def dm_help_text() -> str:
-    """Return DM admin help text."""
-    return (
-        "DM Admin:\n"
-        "help — show this help [open]\n"
-        "repos — list repos under code_root [open]\n"
-        "sessions — list sessions across channels [open]\n"
-        "status — show queues and running jobs [open]\n"
-        "config — show effective config [open]\n"
-        "options [show] | options set <name> <value> [local|global] — runtime options (set requires totp unless unlocked) [mixed]\n"
-        "gh <args> — run GitHub CLI in DM context [unlock/gh]\n"
-        "updates — check Codex CLI update status [open]\n"
-        "create/new <name> — create repo [totp]\n"
-        "clone <name> <url> — clone repo [totp]\n"
-        "copy/cp <from> <to> — copy repo [totp]\n"
-        "deleterepo/del <name> — delete repo [totp]\n"
-        "renamerepo/ren <from> <to> — rename repo [totp]\n"
-        "reset all — request reset-all confirmation; next reply must be `yes` within 60s [open]\n"
-        "unlock/ul [gh|all] [status|ttl] — unlock command scopes for your account [totp; status=open]\n"
-        "lock/lk [gh|all] — clear unlock scopes for your account [open]\n"
-    )
-
-
 def dm_binding_help_text() -> str:
     """Return DM repo binding help text."""
     return (

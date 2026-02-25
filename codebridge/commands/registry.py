@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import json
 import os
 import re
-from typing import Any, Awaitable, Callable, Dict, Iterable, List, Sequence, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Sequence, Tuple
 
 from .parse import parse_choose, parse_session_and_id, parse_session_and_prompt, parse_session_or_limit
 from . import help as help_renderer
@@ -25,28 +25,11 @@ from ..util import path as pathutil
 
 CommandHandler = Callable[[Any, MessageEvent, ResponseSink, str, str, str], Awaitable[None]]
 
-GROUP_ORDER = (
-    "General",
-    "Security",
-    "Sessions",
-    "Repo lifecycle",
-    "Run control",
-    "Repo helpers",
-    "Queue",
-)
-
 AUTH_OPEN = "open"
 AUTH_UNLOCK = "unlock"
 AUTH_UNLOCK_GH = "unlock-gh"
 AUTH_TOTP = "totp"
 AUTH_MIXED = "mixed"
-AUTH_LABELS = {
-    AUTH_OPEN: "open",
-    AUTH_UNLOCK: "unlock/default",
-    AUTH_UNLOCK_GH: "unlock/gh",
-    AUTH_TOTP: "totp",
-    AUTH_MIXED: "mixed",
-}
 
 _MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{1,63}$")
 _REASONING_ALIASES = {
@@ -383,24 +366,6 @@ async def dispatch(
         return False
     await spec.handler(router, message, sink, repo_name, repo_path, rest)
     return True
-
-
-def _group_specs(specs: Sequence[CommandSpec]) -> Dict[str, List[CommandSpec]]:
-    grouped: Dict[str, List[CommandSpec]] = {}
-    for spec in specs:
-        grouped.setdefault(spec.group, []).append(spec)
-    return grouped
-
-
-def _ordered_groups(grouped: Dict[str, List[CommandSpec]]) -> Iterable[str]:
-    seen = set()
-    for group in GROUP_ORDER:
-        if group in grouped:
-            seen.add(group)
-            yield group
-    for group in grouped:
-        if group not in seen:
-            yield group
 
 
 async def _cmd_help(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
