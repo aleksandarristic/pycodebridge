@@ -208,88 +208,140 @@ class Router:
             if had_leading_mention and not content:
                 return
         shortcut_cmdline = self._shortcut_cmdline(content)
-        if event.attachments:
-            if self._totp_enabled(event):
-                ok, _ = await self.require_totp(event, sink, "upload", content)
-                if not ok:
-                    return
-            try:
-                repo_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, repo_name)
-            except Exception as exc:
-                await self.reply_forbidden(sink, f"Repo error: {exc}")
-                return
-            await self.handle_upload_request(event, sink, repo_name, repo_path)
+        if await self._handle_attachment_flow(event, sink, repo_name, content):
             return
+        handled_pending, _ = await self._handle_pending_upload_flow(event, sink, repo_name, content)
+        if handled_pending:
+            return
+        if await self._handle_plain_prompt_flow(
+            event,
+            sink,
+            repo_name,
+            prefix,
+            content,
+            shortcut_cmdline,
+            had_leading_mention,
+        ):
+            return
+        await self._handle_command_flow(event, sink, repo_name, prefix, content, shortcut_cmdline)
+
+    async def _repo_path_or_forbidden(self, sink: ResponseSink, repo_name: str, *, for_create: bool = False) -> str | None:
+        try:
+            if for_create:
+                return pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, repo_name)
+            return pathutil.resolve_repo_path(self.cfg.codex.code_root, repo_name)
+        except Exception as exc:
+            await self.reply_forbidden(sink, f"Repo error: {exc}")
+            return None
+
+    async def _handle_attachment_flow(self, event: MessageEvent, sink: ResponseSink, repo_name: str, content: str) -> bool:
+        if not event.attachments:
+            return False
+        if self._totp_enabled(event):
+            ok, _ = await self.require_totp(event, sink, "upload", content)
+            if not ok:
+                return True
+        repo_path = await self._repo_path_or_forbidden(sink, repo_name)
+        if repo_path is None:
+            return True
+        await self.handle_upload_request(event, sink, repo_name, repo_path)
+        return True
+
+    async def _handle_pending_upload_flow(
+        self,
+        event: MessageEvent,
+        sink: ResponseSink,
+        repo_name: str,
+        content: str,
+    ) -> tuple[bool, str]:
         pending_content = content
         if self.file_transfers.has_pending_upload(event) and self._totp_enabled(event):
             ok, pending_content = await self.require_totp(event, sink, "upload", content)
             if not ok:
-                return
-        if await self.handle_pending_upload_response(event, sink, repo_name, pending_content):
-            return
+                return True, pending_content
+        handled = await self.handle_pending_upload_response(event, sink, repo_name, pending_content)
+        return handled, pending_content
+
+    async def _handle_plain_prompt_flow(
+        self,
+        event: MessageEvent,
+        sink: ResponseSink,
+        repo_name: str,
+        prefix: str,
+        content: str,
+        shortcut_cmdline: str,
+        had_leading_mention: bool,
+    ) -> bool:
         if had_leading_mention and event.platform_thread_id and not content.startswith(prefix) and not shortcut_cmdline:
             # In Discord threads, require explicit command syntax after a bot mention.
-            return
-        if not content.startswith(prefix) and not shortcut_cmdline:
-            relay_session, ambiguous = await self.pending_input_session(event)
-            if ambiguous:
-                await self.reply_forbidden(
-                    sink,
-                    "Multiple sessions are waiting for input. Use `!c answer <session> -- <text>`.",
-                )
-                return
-            if relay_session:
-                relay_text = content.strip()
-                if not relay_text:
-                    return
-                if self._totp_enabled(event) and not self._totp_is_unlocked(event):
-                    ok, relay_text = await self.require_totp(event, sink, "answer", relay_text)
-                    if not ok:
-                        return
-                await self.handle_answer(event, sink, relay_session, relay_text)
-                return
-            pending_session = self.current_session_for_event(event)
-            pending_conflict = await self.consume_pending(event.channel_id, pending_session)
-            if pending_conflict is not None:
-                pending_conflict.prompt = content.strip() or (pending_conflict.prompt or "").strip()
-                await self.coordinator.set_pending_conflict(event.channel_id, pending_conflict.session, pending_conflict)
-                try:
-                    repo_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, repo_name)
-                except Exception as exc:
-                    await self.reply_forbidden(sink, f"Repo error: {exc}")
-                    return
-                await self.handle_choose(event, sink, repo_name, repo_path, pending_conflict.session, "new")
-                return
-            allow_plain = self._transport_allow_plain_prompts(event)
-            if self._totp_enabled(event) and self._totp_is_unlocked(event):
-                allow_plain = True
-            if not allow_plain:
-                return
-            self.logger.info(
-                "routing.prompt",
-                extra={
-                    "platform": event.platform,
-                    "channel_id": event.channel_id,
-                    "repo": repo_name,
-                    "session": self.current_session_for_event(event),
-                },
-            )
-            prompt = content.strip()
-            if not prompt:
-                return
-            if self._totp_enabled(event) and not self._totp_is_unlocked(event):
-                ok, prompt = await self.require_totp(event, sink, "resume", prompt)
-                if not ok:
-                    return
-            try:
-                repo_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, repo_name)
-            except Exception as exc:
-                await self.reply_forbidden(sink, f"Repo error: {exc}")
-                return
-            session = self.current_session_for_event(event)
-            await self.handle_resume(event, sink, repo_name, repo_path, session, prompt)
-            return
+            return True
+        if content.startswith(prefix) or shortcut_cmdline:
+            return False
 
+        relay_session, ambiguous = await self.pending_input_session(event)
+        if ambiguous:
+            await self.reply_forbidden(
+                sink,
+                "Multiple sessions are waiting for input. Use `!c answer <session> -- <text>`.",
+            )
+            return True
+        if relay_session:
+            relay_text = content.strip()
+            if not relay_text:
+                return True
+            if self._totp_enabled(event) and not self._totp_is_unlocked(event):
+                ok, relay_text = await self.require_totp(event, sink, "answer", relay_text)
+                if not ok:
+                    return True
+            await self.handle_answer(event, sink, relay_session, relay_text)
+            return True
+        pending_session = self.current_session_for_event(event)
+        pending_conflict = await self.consume_pending(event.channel_id, pending_session)
+        if pending_conflict is not None:
+            pending_conflict.prompt = content.strip() or (pending_conflict.prompt or "").strip()
+            await self.coordinator.set_pending_conflict(event.channel_id, pending_conflict.session, pending_conflict)
+            repo_path = await self._repo_path_or_forbidden(sink, repo_name)
+            if repo_path is None:
+                return True
+            await self.handle_choose(event, sink, repo_name, repo_path, pending_conflict.session, "new")
+            return True
+        allow_plain = self._transport_allow_plain_prompts(event)
+        if self._totp_enabled(event) and self._totp_is_unlocked(event):
+            allow_plain = True
+        if not allow_plain:
+            return True
+        self.logger.info(
+            "routing.prompt",
+            extra={
+                "platform": event.platform,
+                "channel_id": event.channel_id,
+                "repo": repo_name,
+                "session": self.current_session_for_event(event),
+            },
+        )
+        prompt = content.strip()
+        if not prompt:
+            return True
+        if self._totp_enabled(event) and not self._totp_is_unlocked(event):
+            ok, prompt = await self.require_totp(event, sink, "resume", prompt)
+            if not ok:
+                return True
+        repo_path = await self._repo_path_or_forbidden(sink, repo_name)
+        if repo_path is None:
+            return True
+        session = self.current_session_for_event(event)
+        await self.handle_resume(event, sink, repo_name, repo_path, session, prompt)
+        return True
+
+    async def _handle_command_flow(
+        self,
+        event: MessageEvent,
+        sink: ResponseSink,
+        repo_name: str,
+        prefix: str,
+        content: str,
+        shortcut_cmdline: str,
+    ) -> None:
         if shortcut_cmdline:
             cmdline = shortcut_cmdline
         else:
@@ -298,12 +350,8 @@ class Router:
             return
         cmdline = self._normalize_unlock_totp_syntax(cmdline)
 
-        pending_cmdline = cmdline
-        if self.file_transfers.has_pending_upload(event) and self._totp_enabled(event):
-            ok, pending_cmdline = await self.require_totp(event, sink, "upload", cmdline)
-            if not ok:
-                return
-        if await self.handle_pending_upload_response(event, sink, repo_name, pending_cmdline):
+        handled_pending, _ = await self._handle_pending_upload_flow(event, sink, repo_name, cmdline)
+        if handled_pending:
             return
 
         fields = cmdline.split()
@@ -334,18 +382,14 @@ class Router:
             },
         )
         if canonical_cmd == "create":
-            try:
-                repo_path = pathutil.resolve_repo_path_for_create(self.cfg.codex.code_root, repo_name)
-            except Exception as exc:
-                await self.reply_forbidden(sink, f"Repo error: {exc}")
+            repo_path = await self._repo_path_or_forbidden(sink, repo_name, for_create=True)
+            if repo_path is None:
                 return
             await self.handle_create_repo(event, sink, repo_name, repo_path)
             return
 
-        try:
-            repo_path = pathutil.resolve_repo_path(self.cfg.codex.code_root, repo_name)
-        except Exception as exc:
-            await self.reply_forbidden(sink, f"Repo error: {exc}")
+        repo_path = await self._repo_path_or_forbidden(sink, repo_name)
+        if repo_path is None:
             return
 
         quit_session = parse_session_quit_alias(fields)
