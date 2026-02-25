@@ -12,6 +12,22 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0024] Refactor `Router.handle_message` into focused phases to reduce nested branching and mixed responsibilities.
+  - Completed: 2026-02-25
+  - Notes: Split routing entry flow into explicit helper phases for attachment handling, pending upload replies, unprefixed prompt flow, and command flow; added shared repo-path error helper and preserved existing behavior with targeted router integration coverage.
+
+- [TASK-0023] Centralize command authorization policy so `CommandSpec.auth` is the default source of truth.
+  - Completed: 2026-02-25
+  - Notes: Updated router TOTP policy decisions to derive default enforcement from command registry auth metadata while preserving subcommand-specific overrides (`options`, `lock`, `unlock status`, `git`, `gh`); added targeted regression test proving metadata-driven behavior.
+
+- [TASK-0022] Consolidate shortcut command parsing so DM and repo-channel paths share one canonical parser core.
+  - Completed: 2026-02-25
+  - Notes: Added shared bang-shortcut normalizer and rewired router + DM shortcut handling to use it with explicit DM alias extensions; added targeted shortcut tests and verified DM/integration shortcut behavior.
+
+- [TASK-0021] Remove dead command/DM helper code paths that no longer participate in runtime behavior.
+  - Completed: 2026-02-25
+  - Notes: Removed unused command registry constants/helpers and stale DM help helper path; validated command/DM test modules for no behavior regressions.
+
 - [TASK-0014] Make repo bash scripts executable and update `update.sh` with auth checks and dry-run support.
   - Completed: 2026-02-25
   - Notes: Confirmed repo shell scripts are executable and `update.sh` includes `--dry-run`, `--check`, and warn-only post-start auth checks for Codex CLI and GitHub CLI with remediation guidance. Runtime execution validation is partially environment-blocked here due missing `docker`.
