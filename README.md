@@ -95,6 +95,13 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `model` (default empty) — default model; override per session with `!c model`.
 - `env` (default `{}`) — extra environment variables for Codex.
 
+Important: if Codex cannot run `git push`, make sure network is enabled for the sandbox level you selected in the host Codex config (`~/.codex/config.toml`). For `workspace-write`, include:
+
+```toml
+[sandbox_workspace_write]
+network_access = true
+```
+
 ### `state`
 - `data_dir` (required) — directory for state.json and locks.
 - `log_dir` (required) — directory for audit logs and `bridge.log`.
