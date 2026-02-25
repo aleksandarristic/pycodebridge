@@ -7,6 +7,7 @@ import time
 from typing import TYPE_CHECKING, Awaitable, Callable, Optional
 
 from ..observability.audit import Entry
+from ..commands.shortcuts import normalize_bang_shortcut
 from ..routing.helpers import (
     DEFAULT_SESSION,
     HELPER_TIMEOUT,
@@ -70,6 +71,43 @@ _DM_SHORTCUT_COMMANDS = {
     "use",
 }
 
+_DM_SHORTCUT_ALIASES = (
+    ("!commands", "help"),
+    ("!repos", "repos"),
+    ("!sessions", "sessions"),
+    ("!status", "status"),
+    ("!st", "status"),
+    ("!config", "config"),
+    ("!updates", "updates"),
+    ("!u", "updates"),
+    ("!health", "health"),
+    ("!diag", "health"),
+    ("!create", "create"),
+    ("!new", "create"),
+    ("!createrepo", "create"),
+    ("!clone", "clone"),
+    ("!clonerepo", "clone"),
+    ("!copy", "copy"),
+    ("!cp", "copy"),
+    ("!copyrepo", "copy"),
+    ("!deleterepo", "deleterepo"),
+    ("!delete", "deleterepo"),
+    ("!del", "deleterepo"),
+    ("!renamerepo", "renamerepo"),
+    ("!rename", "renamerepo"),
+    ("!ren", "renamerepo"),
+    ("!reset", "reset"),
+    ("!lk", "lock"),
+    ("!bind", "bind"),
+    ("!use", "use"),
+    ("!repo", "repo"),
+    ("!unbind", "unbind"),
+    ("!answer", "answer"),
+    ("!reply", "answer"),
+    ("!approve", "approve"),
+    ("!deny", "deny"),
+)
+
 _DM_HELP_OVERVIEW_ORDER = (
     "help",
     "bind",
@@ -130,54 +168,7 @@ _DM_HELP_DETAILS: dict[str, tuple[str, str]] = {
 
 def _dm_shortcut_cmdline(content: str) -> str:
     """Translate DM-only top-level shortcuts into canonical command text."""
-    raw = (content or "").strip()
-    if not raw.startswith("!"):
-        return ""
-    lower = raw.lower()
-
-    def _tail(prefix: str) -> str:
-        return raw[len(prefix) :].strip()
-
-    dm_mapping = (
-        ("!commands", "help"),
-        ("!repos", "repos"),
-        ("!sessions", "sessions"),
-        ("!status", "status"),
-        ("!st", "status"),
-        ("!config", "config"),
-        ("!updates", "updates"),
-        ("!u", "updates"),
-        ("!health", "health"),
-        ("!diag", "health"),
-        ("!create", "create"),
-        ("!new", "create"),
-        ("!createrepo", "create"),
-        ("!clone", "clone"),
-        ("!clonerepo", "clone"),
-        ("!copy", "copy"),
-        ("!cp", "copy"),
-        ("!copyrepo", "copy"),
-        ("!deleterepo", "deleterepo"),
-        ("!delete", "deleterepo"),
-        ("!del", "deleterepo"),
-        ("!renamerepo", "renamerepo"),
-        ("!rename", "renamerepo"),
-        ("!ren", "renamerepo"),
-        ("!reset", "reset"),
-        ("!lk", "lock"),
-        ("!bind", "bind"),
-        ("!use", "use"),
-        ("!repo", "repo"),
-        ("!unbind", "unbind"),
-        ("!answer", "answer"),
-        ("!reply", "answer"),
-        ("!approve", "approve"),
-        ("!deny", "deny"),
-    )
-    for bang, cmd in dm_mapping:
-        if lower == bang or lower.startswith(bang + " "):
-            return (cmd + " " + _tail(bang)).strip()
-    return ""
+    return normalize_bang_shortcut(content, _DM_SHORTCUT_COMMANDS, aliases=_DM_SHORTCUT_ALIASES)
 
 
 def _normalize_dm_help_token(token: str) -> str:

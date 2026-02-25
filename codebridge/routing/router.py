@@ -32,6 +32,7 @@ from ..handlers import repo_helpers as repo_handlers
 from ..handlers import system_helpers
 from ..commands import registry as command_registry
 from ..commands.parse import parse_session_quit_alias, parse_session_slash_prompt
+from ..commands.shortcuts import normalize_bang_shortcut
 from ..services.file_transfer import FileTransferService
 from .reply import send_forbidden, send_reply
 from ..util.ansi import strip_control_codes
@@ -461,52 +462,7 @@ class Router:
 
     def _shortcut_cmdline(self, content: str) -> str:
         """Translate top-level !<command> forms into canonical command lines."""
-        raw = (content or "").strip()
-        if not raw.startswith("!"):
-            return ""
-        lower = raw.lower()
-
-        # Session-targeted steering/answer shorthands: !s:<session> <text>, !a:<session> <text>
-        for token, cmd in (("!s:", "steer"), ("!a:", "answer")):
-            if lower.startswith(token):
-                after = raw[len(token) :].strip()
-                if not after:
-                    return cmd
-                parts = after.split(maxsplit=1)
-                session = parts[0].strip()
-                text = parts[1].strip() if len(parts) > 1 else ""
-                if text:
-                    return f"{cmd} {session} -- {text}"
-                return cmd
-
-        if lower == "!s":
-            return "steer"
-        if lower.startswith("!s"):
-            if len(raw) == len("!s"):
-                return "steer"
-            if raw[len("!s")].isspace():
-                return ("steer " + raw[len("!s") :].strip()).strip()
-        if lower == "!a":
-            return "answer"
-        if lower.startswith("!a"):
-            if len(raw) == len("!a"):
-                return "answer"
-            if raw[len("!a")].isspace():
-                return ("answer " + raw[len("!a") :].strip()).strip()
-        if lower in {"!cont", "!continue"}:
-            return "choose continue"
-
-        after_bang = raw[1:].strip()
-        if not after_bang:
-            return ""
-        parts = after_bang.split(maxsplit=1)
-        token = parts[0].strip().lower()
-        if token not in self._command_registry:
-            return ""
-        tail = parts[1].strip() if len(parts) > 1 else ""
-        if tail:
-            return f"{token} {tail}"
-        return token
+        return normalize_bang_shortcut(content, self._command_registry.keys())
 
     async def handle_start(self, event: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, session: str) -> None:
         """Start a new Codex session for a channel/session."""
