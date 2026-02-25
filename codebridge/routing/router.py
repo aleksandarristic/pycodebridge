@@ -2140,8 +2140,16 @@ class Router:
             return token
         return spec.name
 
+    def _command_auth_mode(self, cmd: str) -> str:
+        token = self._canonical_command(cmd)
+        spec = self._command_registry.get(token)
+        if not spec:
+            return ""
+        return getattr(spec, "auth", "")
+
     def _totp_required_for_command(self, event: MessageEvent, cmd: str, rest: str) -> bool:
         token = self._canonical_command(cmd)
+        auth_mode = self._command_auth_mode(token)
         if token == "options":
             if self._options_show_requested(rest):
                 return False
@@ -2164,6 +2172,18 @@ class Router:
             if not self.cfg.discord.totp_enforce_gh:
                 return False
             return not self._totp_is_unlocked(event, _UNLOCK_SCOPE_GH)
+        if auth_mode == command_registry.AUTH_OPEN:
+            return False
+        if auth_mode == command_registry.AUTH_UNLOCK:
+            return not self._totp_is_unlocked(event)
+        if auth_mode == command_registry.AUTH_UNLOCK_GH:
+            if not self.cfg.discord.totp_enforce_gh:
+                return False
+            return not self._totp_is_unlocked(event, _UNLOCK_SCOPE_GH)
+        if auth_mode == command_registry.AUTH_TOTP:
+            return self.cfg.discord.totp_enforce_high_risk
+        if auth_mode == command_registry.AUTH_MIXED:
+            return not self._totp_is_unlocked(event)
         if self._totp_command_is_high_risk(token, rest):
             return self.cfg.discord.totp_enforce_high_risk
         if token in _READ_ONLY_COMMANDS:

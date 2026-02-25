@@ -15,6 +15,7 @@ router behavior depends on multiple subsystems at once.
 
 import asyncio
 import base64
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
@@ -2295,6 +2296,26 @@ def test_totp_command_group_toggles_control_enforcement(tmp_path, monkeypatch):
     assert router._totp_required_for_command(event, "create", "demo-repo") is True
     router.cfg.discord.totp_enforce_high_risk = False
     assert router._totp_required_for_command(event, "create", "demo-repo") is False
+
+
+def test_totp_defaults_follow_command_spec_auth(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    event = _discord_event("!c status", "codex-repo")
+
+    # `start` is AUTH_UNLOCK by default.
+    assert router._totp_required_for_command(event, "start", "") is True
+
+    # Changing auth metadata should immediately affect default enforcement.
+    spec = router._command_registry["start"]
+    router._command_registry["start"] = replace(spec, auth="open")
+    assert router._totp_required_for_command(event, "start", "") is False
 
 
 def test_totp_unlock_status_and_lock(tmp_path, monkeypatch):
