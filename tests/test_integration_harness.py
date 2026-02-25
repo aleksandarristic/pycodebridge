@@ -2732,3 +2732,8 @@ def test_router_writes_codex_error_log(tmp_path):
     assert payload["return_code"] == 2
     assert payload["args"] == ["exec", "hello"]
     assert payload["stderr_tail"][-1] == "For more information, try '--help'."
+    session_path = tmp_path / "logs" / "session_jsonl" / "active" / "chan" / "default.jsonl"
+    session_lines = session_path.read_text(encoding="utf-8").strip().splitlines()
+    event_payload = json.loads(session_lines[-1])
+    assert event_payload["event"] == "codex.error"
+    assert event_payload["data"]["return_code"] == 2

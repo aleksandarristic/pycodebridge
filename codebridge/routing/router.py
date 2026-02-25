@@ -18,6 +18,7 @@ import zipfile
 from .. import config as cfgmod
 from ..observability.audit import Entry, Logger as AuditLogger
 from ..observability.audit_helpers import AuditHelper
+from ..observability.session_jsonl import SessionJsonlHelper, SessionJsonlLogger
 from ..codex import Event, Options, Runner, display_texts, parse_event
 from ..sessions.coordinator import SessionCoordinator
 from ..sessions.state import Store, utc_now_iso
@@ -110,6 +111,13 @@ class Router:
         self.file_transfers = FileTransferService(cfg, logger)
         self._commit = _git_commit_hash()
         self._audit_helper = AuditHelper(audit, logger)
+        session_logger = None
+        if self.cfg.state.log_dir:
+            try:
+                session_logger = SessionJsonlLogger(self.cfg.state.log_dir)
+            except Exception as exc:
+                self.logger.warning("session_jsonl.init_failed", extra={"error": str(exc)})
+        self._session_log = SessionJsonlHelper(session_logger, logger)
         self._awaiting_input: Dict[str, Dict[str, float]] = {}
         self._totp_last_step_by_user: Dict[str, int] = {}
         self._totp_locked_users: Set[str] = set()
@@ -1589,11 +1597,29 @@ class Router:
             "timestamp": utc_now_iso(),
             "channel": channel_id,
         }
+        self._session_log.append(
+            channel_id,
+            session or DEFAULT_SESSION,
+            "run.start",
+            {
+                "repo_name": repo_name,
+                "repo_path": repo_path,
+                "model": model,
+                "reasoning_effort": reasoning_effort,
+                "args": original_args,
+            },
+        )
         entry = self._audit_helper.start(channel_id, session or DEFAULT_SESSION, "pending", meta)
         stderr_tail: list[str] = []
 
         async def _on_stderr(line: str) -> None:
             self._audit_helper.append_stderr(entry, line)
+            self._session_log.append(
+                channel_id,
+                session or DEFAULT_SESSION,
+                "codex.stderr",
+                {"line": line},
+            )
             text = strip_control_codes((line or "").strip())
             if not text:
                 return
@@ -1631,6 +1657,12 @@ class Router:
                         return_code=None,
                         stderr_lines=stderr_tail,
                         note=f"failed to start: {exc}",
+                    )
+                    self._session_log.append(
+                        channel_id,
+                        session or DEFAULT_SESSION,
+                        "run.start_failed",
+                        {"error": str(exc)},
                     )
                     self._audit_helper.close(entry)
                     await self.reply_forbidden(sink, f"Codex failed to start: {exc}")
@@ -1694,6 +1726,12 @@ class Router:
                             output_events,
                             last_output,
                         )
+                    self._session_log.append(
+                        channel_id,
+                        session or DEFAULT_SESSION,
+                        "run.complete",
+                        {"code": 0, "output_events": output_events},
+                    )
                     break
 
                 self.logger.warning("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "code": rc})
@@ -1742,6 +1780,12 @@ class Router:
                     detail += f" Last stderr: {stderr_tail[-1]}"
                 detail += " Use `!c logs` for details."
                 await self.reply_forbidden(sink, detail)
+                self._session_log.append(
+                    channel_id,
+                    session or DEFAULT_SESSION,
+                    "run.failed",
+                    {"code": rc, "stderr_tail": list(stderr_tail[-5:])},
+                )
                 break
             self._audit_helper.close(entry)
         await self._budget_soft_notify_if_needed(event, sink)
@@ -1844,6 +1888,12 @@ class Router:
         relay_output: bool,
     ) -> None:
         """Handle a JSONL line from Codex and relay output."""
+        self._session_log.append(
+            channel_id,
+            session or DEFAULT_SESSION,
+            "codex.jsonl",
+            {"line": line},
+        )
         self._audit_helper.append_codex(entry, line)
         evt = parse_event(line)
         if not evt:
@@ -1851,6 +1901,12 @@ class Router:
             if text and relay_output:
                 for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
                     self._audit_helper.append_output(entry, chunk)
+                    self._session_log.append(
+                        channel_id,
+                        session or DEFAULT_SESSION,
+                        "discord.output",
+                        {"chunk": chunk},
+                    )
                     await self.reply(sink, chunk)
             return
         self.update_usage(channel_id, session, evt)
@@ -1863,6 +1919,12 @@ class Router:
             if relay_output:
                 for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
                     self._audit_helper.append_output(entry, chunk)
+                    self._session_log.append(
+                        channel_id,
+                        session or DEFAULT_SESSION,
+                        "discord.output",
+                        {"chunk": chunk},
+                    )
                     await self.reply(sink, chunk)
 
     async def on_thread(
@@ -1880,6 +1942,12 @@ class Router:
         if entry:
             entry.thread_id = thread_id
             entry.session = session or DEFAULT_SESSION
+        self._session_log.append(
+            channel_id,
+            session or DEFAULT_SESSION,
+            "codex.thread",
+            {"thread_id": thread_id},
+        )
         self.update_state(channel_id, session, repo_name, repo_path, thread_id, model, reasoning_effort)
 
     async def on_exit(self, channel_id: str, session: str, repo_name: str, err: Optional[BaseException], rc: int) -> None:
@@ -1888,8 +1956,20 @@ class Router:
         self.clear_awaiting_input(channel_id, session)
         if err:
             self.logger.error("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "error": str(err)})
+            self._session_log.append(
+                channel_id,
+                session or DEFAULT_SESSION,
+                "codex.exit",
+                {"error": str(err)},
+            )
             return
         self.logger.info("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "code": rc})
+        self._session_log.append(
+            channel_id,
+            session or DEFAULT_SESSION,
+            "codex.exit",
+            {"code": rc},
+        )
 
     async def reply(self, sink: ResponseSink, content: str) -> None:
         """Send a reply to a channel, chunking as needed."""
@@ -2744,6 +2824,12 @@ class Router:
             }
             with open(self._codex_error_log_path, "a", encoding="utf-8") as fh:
                 fh.write(json.dumps(payload, ensure_ascii=True) + "\n")
+            self._session_log.append(
+                channel_id,
+                session or DEFAULT_SESSION,
+                "codex.error",
+                payload,
+            )
         except Exception as exc:
             self.logger.warning("codex.error_log_write_failed", extra={"error": str(exc)})
 

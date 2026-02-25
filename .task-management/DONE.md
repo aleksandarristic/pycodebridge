@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0017] Consolidate logging architecture with unified session JSONL streams and archival rotation.
+  - Completed: 2026-02-25
+  - Notes: Added consolidated per-session JSONL logs under `state.log_dir/session_jsonl/active/<channel>/<session>.jsonl`, wired key run/codex/output/error events, implemented mandatory `.tgz` archival for active logs older than 30 days into `session_jsonl/archive/...`, retained archives indefinitely, and updated tests/docs.
+
 - [TASK-0016] Add top-level `!branch` command for branch + clean-state visibility.
   - Completed: 2026-02-24
   - Notes: Added a read-only `branch` command (`!c branch` and `!branch`) that summarizes current branch and working tree clean/not-clean status via git helper output, with targeted tests and docs updates.

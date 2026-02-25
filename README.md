@@ -104,7 +104,7 @@ network_access = true
 
 ### `state`
 - `data_dir` (required) — directory for state.json and locks.
-- `log_dir` (required) — directory for audit logs and `bridge.log`.
+- `log_dir` (required) — directory for runtime logs (`bridge.log`, `codex_errors.log`, unified `session_jsonl/` logs) and audit artifacts.
 - `lock_timeout_seconds` (default `600`) — stale lock timeout.
 - `conflict_ttl_seconds` (default `60`) — conflict prompt TTL.
 - `session_idle_ttl_seconds` (default `0`) — when >0, sessions idle longer than this require explicit `continue` or `new` before resuming.
@@ -372,6 +372,10 @@ Backward-compatible top-level module shims are retained (for example `codebridge
 - Repo error: ensure channel name matches `codex-<repo>` and `<code_root>/<repo>/.git` exists. Repo names are normalized to lowercase.
 - DM admin: enable `discord.dm_admin_enabled` and ensure `allowed_user_ids` includes you; optionally set `dm_admin_user_ids` for a separate admin allowlist.
 - Security logs (`state.log_dir/bridge.log`): look for `security.totp_invalid`, `security.totp_replay`, `security.totp_locked`, `security.totp_unlock`, `security.totp_success`.
+- Session timeline logs (first place to check): `state.log_dir/session_jsonl/active/<channel>/<session>.jsonl`.
+  - Active session logs are retained for 30 days.
+  - Logs older than 30 days are mandatorily archived to `state.log_dir/session_jsonl/archive/...` as `.tgz`.
+  - Archived logs are kept indefinitely.
 - Codex execution errors are also written as JSON lines to `state.log_dir/codex_errors.log` (contains args, return code, stderr tail, and retry notes).
 
 ## Docs
