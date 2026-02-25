@@ -951,6 +951,70 @@ def test_integration_bang_reset_alias_clears_context_and_allows_fresh_start(tmp_
     assert len([args for args in runner.calls if args and args[0] == "start"]) >= 3
 
 
+def test_integration_purge_removes_session_artifacts(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    session_log = tmp_path / "logs" / "session_jsonl" / "active" / "chan" / "repo-repo__session-default.jsonl"
+    session_log.parent.mkdir(parents=True, exist_ok=True)
+    session_log.write_text('{"event":"x"}\n', encoding="utf-8")
+
+    audit_file = tmp_path / "logs" / "chan" / "repo-repo__session-default" / "thread-pending" / "000001.request.json"
+    audit_file.parent.mkdir(parents=True, exist_ok=True)
+    audit_file.write_text("{}", encoding="utf-8")
+
+    archive_file = (
+        tmp_path
+        / "logs"
+        / "session_archives"
+        / "chan"
+        / "repo-repo__session-default"
+        / "20260101T000000Z.txt"
+    )
+    archive_file.parent.mkdir(parents=True, exist_ok=True)
+    archive_file.write_text("archived", encoding="utf-8")
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c purge", "codex-repo"), sink)
+
+    asyncio.run(run())
+    state = router.state.load()
+    ch = state.channels.get("chan")
+    if ch:
+        assert "default" not in ch.sessions
+    assert not session_log.exists()
+    assert not audit_file.exists()
+    assert not archive_file.exists()
+    assert any("purged" in msg.lower() for msg, _, _ in sink.sent)
+
+
+def test_api_reset_session_hook_supports_purge(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    session_log = tmp_path / "logs" / "session_jsonl" / "active" / "chan" / "repo-repo__session-default.jsonl"
+    session_log.parent.mkdir(parents=True, exist_ok=True)
+    session_log.write_text('{"event":"x"}\n', encoding="utf-8")
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        result = await router.api_reset_session("chan", "default", purge=True)
+        assert result["session"] == "default"
+        assert result["purged_artifacts"] >= 1
+
+    asyncio.run(run())
+    assert not session_log.exists()
+
+
 def test_integration_bang_reset_alias_works_in_discord_thread_scope(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -1278,6 +1342,7 @@ def test_integration_auto_relays_plain_reply_when_codex_waits_for_input(tmp_path
             sink,
             "chan",
             "default",
+            "repo",
             None,
             '{"type":"item.completed","item":{"type":"agent_message","text":"Proceed?"}}',
             True,
@@ -1310,6 +1375,7 @@ def test_integration_wait_command_reports_pending_input(tmp_path):
             sink,
             "chan",
             "default",
+            "repo",
             None,
             '{"type":"item.completed","item":{"type":"agent_message","text":"Proceed?"}}',
             True,
@@ -2732,7 +2798,7 @@ def test_router_writes_codex_error_log(tmp_path):
     assert payload["return_code"] == 2
     assert payload["args"] == ["exec", "hello"]
     assert payload["stderr_tail"][-1] == "For more information, try '--help'."
-    session_path = tmp_path / "logs" / "session_jsonl" / "active" / "chan" / "default.jsonl"
+    session_path = tmp_path / "logs" / "session_jsonl" / "active" / "chan" / "repo-repo__session-default.jsonl"
     session_lines = session_path.read_text(encoding="utf-8").strip().splitlines()
     event_payload = json.loads(session_lines[-1])
     assert event_payload["event"] == "codex.error"

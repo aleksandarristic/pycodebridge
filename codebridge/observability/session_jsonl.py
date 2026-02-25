@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
-import re
 import tarfile
 import tempfile
 import time
@@ -14,22 +12,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-SAFE_SEG_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+from ..util.session_artifacts import safe_segment, session_artifact_label
+
 _DEFAULT_ACTIVE_RETENTION_DAYS = 30
 _MAINTENANCE_INTERVAL_SECONDS = 300
 
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _safe_segment(val: str, fallback: str) -> str:
-    if not val:
-        val = fallback
-    if SAFE_SEG_RE.match(val):
-        return val
-    digest = hashlib.sha1(val.encode("utf-8")).hexdigest()[:12]
-    return f"{fallback}-{digest}"
 
 
 class SessionJsonlLogger:
@@ -47,16 +37,24 @@ class SessionJsonlLogger:
         self._archive_dir.mkdir(parents=True, exist_ok=True)
         self.cleanup()
 
-    def append(self, channel_id: str, session: str, event: str, data: Optional[dict[str, Any]] = None) -> None:
+    def append(
+        self,
+        channel_id: str,
+        session: str,
+        event: str,
+        data: Optional[dict[str, Any]] = None,
+        repo_name: str = "",
+    ) -> None:
         self._maybe_run_maintenance()
-        channel_safe = _safe_segment(channel_id, "channel")
-        session_safe = _safe_segment(session or "default", "default")
-        path = self._active_dir / channel_safe / f"{session_safe}.jsonl"
+        channel_safe = safe_segment(channel_id, "channel")
+        session_label = session_artifact_label(repo_name, session or "default")
+        path = self._active_dir / channel_safe / f"{session_label}.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "timestamp": _utc_now_iso(),
             "channel_id": channel_id,
             "session": session or "default",
+            "repo_name": repo_name or "",
             "event": event,
             "data": data or {},
         }
@@ -101,6 +99,29 @@ class SessionJsonlLogger:
             with contextlib.suppress(FileNotFoundError):
                 os.unlink(tmp_name)
 
+    def session_paths(self, channel_id: str, session: str, repo_name: str = "") -> list[Path]:
+        """Return candidate active/archive paths for one logical session."""
+        channel_safe = safe_segment(channel_id, "channel")
+        candidates = [session_artifact_label(repo_name, session or "default")]
+        # Backward compatibility with pre-prefix naming.
+        legacy = safe_segment(session or "default", "default")
+        if legacy not in candidates:
+            candidates.append(legacy)
+
+        active: list[Path] = [self._active_dir / channel_safe / f"{label}.jsonl" for label in candidates]
+        if not repo_name:
+            wildcard_pattern = f"repo-*__session-{legacy}.jsonl"
+            active.extend((self._active_dir / channel_safe).glob(wildcard_pattern))
+        archive: list[Path] = []
+        archive_dir = self._archive_dir / channel_safe
+        if archive_dir.is_dir():
+            for item in archive_dir.glob("*.tgz"):
+                if any(item.name.startswith(f"{label}-") for label in candidates):
+                    archive.append(item)
+                elif not repo_name and f"__session-{legacy}-" in item.name:
+                    archive.append(item)
+        return active + archive
+
 
 class SessionJsonlHelper:
     """Safe wrapper around session JSONL logging."""
@@ -109,10 +130,25 @@ class SessionJsonlHelper:
         self._logger = logger
         self._app_logger = app_logger
 
-    def append(self, channel_id: str, session: str, event: str, data: Optional[dict[str, Any]] = None) -> None:
+    def append(
+        self,
+        channel_id: str,
+        session: str,
+        event: str,
+        data: Optional[dict[str, Any]] = None,
+        repo_name: str = "",
+    ) -> None:
         if not self._logger:
             return
         try:
-            self._logger.append(channel_id, session, event, data)
+            self._logger.append(channel_id, session, event, data, repo_name=repo_name)
         except Exception as exc:
             self._app_logger.warning("session_jsonl.append_failed", extra={"event": event, "error": str(exc)})
+
+    def session_paths(self, channel_id: str, session: str, repo_name: str = "") -> list[Path]:
+        if not self._logger:
+            return []
+        try:
+            return self._logger.session_paths(channel_id, session, repo_name=repo_name)
+        except Exception:
+            return []

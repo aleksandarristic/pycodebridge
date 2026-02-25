@@ -195,6 +195,7 @@ TOTP required unless the chat is unlocked:
 - `!c model [session] <id> [reasoning]`
 - `!c thread [session] <id>`
 - `!c reset [session]`
+- `!c purge [session]`
 - `!c spec [session]`
 - `!c stop [session]`
 - `!c interrupt [session]` (aliases: `int`, `esc`, `escape`)
@@ -367,12 +368,20 @@ Core modules are now grouped by responsibility:
 
 Backward-compatible top-level module shims are retained (for example `codebridge/router.py`) and re-export from the new package layout.
 
+## State And Artifact Map
+- `state.data_dir/state.json` — canonical persisted channel/session metadata, DM bindings, and runtime options.
+- `state.data_dir/state.json.lock` — file lock used for atomic state mutations.
+- `state.log_dir/session_jsonl/active/<channel>/repo-<repo>__session-<session>.jsonl` — primary per-session timeline log stream.
+- `state.log_dir/session_jsonl/archive/<channel>/repo-<repo>__session-<session>-<timestamp>.tgz` — mandatory archive for active logs older than 30 days (kept indefinitely).
+- `state.log_dir/<channel>/repo-<repo>__session-<session>/thread-<thread>/...` — detailed per-request audit artifacts (`*.request.json`, `*.codex.jsonl`, `*.discord_out.txt`, `*.codex.stderr.txt`).
+- `state.log_dir/session_archives/<channel>/repo-<repo>__session-<session>/<archive-id>.txt` — optional session summary archives for lifecycle restore flows.
+
 ## Troubleshooting
 - No response: confirm Message Content intent is enabled and saved, and your user ID is allowlisted.
 - Repo error: ensure channel name matches `codex-<repo>` and `<code_root>/<repo>/.git` exists. Repo names are normalized to lowercase.
 - DM admin: enable `discord.dm_admin_enabled` and ensure `allowed_user_ids` includes you; optionally set `dm_admin_user_ids` for a separate admin allowlist.
 - Security logs (`state.log_dir/bridge.log`): look for `security.totp_invalid`, `security.totp_replay`, `security.totp_locked`, `security.totp_unlock`, `security.totp_success`.
-- Session timeline logs (first place to check): `state.log_dir/session_jsonl/active/<channel>/<session>.jsonl`.
+- Session timeline logs (first place to check): `state.log_dir/session_jsonl/active/<channel>/repo-<repo>__session-<session>.jsonl`.
   - Active session logs are retained for 30 days.
   - Logs older than 30 days are mandatorily archived to `state.log_dir/session_jsonl/archive/...` as `.tgz`.
   - Archived logs are kept indefinitely.

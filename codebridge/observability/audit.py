@@ -1,15 +1,20 @@
 """Audit logging for Codex/Discord interactions."""
 
-import hashlib
 import json
 import logging
 import os
-import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-SAFE_SEG_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+from ..util.session_artifacts import (
+    parse_session_artifact_label,
+    parse_thread_artifact_label,
+    safe_segment,
+    session_artifact_label,
+    thread_artifact_label,
+)
+
 _LOG = logging.getLogger(__name__)
 
 
@@ -75,6 +80,7 @@ class Summary:
     path: str
     started_at: str
     ended_at: str
+    repo_name: str = ""
 
 
 class Logger:
@@ -89,11 +95,13 @@ class Logger:
     def start(self, channel_id: str, session: str, thread_id: str, request: Any) -> Entry:
         """Start a new audit entry and return its writer."""
         session = session or "default"
-        channel_safe = _safe_segment(channel_id, "channel")
-        session_safe = _safe_segment(session, "default")
-        thread_safe = _safe_segment(thread_id, "pending")
+        channel_safe = safe_segment(channel_id, "channel")
+        request_map = request if isinstance(request, dict) else {}
+        repo_name = str((request_map or {}).get("repo_name") or "")
+        session_dir = session_artifact_label(repo_name, session)
+        thread_safe = thread_artifact_label(thread_id)
 
-        entry_dir = os.path.join(self.base_dir, channel_safe, session_safe, thread_safe)
+        entry_dir = os.path.join(self.base_dir, channel_safe, session_dir, thread_safe)
         os.makedirs(entry_dir, exist_ok=True)
 
         seq = _next_seq(entry_dir)
@@ -125,22 +133,26 @@ class Logger:
         """Return recent audit summaries for a channel/session."""
         summaries: list[Summary] = []
         if channel_id:
-            channel_id = _safe_segment(channel_id, "channel")
+            channel_id = safe_segment(channel_id, "channel")
         if session:
-            session = _safe_segment(session, "default")
+            session = safe_segment(session, "default")
 
         channels = [channel_id] if channel_id else [d for d in os.listdir(self.base_dir) if os.path.isdir(os.path.join(self.base_dir, d))]
         for ch in channels:
             channel_dir = os.path.join(self.base_dir, ch)
             if not os.path.isdir(channel_dir):
                 continue
-            session_dirs = [session] if session else [d for d in os.listdir(channel_dir) if os.path.isdir(os.path.join(channel_dir, d))]
-            for sess in session_dirs:
-                sess_dir = os.path.join(channel_dir, sess)
+            session_dirs = [d for d in os.listdir(channel_dir) if os.path.isdir(os.path.join(channel_dir, d))]
+            for sess_dir_name in session_dirs:
+                parsed_repo, parsed_session = parse_session_artifact_label(sess_dir_name)
+                resolved_session = parsed_session or "default"
+                if session and resolved_session != session:
+                    continue
+                sess_dir = os.path.join(channel_dir, sess_dir_name)
                 if not os.path.isdir(sess_dir):
                     continue
-                for thread_id in os.listdir(sess_dir):
-                    thread_dir = os.path.join(sess_dir, thread_id)
+                for thread_dir_name in os.listdir(sess_dir):
+                    thread_dir = os.path.join(sess_dir, thread_dir_name)
                     if not os.path.isdir(thread_dir):
                         continue
                     for fname in os.listdir(thread_dir):
@@ -154,8 +166,20 @@ class Logger:
                             request_ts = str(req.get("timestamp") or "").strip()
                             started_at = request_ts if request_ts else _mtime_iso(path)
                             ended_at = _entry_end_iso(thread_dir, seq, started_at)
+                            req_repo = str(req.get("repo_name") or "").strip()
+                            repo_name = req_repo or parsed_repo
                             summaries.append(
-                                Summary(seq, ch, sess, thread_id, req, thread_dir, started_at, ended_at)
+                                Summary(
+                                    seq=seq,
+                                    channel_id=ch,
+                                    session=resolved_session,
+                                    thread_id=parse_thread_artifact_label(thread_dir_name),
+                                    request=req,
+                                    path=thread_dir,
+                                    started_at=started_at,
+                                    ended_at=ended_at,
+                                    repo_name=repo_name,
+                                )
                             )
                         except Exception as exc:
                             _LOG.warning("audit.summaries.read_failed path=%s error=%s", path, exc)
@@ -223,16 +247,6 @@ def _write_json(path: str, payload: Any) -> None:
     """Write JSON to disk with indentation."""
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
-
-
-def _safe_segment(val: str, fallback: str) -> str:
-    """Return a filesystem-safe segment, hashing when needed."""
-    if not val:
-        val = fallback
-    if SAFE_SEG_RE.match(val):
-        return val
-    digest = hashlib.sha1(val.encode("utf-8")).hexdigest()[:12]
-    return f"{fallback}-{digest}"
 
 
 def _default_redaction_patterns() -> list[str]:

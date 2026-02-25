@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0018] Clarify state layout and add explicit session purge/reset flows.
+  - Completed: 2026-02-25
+  - Notes: Added explicit state/artifact map docs, introduced prefixed session artifact naming (`repo-<repo>__session-<session>`) across session logs/audit/session archives with compatibility handling, added `purge [session]` command that resets runtime/state and removes session artifacts, and added transport-agnostic `api_reset_session(..., purge=...)` hook for future web API integration with targeted coverage.
+
 - [TASK-0017] Consolidate logging architecture with unified session JSONL streams and archival rotation.
   - Completed: 2026-02-25
   - Notes: Added consolidated per-session JSONL logs under `state.log_dir/session_jsonl/active/<channel>/<session>.jsonl`, wired key run/codex/output/error events, implemented mandatory `.tgz` archival for active logs older than 30 days into `session_jsonl/archive/...`, retained archives indefinitely, and updated tests/docs.

@@ -38,6 +38,7 @@ from ..util.ansi import strip_control_codes
 from ..util.chunk import chunk_text
 from ..util.coerce import parse_bool
 from ..util.prompt import needs_user_input
+from ..util.session_artifacts import safe_segment, session_artifact_label
 from ..security.totp import TotpAttemptLimiter, verify_totp
 from ..services import git_bootstrap
 from ..commands import help as help_renderer
@@ -1101,46 +1102,63 @@ class Router:
 
     async def handle_reset_session(self, sink: ResponseSink, channel_id: str, session: str) -> None:
         """Reset a session by clearing persisted context and session-local runtime state."""
-        session = normalize_session(session or DEFAULT_SESSION)
-        statuses = await self.coordinator.snapshot(channel_id)
-        queued_ids = [s.job_id for s in statuses if s.status == "queued" and (s.session or DEFAULT_SESSION) == session]
-        for job_id in queued_ids:
-            await self.coordinator.cancel(channel_id, job_id)
-
-        running_job = any(s.status == "running" and (s.session or DEFAULT_SESSION) == session for s in statuses)
-        proc = await self.get_active(channel_id, session)
-        killed = False
-        if proc is not None:
-            await proc.kill()
-            killed = True
-        elif running_job:
+        result = await self.control_reset_session(channel_id, session, purge=False)
+        if result.get("blocked_running"):
             await self.reply_forbidden(
                 sink,
-                f"Session '{session}' has a running non-interruptible job. Retry reset after it finishes.",
+                f"Session '{result['session']}' has a running non-interruptible job. Retry reset after it finishes.",
             )
             return
-
-        removed = await self.coordinator.reset_session(channel_id, session)
-        self.clear_awaiting_input(channel_id, session)
-
         details = []
-        if removed:
+        if result["removed"]:
             details.append("cleared stored context")
         else:
             details.append("no stored context was found")
-        if killed:
+        if result["killed"]:
             details.append("killed active process")
-        if queued_ids:
-            details.append(f"cancelled {len(queued_ids)} queued job(s)")
-        await self.reply(sink, f"Session '{session}' reset: {', '.join(details)}.")
+        if result["cancelled_jobs"]:
+            details.append(f"cancelled {result['cancelled_jobs']} queued job(s)")
+        await self.reply(sink, f"Session '{result['session']}' reset: {', '.join(details)}.")
         self.logger.info(
             "session.reset",
             extra={
-                "channel_id": channel_id,
-                "session": session,
-                "removed": removed,
-                "killed": killed,
-                "cancelled_jobs": len(queued_ids),
+                "channel_id": result["channel_id"],
+                "session": result["session"],
+                "removed": result["removed"],
+                "killed": result["killed"],
+                "cancelled_jobs": result["cancelled_jobs"],
+            },
+        )
+
+    async def handle_purge_session(self, sink: ResponseSink, channel_id: str, session: str) -> None:
+        """Purge a session by resetting state/runtime and removing session artifacts."""
+        result = await self.control_reset_session(channel_id, session, purge=True)
+        if result.get("blocked_running"):
+            await self.reply_forbidden(
+                sink,
+                f"Session '{result['session']}' has a running non-interruptible job. Retry purge after it finishes.",
+            )
+            return
+        details = []
+        if result["removed"]:
+            details.append("cleared stored context")
+        else:
+            details.append("no stored context was found")
+        if result["killed"]:
+            details.append("killed active process")
+        if result["cancelled_jobs"]:
+            details.append(f"cancelled {result['cancelled_jobs']} queued job(s)")
+        details.append(f"removed {result['purged_artifacts']} session artifact(s)")
+        await self.reply(sink, f"Session '{result['session']}' purged: {', '.join(details)}.")
+        self.logger.info(
+            "session.purge",
+            extra={
+                "channel_id": result["channel_id"],
+                "session": result["session"],
+                "removed": result["removed"],
+                "killed": result["killed"],
+                "cancelled_jobs": result["cancelled_jobs"],
+                "purged_artifacts": result["purged_artifacts"],
             },
         )
 
@@ -1211,7 +1229,7 @@ class Router:
             return
         content = self._build_session_archive_text(event.channel_id, session, sess, repo_name or sess.repo_name, repo_path or sess.repo_path)
         archive_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        archive_dir = self._session_archive_dir(event.channel_id, session)
+        archive_dir = self._session_archive_dir(event.channel_id, session, repo_name or sess.repo_name)
         os.makedirs(archive_dir, exist_ok=True)
         path = os.path.join(archive_dir, f"{archive_id}.txt")
         with open(path, "w", encoding="utf-8") as fh:
@@ -1228,7 +1246,8 @@ class Router:
         archive_id: str,
     ) -> None:
         """Restore context by sending archived summary as prompt preface."""
-        archive_file = self._find_archive_file(event.channel_id, session, archive_id)
+        archive_repo = repo_name or self._session_repo_name(event.channel_id, session)
+        archive_file = self._find_archive_file(event.channel_id, session, archive_repo, archive_id)
         if not archive_file:
             await self.reply_forbidden(sink, "Archive not found for that session.")
             return
@@ -1244,20 +1263,36 @@ class Router:
         )
         await self.handle_resume(event, sink, repo_name, repo_path, session, prompt)
 
-    def _session_archive_dir(self, channel_id: str, session: str) -> str:
+    def _session_archive_dir(self, channel_id: str, session: str, repo_name: str = "") -> str:
         base = self.cfg.state.log_dir or tempfile.gettempdir()
-        safe_channel = re.sub(r"[^A-Za-z0-9._-]+", "_", channel_id or "channel")
-        safe_session = re.sub(r"[^A-Za-z0-9._-]+", "_", session or DEFAULT_SESSION)
-        return os.path.join(base, "session_archives", safe_channel, safe_session)
+        safe_channel = safe_segment(channel_id or "channel", "channel")
+        label = session_artifact_label(repo_name, session or DEFAULT_SESSION)
+        return os.path.join(base, "session_archives", safe_channel, label)
 
-    def _find_archive_file(self, channel_id: str, session: str, archive_id: str) -> str:
-        archive_dir = self._session_archive_dir(channel_id, session)
-        if not os.path.isdir(archive_dir):
-            return ""
+    def _find_archive_file(self, channel_id: str, session: str, repo_name: str, archive_id: str = "") -> str:
+        dirs = [
+            self._session_archive_dir(channel_id, session, repo_name),
+            self._session_archive_dir(channel_id, session, ""),
+            os.path.join(
+                self.cfg.state.log_dir or tempfile.gettempdir(),
+                "session_archives",
+                safe_segment(channel_id or "channel", "channel"),
+                safe_segment(session or DEFAULT_SESSION, "default"),
+            ),
+        ]
         if archive_id:
-            path = os.path.join(archive_dir, f"{archive_id}.txt")
-            return path if os.path.exists(path) else ""
-        candidates = sorted(Path(archive_dir).glob("*.txt"))
+            for archive_dir in dirs:
+                path = os.path.join(archive_dir, f"{archive_id}.txt")
+                if os.path.exists(path):
+                    return path
+            return ""
+
+        candidates: list[Path] = []
+        for archive_dir in dirs:
+            if not os.path.isdir(archive_dir):
+                continue
+            candidates.extend(Path(archive_dir).glob("*.txt"))
+        candidates = sorted(set(candidates))
         if not candidates:
             return ""
         return str(candidates[-1])
@@ -1370,6 +1405,126 @@ class Router:
                 "blocked_running": blocked_running,
             },
         )
+
+    async def control_reset_session(self, channel_id: str, session: str, purge: bool = False) -> dict[str, Any]:
+        """Transport-agnostic reset/purge hook for command and future web API handlers."""
+        session = normalize_session(session or DEFAULT_SESSION)
+        repo_name = self._session_repo_name(channel_id, session)
+        statuses = await self.coordinator.snapshot(channel_id)
+        queued_ids = [s.job_id for s in statuses if s.status == "queued" and (s.session or DEFAULT_SESSION) == session]
+        for job_id in queued_ids:
+            await self.coordinator.cancel(channel_id, job_id)
+
+        running_job = any(s.status == "running" and (s.session or DEFAULT_SESSION) == session for s in statuses)
+        proc = await self.get_active(channel_id, session)
+        killed = False
+        blocked_running = False
+        if proc is not None:
+            await proc.kill()
+            killed = True
+        elif running_job:
+            blocked_running = True
+
+        removed = False
+        purged_artifacts = 0
+        if not blocked_running:
+            removed = await self.coordinator.reset_session(channel_id, session)
+            self.clear_awaiting_input(channel_id, session)
+            if purge:
+                # Allow exit callbacks to flush any final log events before purge deletion.
+                await asyncio.sleep(0)
+                purged_artifacts = self._purge_session_artifacts(channel_id, session, repo_name)
+                await asyncio.sleep(0)
+                purged_artifacts += self._purge_session_artifacts(channel_id, session, repo_name)
+        return {
+            "channel_id": channel_id,
+            "session": session,
+            "repo_name": repo_name,
+            "removed": removed,
+            "killed": killed,
+            "cancelled_jobs": len(queued_ids),
+            "blocked_running": blocked_running,
+            "purged_artifacts": purged_artifacts,
+        }
+
+    async def api_reset_session(self, channel_id: str, session: str, purge: bool = False) -> dict[str, Any]:
+        """Future web API hook for session reset/purge operations."""
+        return await self.control_reset_session(channel_id, session, purge=purge)
+
+    def _session_repo_name(self, channel_id: str, session: str) -> str:
+        state = self.state.load()
+        ch = state.channels.get(channel_id)
+        if not ch:
+            return ""
+        sess = ch.sessions.get(session)
+        if not sess:
+            return ""
+        return str(getattr(sess, "repo_name", "") or "")
+
+    def _purge_session_artifacts(self, channel_id: str, session: str, repo_name: str) -> int:
+        removed = 0
+
+        for path in self._session_log.session_paths(channel_id, session, repo_name=repo_name):
+            try:
+                if path.exists():
+                    path.unlink()
+                    removed += 1
+            except Exception as exc:
+                self.logger.warning("session.purge.remove_failed", extra={"path": str(path), "error": str(exc)})
+
+        archive_dirs = {
+            self._session_archive_dir(channel_id, session, repo_name),
+            self._session_archive_dir(channel_id, session, ""),
+            os.path.join(
+                self.cfg.state.log_dir or tempfile.gettempdir(),
+                "session_archives",
+                safe_segment(channel_id or "channel", "channel"),
+                safe_segment(session or DEFAULT_SESSION, "default"),
+            ),
+        }
+        for archive_dir in archive_dirs:
+            path_obj = Path(archive_dir)
+            if not path_obj.is_dir():
+                continue
+            for item in path_obj.glob("*.txt"):
+                try:
+                    item.unlink()
+                    removed += 1
+                except Exception as exc:
+                    self.logger.warning("session.purge.remove_failed", extra={"path": str(item), "error": str(exc)})
+        if not repo_name:
+            wildcard_root = Path(self.cfg.state.log_dir or tempfile.gettempdir()) / "session_archives" / safe_segment(channel_id or "channel", "channel")
+            if wildcard_root.is_dir():
+                for dir_path in wildcard_root.glob(f"repo-*__session-{safe_segment(session or DEFAULT_SESSION, 'default')}"):
+                    for item in dir_path.glob("*.txt"):
+                        try:
+                            item.unlink()
+                            removed += 1
+                        except Exception as exc:
+                            self.logger.warning("session.purge.remove_failed", extra={"path": str(item), "error": str(exc)})
+
+        channel_dir = Path(self.cfg.state.log_dir or "") / safe_segment(channel_id, "channel")
+        if channel_dir.is_dir():
+            legacy_dir = channel_dir / safe_segment(session, "default")
+            prefixed_dir = channel_dir / session_artifact_label(repo_name, session)
+            candidates = {legacy_dir, prefixed_dir}
+            if not repo_name:
+                candidates.update(channel_dir.glob(f"repo-*__session-{safe_segment(session, 'default')}"))
+            for candidate in candidates:
+                if not candidate.is_dir():
+                    continue
+                for file_path in candidate.rglob("*"):
+                    if not file_path.is_file():
+                        continue
+                    try:
+                        file_path.unlink()
+                        removed += 1
+                    except Exception as exc:
+                        self.logger.warning(
+                            "session.purge.remove_failed",
+                            extra={"path": str(file_path), "error": str(exc)},
+                        )
+        return removed
 
     async def handle_stats(self, sink: ResponseSink, session: str) -> None:
         """Show token usage stats for a session."""
@@ -1594,6 +1749,7 @@ class Router:
             "args": original_args,
             "model": model,
             "reasoning_effort": reasoning_effort,
+            "session": session or DEFAULT_SESSION,
             "timestamp": utc_now_iso(),
             "channel": channel_id,
         }
@@ -1608,6 +1764,7 @@ class Router:
                 "reasoning_effort": reasoning_effort,
                 "args": original_args,
             },
+            repo_name=repo_name,
         )
         entry = self._audit_helper.start(channel_id, session or DEFAULT_SESSION, "pending", meta)
         stderr_tail: list[str] = []
@@ -1619,6 +1776,7 @@ class Router:
                 session or DEFAULT_SESSION,
                 "codex.stderr",
                 {"line": line},
+                repo_name=repo_name,
             )
             text = strip_control_codes((line or "").strip())
             if not text:
@@ -1638,7 +1796,9 @@ class Router:
                             repo_path=repo_path,
                             args=args_to_run,
                             env=self.cfg.codex.env,
-                            on_jsonl=lambda line: self.on_jsonl(sink, channel_id, session, entry, line, relay_output),
+                            on_jsonl=lambda line: self.on_jsonl(
+                                sink, channel_id, session, repo_name, entry, line, relay_output
+                            ),
                             on_thread=lambda tid: self.on_thread(
                                 channel_id, session, repo_name, repo_path, model, reasoning_effort, entry, tid
                             ),
@@ -1663,6 +1823,7 @@ class Router:
                         session or DEFAULT_SESSION,
                         "run.start_failed",
                         {"error": str(exc)},
+                        repo_name=repo_name,
                     )
                     self._audit_helper.close(entry)
                     await self.reply_forbidden(sink, f"Codex failed to start: {exc}")
@@ -1731,6 +1892,7 @@ class Router:
                         session or DEFAULT_SESSION,
                         "run.complete",
                         {"code": 0, "output_events": output_events},
+                        repo_name=repo_name,
                     )
                     break
 
@@ -1785,6 +1947,7 @@ class Router:
                     session or DEFAULT_SESSION,
                     "run.failed",
                     {"code": rc, "stderr_tail": list(stderr_tail[-5:])},
+                    repo_name=repo_name,
                 )
                 break
             self._audit_helper.close(entry)
@@ -1883,6 +2046,7 @@ class Router:
         sink: ResponseSink,
         channel_id: str,
         session: str,
+        repo_name: str,
         entry: Optional[Entry],
         line: str,
         relay_output: bool,
@@ -1893,6 +2057,7 @@ class Router:
             session or DEFAULT_SESSION,
             "codex.jsonl",
             {"line": line},
+            repo_name=repo_name,
         )
         self._audit_helper.append_codex(entry, line)
         evt = parse_event(line)
@@ -1906,6 +2071,7 @@ class Router:
                         session or DEFAULT_SESSION,
                         "discord.output",
                         {"chunk": chunk},
+                        repo_name=repo_name,
                     )
                     await self.reply(sink, chunk)
             return
@@ -1924,6 +2090,7 @@ class Router:
                         session or DEFAULT_SESSION,
                         "discord.output",
                         {"chunk": chunk},
+                        repo_name=repo_name,
                     )
                     await self.reply(sink, chunk)
 
@@ -1947,6 +2114,7 @@ class Router:
             session or DEFAULT_SESSION,
             "codex.thread",
             {"thread_id": thread_id},
+            repo_name=repo_name,
         )
         self.update_state(channel_id, session, repo_name, repo_path, thread_id, model, reasoning_effort)
 
@@ -1961,6 +2129,7 @@ class Router:
                 session or DEFAULT_SESSION,
                 "codex.exit",
                 {"error": str(err)},
+                repo_name=repo_name,
             )
             return
         self.logger.info("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "code": rc})
@@ -1969,6 +2138,7 @@ class Router:
             session or DEFAULT_SESSION,
             "codex.exit",
             {"code": rc},
+            repo_name=repo_name,
         )
 
     async def reply(self, sink: ResponseSink, content: str) -> None:
@@ -2829,6 +2999,7 @@ class Router:
                 session or DEFAULT_SESSION,
                 "codex.error",
                 payload,
+                repo_name=repo_name,
             )
         except Exception as exc:
             self.logger.warning("codex.error_log_write_failed", extra={"error": str(exc)})

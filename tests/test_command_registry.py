@@ -79,6 +79,7 @@ def test_command_registry_help_text():
     assert "**`!c use <session>`**" in text
     assert "**`!c select <session>`**" in text
     assert "**`!c reset [session]`**" in text
+    assert "**`!c purge [session]`**" in text
     assert "**`!c create`**" in text
     assert "**`!c createrepo`**" in text
     assert "**`!c new`**" in text

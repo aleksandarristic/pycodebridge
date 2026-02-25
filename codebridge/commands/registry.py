@@ -233,6 +233,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec("models", "models [session]", "list available models via /model", "Sessions", _cmd_models, AUTH_OPEN, aliases=("mdls",)),
         CommandSpec("thread", "thread [session] <id>", "set thread id", "Sessions", _cmd_thread, AUTH_UNLOCK, aliases=("tid",)),
         CommandSpec("reset", "reset [session]", "reset session context", "Sessions", _cmd_reset, AUTH_UNLOCK),
+        CommandSpec("purge", "purge [session]", "reset session and purge session artifacts", "Sessions", _cmd_purge, AUTH_UNLOCK),
         CommandSpec(
             "session",
             "session status | session prune <ttl> | session archive [session] | session restore [session] [archive-id]",
@@ -656,6 +657,14 @@ async def _cmd_reset(router: Any, message: MessageEvent, sink: ResponseSink, rep
     if not session:
         return
     await router.handle_reset_session(sink, message.channel_id, session)
+
+
+async def _cmd_purge(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    _ = (repo_name, repo_path)
+    session = await _resolve_session_name(router, message, sink, rest.strip())
+    if not session:
+        return
+    await router.handle_purge_session(sink, message.channel_id, session)
 
 
 async def _cmd_session_lifecycle(
