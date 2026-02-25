@@ -1089,6 +1089,8 @@ class Router:
         """Set the sticky session selection for a user."""
         user_id = event.author_id
         channel_id = event.channel_id
+        if not event.is_dm:
+            session = self.resolve_scoped_session_for_event(event, session)
         self.coordinator.set_sticky(channel_id, user_id, session)
         await self.update_state(channel_id, session, "", "", "", "", "")
         await self.reply(sink, f"Using session '{session}' by default.")
@@ -1161,6 +1163,41 @@ class Router:
                 "purged_artifacts": result["purged_artifacts"],
             },
         )
+
+    async def handle_purge_stale_sessions(self, event: MessageEvent, sink: ResponseSink, ttl_seconds: int) -> None:
+        """Purge stale sessions older than TTL in the current scope channel key."""
+        state = self.state.load()
+        ch = state.channels.get(event.channel_id)
+        if not ch or not ch.sessions:
+            await self.reply(sink, "No sessions to purge.")
+            return
+        purged: list[str] = []
+        skipped_running = 0
+        purged_artifacts = 0
+        for name in sorted(list(ch.sessions.keys())):
+            sess = ch.sessions[name]
+            idle = self._session_idle_seconds(sess.last_used_at or sess.created_at)
+            if idle < 0 or idle < ttl_seconds:
+                continue
+            result = await self.control_reset_session(event.channel_id, name, purge=True)
+            if result["blocked_running"]:
+                skipped_running += 1
+                continue
+            if result["removed"]:
+                purged.append(name)
+            purged_artifacts += int(result["purged_artifacts"])
+        if not purged and skipped_running == 0:
+            await self.reply(sink, f"No sessions exceeded stale TTL {self._format_duration(ttl_seconds)}.")
+            return
+        msg = (
+            f"Purged {len(purged)} stale session(s) older than {self._format_duration(ttl_seconds)}; "
+            f"removed {purged_artifacts} artifact(s)."
+        )
+        if purged:
+            msg += " Sessions: " + ", ".join(purged) + "."
+        if skipped_running:
+            msg += f" Skipped running: {skipped_running}."
+        await self.reply(sink, msg)
 
     async def handle_session_lifecycle_status(self, event: MessageEvent, sink: ResponseSink) -> None:
         """Show session lifecycle status for the current channel."""
@@ -3127,4 +3164,34 @@ class Router:
     def current_session_for_event(self, event: MessageEvent) -> str:
         """Return sticky session or context-aware default for a message event."""
         default_session = self.default_session_for_event(event)
-        return self.current_session_for_user(event.author_id, event.channel_id, default_session)
+        if event.is_dm:
+            return self.current_session_for_user(event.author_id, event.channel_id, default_session)
+        return self._single_known_scope_session(event.channel_id) or default_session
+
+    def resolve_scoped_session_for_event(self, event: MessageEvent, requested_session: str) -> str:
+        """Enforce single-session-per-scope semantics for channel/thread usage."""
+        requested = normalize_session(requested_session or "")
+        if event.is_dm:
+            return requested or DEFAULT_SESSION
+        scoped = self.default_session_for_event(event)
+        known = self._single_known_scope_session(event.channel_id)
+        if not requested:
+            return known or scoped
+        if requested == scoped:
+            return scoped
+        if known and requested == known:
+            return known
+        if requested and requested != scoped:
+            raise ValueError(f"This scope supports a single session '{scoped}'.")
+        return known or scoped
+
+    def _single_known_scope_session(self, channel_id: str) -> str:
+        names: set[str] = set()
+        state = self.state.load()
+        ch = state.channels.get(channel_id)
+        if ch:
+            names.update(ch.sessions.keys())
+        names.update(self._awaiting_input.get(channel_id, {}).keys())
+        if len(names) == 1:
+            return next(iter(names))
+        return ""

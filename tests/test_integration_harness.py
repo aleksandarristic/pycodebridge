@@ -951,6 +951,48 @@ def test_integration_bang_reset_alias_clears_context_and_allows_fresh_start(tmp_
     assert len([args for args in runner.calls if args and args[0] == "start"]) >= 3
 
 
+def test_integration_single_session_scope_rejects_named_channel_session(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start custom", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert len(runner.calls) == 0
+    assert any("single session 'default'" in msg.lower() for msg, _, _ in sink.sent)
+
+
+def test_integration_single_session_scope_rejects_named_thread_session(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(
+            _discord_event(
+                "!c start default",
+                "topic-a",
+                channel_id="thread-a",
+                platform_thread_id="thread-a",
+                parent_channel_id="chan-parent",
+                parent_channel_name="codex-repo",
+            ),
+            sink,
+        )
+
+    asyncio.run(run())
+    assert len(runner.calls) == 0
+    assert any("single session 'topic-a'" in msg.lower() for msg, _, _ in sink.sent)
+
+
 def test_integration_purge_removes_session_artifacts(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -991,6 +1033,47 @@ def test_integration_purge_removes_session_artifacts(tmp_path):
     assert not audit_file.exists()
     assert not archive_file.exists()
     assert any("purged" in msg.lower() for msg, _, _ in sink.sent)
+
+
+def test_integration_purge_stale_ttl_removes_old_scope_session(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+
+    asyncio.run(run())
+
+    stale_ts = (datetime.now(timezone.utc) - timedelta(hours=4)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def mutator(fs):
+        ch = fs.channels.get("chan")
+        assert ch is not None
+        sess = ch.sessions.get("default")
+        assert sess is not None
+        sess.last_used_at = stale_ts
+        ch.sessions["default"] = sess
+        fs.channels["chan"] = ch
+
+    router.state.update(mutator)
+    session_log = tmp_path / "logs" / "session_jsonl" / "active" / "chan" / "repo-repo__session-default.jsonl"
+    session_log.parent.mkdir(parents=True, exist_ok=True)
+    session_log.write_text('{"event":"x"}\n', encoding="utf-8")
+
+    async def prune():
+        await router.handle_message(_discord_event("!c purge stale 1h", "codex-repo"), sink)
+
+    asyncio.run(prune())
+    state = router.state.load()
+    ch = state.channels.get("chan")
+    if ch:
+        assert "default" not in ch.sessions
+    assert not session_log.exists()
+    assert any("purged" in msg.lower() and "stale" in msg.lower() for msg, _, _ in sink.sent)
 
 
 def test_api_reset_session_hook_supports_purge(tmp_path):

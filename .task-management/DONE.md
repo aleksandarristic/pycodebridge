@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0019] Enforce single-session-per-scope semantics with explicit expiry and stale-session controls.
+  - Completed: 2026-02-25
+  - Notes: Enforced one logical session per non-DM scope via scoped session resolution, preserved expired-session continue/new decision flow in scope, added `!c purge stale <ttl>` stale cleanup command, and aligned reset semantics with fresh-start behavior in scope. Updated command/docs and added targeted routing/integration coverage.
+
 - [TASK-0018] Clarify state layout and add explicit session purge/reset flows.
   - Completed: 2026-02-25
   - Notes: Added explicit state/artifact map docs, introduced prefixed session artifact naming (`repo-<repo>__session-<session>`) across session logs/audit/session archives with compatibility handling, added `purge [session]` command that resets runtime/state and removes session artifacts, and added transport-agnostic `api_reset_session(..., purge=...)` hook for future web API integration with targeted coverage.

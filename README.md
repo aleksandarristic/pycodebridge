@@ -145,6 +145,7 @@ network_access = true
 ## Commands
 Prefix default is `!c`. Channels should be named `codex-<repo>`.
 In mapped repo channels/threads, every registered command and alias also works as top-level `!<command>` / `!<alias>` (for example `!models`, `!model`, `!status`, `!cfg`, `!logs`).
+Session scope model: one logical session per channel scope and one per thread scope. Channel scope uses `default`; thread scope uses the normalized thread name.
 When `discord.totp.enabled: true`, use `!c unlock <totp> [ttl]` to unlock default commands for your account (`30m`, `1h`, `2h`; default `1h`).
 Use `!c unlock gh <totp> [ttl]` for GitHub CLI commands, or `!c unlock all <totp> [ttl]` to unlock both scopes.
 Use `!c unlock extend [gh|all] <ttl> --totp <code>` to extend active unlock windows.
@@ -196,6 +197,7 @@ TOTP required unless the chat is unlocked:
 - `!c thread [session] <id>`
 - `!c reset [session]`
 - `!c purge [session]`
+- `!c purge stale <ttl>`
 - `!c spec [session]`
 - `!c stop [session]`
 - `!c interrupt [session]` (aliases: `int`, `esc`, `escape`)
@@ -228,6 +230,8 @@ TOTP required unless the chat is unlocked:
 - `!c git <status|log|branches|branch|show|diff|remote|fetch|pull|add|commit|push|merge>`
 - Shortcut: `!git ...` (maps to `!c git ...`)
 - Any other prompt-style `!c ...` command that is not in the read-only list
+
+`!c reset [session]` clears scoped session context/runtime. The next `start`/`resume` in that scope starts fresh.
 - Plain prompts in mapped channels when `allow_plain_prompts: true`
 
 Auth tags used by `!c help`:

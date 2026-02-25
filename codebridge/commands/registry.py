@@ -140,7 +140,16 @@ async def _resolve_session_name(
             session = _current_session(router, message, default_value)
         else:
             session = default_value
-    return await _normalize_session_or_reply(router, sink, session)
+    normalized = await _normalize_session_or_reply(router, sink, session)
+    if not normalized:
+        return None
+    if hasattr(router, "resolve_scoped_session_for_event"):
+        try:
+            return router.resolve_scoped_session_for_event(message, normalized)
+        except ValueError as exc:
+            await router.reply_forbidden(sink, str(exc))
+            return None
+    return normalized
 
 
 @dataclass(frozen=True)
@@ -233,7 +242,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec("models", "models [session]", "list available models via /model", "Sessions", _cmd_models, AUTH_OPEN, aliases=("mdls",)),
         CommandSpec("thread", "thread [session] <id>", "set thread id", "Sessions", _cmd_thread, AUTH_UNLOCK, aliases=("tid",)),
         CommandSpec("reset", "reset [session]", "reset session context", "Sessions", _cmd_reset, AUTH_UNLOCK),
-        CommandSpec("purge", "purge [session]", "reset session and purge session artifacts", "Sessions", _cmd_purge, AUTH_UNLOCK),
+        CommandSpec("purge", "purge [session] | purge stale <ttl>", "reset session and purge session artifacts", "Sessions", _cmd_purge, AUTH_UNLOCK),
         CommandSpec(
             "session",
             "session status | session prune <ttl> | session archive [session] | session restore [session] [archive-id]",
@@ -465,6 +474,10 @@ async def _cmd_start(router: Any, message: MessageEvent, sink: ResponseSink, rep
 
 async def _cmd_resume(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     session_name, prompt = parse_session_and_prompt(rest)
+    # In single-session scope mode, treat a lone token as prompt text.
+    if session_name and not prompt:
+        prompt = session_name
+        session_name = ""
     session_name = await _resolve_session_name(router, message, sink, session_name)
     if not session_name:
         return
@@ -476,10 +489,10 @@ async def _cmd_choose(router: Any, message: MessageEvent, sink: ResponseSink, re
     if not choice:
         await router.reply_forbidden(sink, "Usage: !c choose [session] continue|new")
         return
-    if sess:
-        if not await _normalize_session_or_reply(router, sink, sess):
-            return
-    await router.handle_choose(message, sink, repo_name, repo_path, sess, choice)
+    session_name = await _resolve_session_name(router, message, sink, sess)
+    if not session_name:
+        return
+    await router.handle_choose(message, sink, repo_name, repo_path, session_name, choice)
 
 
 async def _cmd_use(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
@@ -487,7 +500,7 @@ async def _cmd_use(router: Any, message: MessageEvent, sink: ResponseSink, repo_
     if not parts:
         await router.reply_forbidden(sink, "Usage: !c use <session>")
         return
-    session_name = await _normalize_session_or_reply(router, sink, parts[0])
+    session_name = await _resolve_session_name(router, message, sink, parts[0], default_from_user=False)
     if not session_name:
         return
     await router.handle_select_session(message, sink, session_name)
@@ -661,7 +674,19 @@ async def _cmd_reset(router: Any, message: MessageEvent, sink: ResponseSink, rep
 
 async def _cmd_purge(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     _ = (repo_name, repo_path)
-    session = await _resolve_session_name(router, message, sink, rest.strip())
+    raw = (rest or "").strip()
+    parts = raw.split()
+    if parts and parts[0].lower() == "stale":
+        if len(parts) != 2:
+            await router.reply_forbidden(sink, "Usage: !c purge stale <ttl>")
+            return
+        ttl = _parse_ttl_seconds(parts[1])
+        if ttl <= 0:
+            await router.reply_forbidden(sink, "TTL must be positive (examples: 30m, 4h, 7d).")
+            return
+        await router.handle_purge_stale_sessions(message, sink, ttl)
+        return
+    session = await _resolve_session_name(router, message, sink, raw)
     if not session:
         return
     await router.handle_purge_session(sink, message.channel_id, session)

@@ -26,6 +26,9 @@ if TYPE_CHECKING:
 
 _DM_COMMAND_ALIASES = {
     "commands": "help",
+    "st": "status",
+    "u": "updates",
+    "diag": "health",
     "ul": "unlock",
     "lk": "lock",
     "createrepo": "create",
@@ -140,8 +143,12 @@ def _dm_shortcut_cmdline(content: str) -> str:
         ("!repos", "repos"),
         ("!sessions", "sessions"),
         ("!status", "status"),
+        ("!st", "status"),
         ("!config", "config"),
         ("!updates", "updates"),
+        ("!u", "updates"),
+        ("!health", "health"),
+        ("!diag", "health"),
         ("!create", "create"),
         ("!new", "create"),
         ("!createrepo", "create"),
@@ -513,9 +520,17 @@ async def _prepare_dm_content(
     if not shortcut_cmdline:
         shortcut_cmdline = _dm_shortcut_cmdline(content)
     if shortcut_cmdline:
-        shortcut_head = shortcut_cmdline.split(maxsplit=1)[0].lower()
+        parts = shortcut_cmdline.split(maxsplit=1)
+        shortcut_head = parts[0].lower()
+        shortcut_tail = parts[1] if len(parts) > 1 else ""
+        registry = getattr(router, "_command_registry", {}) or {}
+        if shortcut_head in registry:
+            shortcut_head = registry[shortcut_head].name
         if shortcut_head in _DM_SHORTCUT_COMMANDS:
-            content = f"{prefix} {shortcut_cmdline}".strip()
+            normalized = shortcut_head
+            if shortcut_tail:
+                normalized += f" {shortcut_tail}"
+            content = f"{prefix} {normalized}".strip()
     pending_upload = False
     file_transfers = getattr(router, "file_transfers", None)
     if file_transfers is not None and hasattr(file_transfers, "has_pending_upload"):
