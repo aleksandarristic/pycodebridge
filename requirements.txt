@@ -1,5 +1,5 @@
-discord.py==2.6.4
+discord.py==2.7.1
 PyYAML==6.0.3
-python-dotenv==1.2.1
-filelock==3.24.3
+python-dotenv==1.2.2
+filelock==3.25.0
 pyotp==2.9.0
