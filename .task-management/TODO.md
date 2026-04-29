@@ -12,21 +12,6 @@ Rules:
 
 Ordered by estimated ROI (highest first), balancing user impact, implementation scope, and delivery risk.
 
-- [TASK-0033] Command surface inventory and capability matrix.
-  - Goal: document every operator-facing command path and identify overlap across channel commands, top-level shortcuts, and DM admin commands.
-  - Analysis summary:
-    - The app currently exposes commands through at least four layers: `!c <cmd>`, top-level `!<cmd>` shortcuts, session-targeted shorthands (`!s:`, `!a:`), and DM-only/admin commands.
-    - There is substantial overlap between direct tool passthrough (`git`, `gh`, Codex sessions) and bridge-specific wrappers (`show`, `changes`, `branch`, `repo`, repo lifecycle, logs/audit/session lifecycle).
-    - The present surface is hard to reason about because the same intent may have multiple entry points depending on channel vs DM context.
-  - Scope:
-    - Build a single inventory of all channel commands, aliases, top-level shortcuts, shorthands, and DM/admin-only commands.
-    - For each command, classify: audience, context, auth mode, backend used (`git`, `gh`, Codex, bridge-local), and whether it is essential, convenience, admin-only, or likely redundant.
-    - Capture the current command taxonomy in docs so future cleanup work is working from a stable baseline.
-  - Acceptance criteria:
-    - A single document lists the entire command surface, including aliases and DM-only differences.
-    - Each command is tagged by backend and usage context so overlap is obvious.
-    - The inventory is complete enough to drive follow-on simplification tasks without additional discovery work.
-
 - [TASK-0034] Command model redesign around a minimal core workflow.
   - Goal: define a simpler command architecture that stays usable even though the bridge already exposes `git`, `gh`, and Codex capabilities.
   - Analysis summary:

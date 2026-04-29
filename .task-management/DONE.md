@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0033] Command surface inventory and capability matrix.
+  - Completed: 2026-04-29
+  - Notes: Added `docs/COMMAND_SURFACE.md` with full channel/shortcut/DM command inventory and classification, and linked it from README for follow-on redesign tasks.
+
 - [TASK-0024] Refactor `Router.handle_message` into focused phases to reduce nested branching and mixed responsibilities.
   - Completed: 2026-02-25
   - Notes: Split routing entry flow into explicit helper phases for attachment handling, pending upload replies, unprefixed prompt flow, and command flow; added shared repo-path error helper and preserved existing behavior with targeted router integration coverage.
