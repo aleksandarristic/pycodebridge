@@ -144,6 +144,8 @@ network_access = true
 - `spec_prompt` (default template) — prompt used by `!c spec`.
 
 ## Commands
+Command inventory and taxonomy baseline: `docs/COMMAND_SURFACE.md`
+
 Prefix default is `!c`. Channels should be named `codex-<repo>`.
 In mapped repo channels/threads, every registered command and alias also works as top-level `!<command>` / `!<alias>` (for example `!models`, `!model`, `!status`, `!cfg`, `!logs`).
 Session scope model: one logical session per channel scope and one per thread scope. Channel scope uses `default`; thread scope uses the normalized thread name.
