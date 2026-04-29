@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0027] Cache-first model listing to avoid unnecessary Codex `/model` runs.
+  - Completed: 2026-04-29
+  - Notes: `!c models` now serves cached model data by default, supports explicit refresh (`refresh`, `--refresh`, `-r`) to re-query Codex, and includes targeted tests for cache-hit and refresh behavior.
+
 - [TASK-0028] Lean default prompt profiles for lower recurring token overhead.
   - Completed: 2026-04-29
   - Notes: Shortened built-in `start_prompt`/`spec_prompt` defaults, updated config examples with routine-vs-complex model/reasoning recommendations, and documented a lightweight prompt-profile pattern in README.

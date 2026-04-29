@@ -55,18 +55,6 @@ Ordered by estimated ROI (highest first), balancing user impact, implementation 
     - Shortcut and alias policy is explicit and intentionally limited.
     - Docs reflect the new command organization and deprecation plan.
 
-- [TASK-0027] Cache-first model listing to avoid unnecessary Codex `/model` runs.
-  - Goal: eliminate avoidable token spend when listing available models.
-  - Scope:
-    - Change `!c models` to use the local models cache first when it is present and valid.
-    - Only invoke Codex for model discovery on explicit refresh or cache miss/staleness.
-    - Keep current parsing/normalization behavior for refreshed results.
-    - Document how operators can refresh the cache when needed.
-  - Acceptance criteria:
-    - `!c models` does not start a Codex session when cached model data is sufficient.
-    - Operators still have a supported way to refresh the list explicitly.
-    - Targeted tests cover cache-hit, cache-miss, and refresh behavior.
-
 - [TASK-0031] Reduce reply-path overhead from repeated chunking and nested send loops.
   - Goal: tighten the output pipeline so Discord replies are formatted and chunked once per message path where practical.
   - Scope:
