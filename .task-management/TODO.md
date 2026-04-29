@@ -12,6 +12,64 @@ Rules:
 
 Ordered by estimated ROI (highest first), balancing user impact, implementation scope, and delivery risk.
 
+- [TASK-0033] Command surface inventory and capability matrix.
+  - Goal: document every operator-facing command path and identify overlap across channel commands, top-level shortcuts, and DM admin commands.
+  - Analysis summary:
+    - The app currently exposes commands through at least four layers: `!c <cmd>`, top-level `!<cmd>` shortcuts, session-targeted shorthands (`!s:`, `!a:`), and DM-only/admin commands.
+    - There is substantial overlap between direct tool passthrough (`git`, `gh`, Codex sessions) and bridge-specific wrappers (`show`, `changes`, `branch`, `repo`, repo lifecycle, logs/audit/session lifecycle).
+    - The present surface is hard to reason about because the same intent may have multiple entry points depending on channel vs DM context.
+  - Scope:
+    - Build a single inventory of all channel commands, aliases, top-level shortcuts, shorthands, and DM/admin-only commands.
+    - For each command, classify: audience, context, auth mode, backend used (`git`, `gh`, Codex, bridge-local), and whether it is essential, convenience, admin-only, or likely redundant.
+    - Capture the current command taxonomy in docs so future cleanup work is working from a stable baseline.
+  - Acceptance criteria:
+    - A single document lists the entire command surface, including aliases and DM-only differences.
+    - Each command is tagged by backend and usage context so overlap is obvious.
+    - The inventory is complete enough to drive follow-on simplification tasks without additional discovery work.
+
+- [TASK-0034] Command model redesign around a minimal core workflow.
+  - Goal: define a simpler command architecture that stays usable even though the bridge already exposes `git`, `gh`, and Codex capabilities.
+  - Analysis summary:
+    - Realistically needed commands appear to cluster into a small core:
+      - orientation/help: `help`, `status`
+      - session lifecycle: `start`, `resume`, `use`, `reset`
+      - active-run control: `answer`, `approve`, `deny`, `steer`, `stop`/`interrupt`, `wait`
+      - repo inspection: `show`, `changes`, `tests`, `branch`
+      - raw tool escape hatches: `git`, `gh`
+      - admin/setup only: repo lifecycle, config/options, logs/audit, security unlock/lock
+    - Several commands likely need consolidation or demotion from the primary surface:
+      - `stats`, `budget`, and `peek` overlap as diagnostic/status views.
+      - `reset`, `purge`, and `session ...` spread session lifecycle across too many verbs.
+      - `logs` and `audit` are power-user/admin features and probably should not compete with core workflow commands.
+      - `thread` is highly specialized and should likely be hidden from normal operator flow.
+  - Scope:
+    - Propose a minimal core command set for normal channel usage.
+    - Define which commands remain first-class, which move under subcommands/admin namespaces, and which become deprecated aliases only.
+    - Recommend a consistent structure for channel commands versus DM/admin commands.
+  - Acceptance criteria:
+    - The redesign clearly separates core workflow commands from power/admin commands.
+    - Overlapping commands are either merged, nested, or explicitly marked for deprecation.
+    - The proposal includes migration guidance for existing operators and scripts.
+
+- [TASK-0035] Command information architecture, naming, and help-system rewrite.
+  - Goal: reorganize command naming and help output so the bridge is easier to learn and operate.
+  - Analysis summary:
+    - The bridge currently mixes flat verbs, aliases, and shorthands in a way that increases cognitive load.
+    - The help experience should emphasize a short “golden path” and treat advanced/admin commands as secondary.
+    - A better structure is likely:
+      - keep `!c` as the canonical namespace
+      - keep only a very small number of top-level shorthands for active-run interaction (`!a`, `!s`, maybe `!y`/`!n`)
+      - group advanced features under clearer families such as `session`, `admin`, `diag`, or similar
+      - preserve `git` and `gh` as explicit escape hatches instead of duplicating too many specialized wrappers
+  - Scope:
+    - Redesign command naming, grouping, and help rendering around progressive disclosure.
+    - Define which shortcuts remain because they materially improve chat ergonomics and which aliases should be removed from prominent docs.
+    - Update user-facing docs/help so the preferred workflow is obvious in both channel and DM contexts.
+  - Acceptance criteria:
+    - The help/index output presents a short primary workflow before advanced/admin commands.
+    - Shortcut and alias policy is explicit and intentionally limited.
+    - Docs reflect the new command organization and deprecation plan.
+
 - [TASK-0029] Parallelize independent helper subprocesses on read-only command paths.
   - Goal: reduce operator-perceived latency for commands that currently await multiple independent subprocesses in sequence.
   - Scope:
