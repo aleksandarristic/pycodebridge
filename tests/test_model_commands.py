@@ -2,6 +2,7 @@ import asyncio
 from types import SimpleNamespace
 
 from codebridge import config as cfgmod
+from codebridge.commands import registry as command_registry
 from codebridge.codex import Options
 from codebridge.routing.router import Router
 from codebridge.sessions.coordinator import SessionCoordinator
@@ -86,7 +87,7 @@ class _FakeRunner:
         # Provide some visible output so Router's streaming path is exercised.
         if opts.on_jsonl:
             await opts.on_jsonl("hello from codex")
-        if opts.on_output and any(a == "/models" for a in opts.args):
+        if opts.on_output and any(a in {"/model", "/models"} for a in opts.args):
             await opts.on_output("Available models:")
             await opts.on_output("- `gpt-5.2-codex` (recommended)")
             await opts.on_output("- o3-mini")
@@ -173,13 +174,14 @@ def _discord_event(content: str, channel_name: str) -> MessageEvent:
     )
 
 
-def test_start_resume_reports_model_and_model_change_is_queued(tmp_path):
+def test_start_resume_reports_model_and_model_change_is_queued(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
 
     router, runner = _build_router(tmp_path)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    monkeypatch.setattr(command_registry, "_read_models_cache", lambda: [])
 
     async def run():
         await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
@@ -212,5 +214,44 @@ def test_start_resume_reports_model_and_model_change_is_queued(tmp_path):
                 break
             await asyncio.sleep(0.01)
         assert any("gpt-5.2-codex" in s for s in sink.sent)
+
+    asyncio.run(run())
+
+
+def test_models_uses_cache_without_running_codex(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    monkeypatch.setattr(command_registry, "_read_models_cache", lambda: ["gpt-5.5", "o3"])
+
+    async def run():
+        await router.handle_message(_discord_event("!models", "codex-repo"), sink)
+        assert any("[cache]" in s for s in sink.sent)
+        assert any("gpt-5.5" in s for s in sink.sent)
+        assert runner.calls == []
+
+    asyncio.run(run())
+
+
+def test_models_refresh_forces_codex_query(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    monkeypatch.setattr(command_registry, "_read_models_cache", lambda: ["gpt-5.5"])
+
+    async def run():
+        await router.handle_message(_discord_event("!models --refresh", "codex-repo"), sink)
+        for _ in range(200):
+            if runner.calls:
+                break
+            await asyncio.sleep(0.01)
+        assert runner.calls
+        assert any("/model" in args for args in runner.calls)
 
     asyncio.run(run())

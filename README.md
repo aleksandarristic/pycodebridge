@@ -166,7 +166,7 @@ TOTP not required (open in channel):
 - `!c stats [session]`
 - `!c peek [session]`
 - `!c updates`
-- `!c models [session]`
+- `!c models [session] [refresh|--refresh]`
 - `!c branch`
 - `!c show` (alias: `showrepo`)
 - `!c changes` (alias: `showchanges`)

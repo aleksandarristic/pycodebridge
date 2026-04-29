@@ -222,7 +222,15 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         ),
         CommandSpec("use", "use <session>", "set your sticky session", "Sessions", _cmd_use, AUTH_UNLOCK, aliases=("select",)),
         CommandSpec("model", "model [session] <id> [reasoning]", "set session model", "Sessions", _cmd_model, AUTH_UNLOCK, aliases=("mdl",)),
-        CommandSpec("models", "models [session]", "list available models via /model", "Sessions", _cmd_models, AUTH_OPEN, aliases=("mdls",)),
+        CommandSpec(
+            "models",
+            "models [session] [refresh|--refresh]",
+            "list available models (cache-first; refresh to re-query Codex)",
+            "Sessions",
+            _cmd_models,
+            AUTH_OPEN,
+            aliases=("mdls",),
+        ),
         CommandSpec("thread", "thread [session] <id>", "set thread id", "Sessions", _cmd_thread, AUTH_UNLOCK, aliases=("tid",)),
         CommandSpec("reset", "reset [session]", "reset session context", "Sessions", _cmd_reset, AUTH_UNLOCK),
         CommandSpec("purge", "purge [session] | purge stale <ttl>", "reset session and purge session artifacts", "Sessions", _cmd_purge, AUTH_UNLOCK),
@@ -553,11 +561,20 @@ async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, rep
 
 async def _cmd_models(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     parts = rest.split()
+    refresh_tokens = {"refresh", "--refresh", "-r"}
+    refresh = any(p.lower() in refresh_tokens for p in parts)
+    parts = [p for p in parts if p.lower() not in refresh_tokens]
     session_name = _current_session(router, message) or DEFAULT_SESSION
     if parts:
         session_name = parts[0]
     session_name = await _resolve_session_name(router, message, sink, session_name, default_from_user=False)
     if not session_name:
+        return
+
+    cached = _read_models_cache()
+    if cached and not refresh:
+        lines = [f"Available models ({len(cached)}) [cache]:"] + [f"- {m}" for m in cached]
+        await router.reply(sink, "\n".join(lines))
         return
 
     channel_id = message.channel_id
@@ -602,13 +619,8 @@ async def _cmd_models(router: Any, message: MessageEvent, sink: ResponseSink, re
             relay_output=False,
         )
         models = parse_models_from_lines(collected)
-        cached = _read_models_cache()
-        if cached:
-            if models:
-                filtered = [m for m in models if m in cached]
-                models = filtered or cached
-            else:
-                models = cached
+        if cached and not models:
+            models = cached
         if not models:
             await router.reply(sink, "No models parsed from /models output or local cache.")
             return
