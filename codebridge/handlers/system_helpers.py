@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import asyncio
 from typing import TYPE_CHECKING
 
 from ..routing.helpers import HELPER_TIMEOUT, run_limited_command
@@ -36,22 +37,17 @@ def _extract_line_version(text: str) -> str:
 async def handle_updates(router: "Router", sink: ResponseSink, repo_path: str) -> None:
     """Compare installed Codex CLI version with latest npm release."""
     binary = getattr(router.runner, "binary", "codex") or "codex"
-    current_out, current_err = await run_limited_command(
+    npm_env = os.environ.copy()
+    npm_env.setdefault("NPM_CONFIG_CACHE", "/tmp/npm-cache")
+    current_task = run_limited_command(
         repo_path,
         [binary, "--version"],
         timeout=HELPER_TIMEOUT,
     )
+    latest_task = run_limited_command(repo_path, ["npm", "view", "@openai/codex", "version"], timeout=HELPER_TIMEOUT, env=npm_env)
+    (current_out, current_err), (latest_out, latest_err) = await asyncio.gather(current_task, latest_task)
     current = _extract_version(current_out)
     current_raw = (current_out or "").strip() or "(no output)"
-
-    npm_env = os.environ.copy()
-    npm_env.setdefault("NPM_CONFIG_CACHE", "/tmp/npm-cache")
-    latest_out, latest_err = await run_limited_command(
-        repo_path,
-        ["npm", "view", "@openai/codex", "version"],
-        timeout=HELPER_TIMEOUT,
-        env=npm_env,
-    )
     latest = _extract_line_version(latest_out)
     latest_raw = (latest_out or "").strip() or "(no output)"
 

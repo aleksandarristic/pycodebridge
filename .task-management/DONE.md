@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0029] Parallelize independent helper subprocesses on read-only command paths.
+  - Completed: 2026-04-29
+  - Notes: Parallelized independent subprocesses in `showchanges` and `updates` via `asyncio.gather` while preserving output ordering and existing error behavior; added targeted helper tests covering concurrent-start behavior.
+
 - [TASK-0003] Compose + global skill defaults for cross-repo persistence (deferred).
   - Completed: 2026-04-29
   - Notes: Added Docker docs for user-level skill storage under `${CODEX_AUTH_HOST}/skills/...`, optional `codex.env.CODEX_HOME` override, restart/apply workflow, and guidance for coexistence with repo `AGENTS.md`.

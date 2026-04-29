@@ -24,8 +24,9 @@ async def handle_showrepo(router: "Router", sink: ResponseSink, repo_path: str) 
 
 async def handle_showchanges(router: "Router", sink: ResponseSink, repo_path: str) -> None:
     """Show git status and diffstat for the repo."""
-    out, err = await run_limited_command(repo_path, ["git", "status", "--short", "--branch"])
-    out2, err2 = await run_limited_command(repo_path, ["git", "diff", "--stat"])
+    status_task = run_limited_command(repo_path, ["git", "status", "--short", "--branch"])
+    diff_task = run_limited_command(repo_path, ["git", "diff", "--stat"])
+    (out, err), (out2, err2) = await asyncio.gather(status_task, diff_task)
     text = strip_control_codes(out + "\n" + out2)
     text = trim_output(text, 200, 4000)
     if err or err2:

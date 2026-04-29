@@ -55,16 +55,6 @@ Ordered by estimated ROI (highest first), balancing user impact, implementation 
     - Shortcut and alias policy is explicit and intentionally limited.
     - Docs reflect the new command organization and deprecation plan.
 
-- [TASK-0029] Parallelize independent helper subprocesses on read-only command paths.
-  - Goal: reduce operator-perceived latency for commands that currently await multiple independent subprocesses in sequence.
-  - Scope:
-    - Review read-only helpers such as `showchanges`, `updates`, and similar status/diagnostic flows.
-    - Run independent subprocesses concurrently where outputs do not depend on one another.
-    - Preserve existing timeout/error semantics and user-visible output ordering.
-  - Acceptance criteria:
-    - Commands that combine multiple independent helper calls no longer block on fully serialized subprocess execution.
-    - Targeted tests cover successful parallel aggregation and failure/timeout handling.
-
 - [TASK-0027] Cache-first model listing to avoid unnecessary Codex `/model` runs.
   - Goal: eliminate avoidable token spend when listing available models.
   - Scope:

@@ -114,3 +114,45 @@ def test_path_access_status_reports_ro_when_not_writable(tmp_path, monkeypatch):
     assert system_helpers._path_access_status("") == "missing"
     assert system_helpers._path_access_status(str(tmp_path / "missing")) == "missing"
     assert system_helpers._path_access_status(str(target)) == "ok(ro)"
+
+
+def test_handle_updates_runs_version_checks_in_parallel(tmp_path, monkeypatch):
+    started: list[str] = []
+    gate = asyncio.Event()
+
+    class _Runner:
+        binary = "codex"
+
+    class _Router:
+        def __init__(self):
+            self.runner = _Runner()
+            self.replies = []
+
+        async def reply(self, sink, text):
+            _ = sink
+            self.replies.append(text)
+
+    class _Sink:
+        pass
+
+    async def _fake_run_limited_command(repo_path, args, timeout, env=None):
+        _ = (repo_path, timeout, env)
+        started.append(" ".join(args))
+        if len(started) == 2:
+            gate.set()
+        await gate.wait()
+        if args[-1] == "--version":
+            return "codex 0.1.0", None
+        return "0.2.0\n", None
+
+    monkeypatch.setattr(system_helpers, "run_limited_command", _fake_run_limited_command)
+    router = _Router()
+
+    async def run():
+        await system_helpers.handle_updates(router, _Sink(), str(tmp_path))
+
+    asyncio.run(run())
+    assert len(started) == 2
+    assert any(cmd.endswith(" --version") for cmd in started)
+    assert any(cmd.startswith("npm view @openai/codex version") for cmd in started)
+    assert any("update available (0.1.0 -> 0.2.0)" in msg for msg in router.replies)
