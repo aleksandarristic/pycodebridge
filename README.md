@@ -177,6 +177,7 @@ TOTP not required (open in channel):
 - `!help` (equivalent to `!c help`)
 - `!c status`
 - `!c stats [session]`
+- `!c budget [status]`
 - `!c peek [session]`
 - `!c updates`
 - `!c models [session] [refresh|--refresh]`
@@ -261,6 +262,7 @@ General:
 - `help` (alias: `commands`) `[open]`
 - `help <command>` for command-specific details and examples (for example `!c help git`)
 - `status` (alias: `st`), `stats` (alias: `usage`), `peek` (alias: `pk`), `updates` (aliases: `update`, `version`, `u`) `[open]`
+- `budget [status] | budget set <channel|user|session|run> <soft> <hard> | budget clear [channel|user|session|run|all]` (alias: `budgets`) `[open]`
 - Top-level command forms are available for all command names and aliases (`!<command>` / `!<alias>`).
   - `status` includes contextual `Related:` hints (for example `!c start`, `!ps`, `!w`) when relevant.
   - `status` also shows lock state for your account (`default` and `gh` unlock remaining time).

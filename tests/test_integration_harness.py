@@ -1957,6 +1957,8 @@ def test_integration_budget_status_and_set(tmp_path):
         await router.handle_message(_discord_event("!c budget status", "codex-repo"), sink)
         await router.handle_message(_discord_event("!c budget set channel 100 200", "codex-repo"), sink)
         await router.handle_message(_discord_event("!c budget set user 50 80", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c budget set session 30 60", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c budget set run 10 20", "codex-repo"), sink)
         await router.handle_message(_discord_event("!c budget status", "codex-repo"), sink)
 
     asyncio.run(run())
@@ -1964,7 +1966,11 @@ def test_integration_budget_status_and_set(tmp_path):
     assert any("Budgets:" in t for t in texts)
     assert any("Budget channel thresholds set: soft=100, hard=200." in t for t in texts)
     assert any("Budget user thresholds set: soft=50, hard=80." in t for t in texts)
+    assert any("Budget session thresholds set: soft=30, hard=60." in t for t in texts)
+    assert any("Budget run thresholds set: soft=10, hard=20." in t for t in texts)
     assert any("soft=100 hard=200" in t for t in texts)
+    assert any("Session usage (default):" in t for t in texts)
+    assert any("Last run (default):" in t for t in texts)
 
 
 def test_integration_budget_hard_limit_blocks_new_runs(tmp_path):
@@ -1984,6 +1990,58 @@ def test_integration_budget_hard_limit_blocks_new_runs(tmp_path):
     texts = [msg for msg, _, _ in sink.sent]
     assert any("Budget limit reached" in t for t in texts)
     assert not any(args and args[0] == "start" for args in runner.calls)
+
+
+def test_integration_budget_session_hard_limit_blocks_new_runs(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c budget set session 0 10", "codex-repo"), sink)
+        from codebridge.routing.helpers import UsageStats
+
+        router._usage.setdefault("chan", {})["default"] = UsageStats(total_tokens=10)
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("session hard budget reached (10/10)" in t for t in texts)
+    assert not any(args and args[0] == "start" for args in runner.calls)
+
+
+def test_integration_budget_run_and_session_notices(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    class _UsageRunner(_FakeRunner):
+        async def run(self, opts: Options):
+            self.calls.append(opts.args)
+            if opts.on_thread:
+                await opts.on_thread("thread-1")
+            if opts.on_jsonl:
+                await opts.on_jsonl('{"type":"usage","usage":{"input_tokens":12,"output_tokens":8,"total_tokens":20}}')
+                await opts.on_jsonl("hello from codex")
+            self.last_proc = _ProcDone(0)
+            return self.last_proc
+
+    router, runner = _build_router(tmp_path, runner=_UsageRunner())
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c budget set run 10 15", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c budget set session 15 20", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("run hard budget reached (20/15)" in t for t in texts)
+    assert any("session hard budget reached (20/20)" in t for t in texts)
+    assert router._budget_last_run_total["chan"]["default"] == 20
 
 
 def test_integration_audit_show_find_and_bundle(tmp_path):

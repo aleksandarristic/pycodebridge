@@ -77,18 +77,6 @@ Ordered by estimated ROI (highest first), balancing user impact, implementation 
     - State semantics remain correct under locking and process restarts.
     - Targeted tests cover cache invalidation and compatibility with existing state mutations.
 
-- [TASK-0026] Budget-aware token guardrails for oversized runs and sessions.
-  - Goal: turn token usage reporting into active spend control.
-  - Scope:
-    - Add per-run and per-session thresholds in addition to the current aggregate channel/user budgets.
-    - Emit early warnings when a run is becoming unusually expensive.
-    - Optionally recommend or trigger safer follow-up actions such as starting a fresh session.
-    - Record enough metadata to distinguish cumulative session bloat from a single large run.
-  - Acceptance criteria:
-    - Operators can configure thresholds that catch expensive runs before they become recurring waste.
-    - User-visible notices distinguish channel/user budgets from run/session-specific token growth.
-    - Targeted tests cover warning/block behavior and usage accounting.
-
 - [TASK-0002] Final-message ordering hardening for run lifecycle output.
   - Goal: prevent stale/intermediate progress updates from appearing after a run-complete message.
   - Scope:

@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0026] Budget-aware token guardrails for oversized runs and sessions.
+  - Completed: 2026-04-29
+  - Notes: Extended `!c budget` with `session` and `run` scopes, added session-hard pre-run blocking, surfaced run/session soft and hard notices during and after runs, recorded per-session last-run token totals, and updated status/docs plus targeted budget integration coverage.
+
 - [TASK-0025] Session compaction and idle-expiry defaults for token control.
   - Completed: 2026-04-29
   - Notes: Enabled a 4-hour default session idle TTL, added `!c choose compact` for expired-session restarts from a concise summary instead of full thread history, cleared stale thread ids before fresh-start paths, and added targeted parser/config/integration coverage for compact restart behavior.

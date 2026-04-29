@@ -85,6 +85,23 @@ _RUN_KEY_RESULT_MAX = 180
 _RUNTIME_OPTION_KEYS = ("run_heartbeat_seconds", "run_completion_min_seconds", "show_reasoning_details")
 
 
+class _RunBudgetMonitor:
+    """Track per-run/session budget notices during a single Codex run."""
+
+    def __init__(
+        self,
+        session: str,
+        before_total: int,
+        run_thresholds: tuple[int, int],
+        session_thresholds: tuple[int, int],
+    ) -> None:
+        self.session = session or DEFAULT_SESSION
+        self.before_total = before_total
+        self.run_thresholds = run_thresholds
+        self.session_thresholds = session_thresholds
+        self.sent: set[str] = set()
+
+
 def _git_commit_hash() -> str:
     try:
         root = Path(__file__).resolve().parents[2]
@@ -135,6 +152,9 @@ class Router:
         self._budget_usage_user: Dict[str, int] = {}
         self._budget_thresholds_channel: Dict[str, tuple[int, int]] = {}
         self._budget_thresholds_user: Dict[str, tuple[int, int]] = {}
+        self._budget_thresholds_session: Dict[str, Dict[str, tuple[int, int]]] = {}
+        self._budget_thresholds_run: Dict[str, Dict[str, tuple[int, int]]] = {}
+        self._budget_last_run_total: Dict[str, Dict[str, int]] = {}
         self._runtime_defaults = {
             "run_heartbeat_seconds": max(1, min(86400, int(getattr(self.cfg.runtime, "run_heartbeat_seconds", _RUN_HEARTBEAT_SECONDS)))),
             "run_completion_min_seconds": max(
@@ -484,6 +504,30 @@ class Router:
             self._budget_thresholds_channel.setdefault(to_channel_id, from_budget_thresholds)
             changed = True
 
+        from_budget_session_thresholds = self._budget_thresholds_session.pop(from_channel_id, None)
+        if from_budget_session_thresholds is not None:
+            target = self._budget_thresholds_session.setdefault(to_channel_id, {})
+            for session, thresholds in from_budget_session_thresholds.items():
+                if session not in target:
+                    target[session] = thresholds
+            changed = True
+
+        from_budget_run_thresholds = self._budget_thresholds_run.pop(from_channel_id, None)
+        if from_budget_run_thresholds is not None:
+            target = self._budget_thresholds_run.setdefault(to_channel_id, {})
+            for session, thresholds in from_budget_run_thresholds.items():
+                if session not in target:
+                    target[session] = thresholds
+            changed = True
+
+        from_budget_last_run = self._budget_last_run_total.pop(from_channel_id, None)
+        if from_budget_last_run is not None:
+            target = self._budget_last_run_total.setdefault(to_channel_id, {})
+            for session, total in from_budget_last_run.items():
+                if session not in target:
+                    target[session] = total
+            changed = True
+
         from_runtime_opts = self._runtime_options_channels.pop(from_channel_id, None)
         if from_runtime_opts is not None:
             target_runtime_opts = self._runtime_options_channels.setdefault(to_channel_id, {})
@@ -775,7 +819,10 @@ class Router:
         action = parts[0].lower()
         if action == "set":
             if len(parts) != 4:
-                await self.reply_forbidden(sink, "Usage: !c budget set channel <soft> <hard> | !c budget set user <soft> <hard>")
+                await self.reply_forbidden(
+                    sink,
+                    "Usage: !c budget set <channel|user|session|run> <soft> <hard>",
+                )
                 return
             scope = parts[1].lower()
             try:
@@ -791,20 +838,40 @@ class Router:
                 self._budget_thresholds_channel[event.channel_id] = (soft, hard)
             elif scope == "user":
                 self._budget_thresholds_user[self._budget_user_key(event)] = (soft, hard)
+            elif scope == "session":
+                session = self.current_session_for_event(event)
+                self._budget_thresholds_session.setdefault(event.channel_id, {})[session] = (soft, hard)
+            elif scope == "run":
+                session = self.current_session_for_event(event)
+                self._budget_thresholds_run.setdefault(event.channel_id, {})[session] = (soft, hard)
             else:
-                await self.reply_forbidden(sink, "Scope must be `channel` or `user`.")
+                await self.reply_forbidden(sink, "Scope must be `channel`, `user`, `session`, or `run`.")
                 return
             await self.reply(sink, f"Budget {scope} thresholds set: soft={soft}, hard={hard}.")
             return
         if action == "clear":
             scope = parts[1].lower() if len(parts) >= 2 else "all"
-            if scope not in {"channel", "user", "all"}:
-                await self.reply_forbidden(sink, "Usage: !c budget clear [channel|user|all]")
+            if scope not in {"channel", "user", "session", "run", "all"}:
+                await self.reply_forbidden(sink, "Usage: !c budget clear [channel|user|session|run|all]")
                 return
             if scope in {"channel", "all"}:
                 self._budget_thresholds_channel.pop(event.channel_id, None)
             if scope in {"user", "all"}:
                 self._budget_thresholds_user.pop(self._budget_user_key(event), None)
+            if scope in {"session", "all"}:
+                session = self.current_session_for_event(event)
+                scoped = self._budget_thresholds_session.get(event.channel_id)
+                if scoped is not None:
+                    scoped.pop(session, None)
+                    if not scoped:
+                        self._budget_thresholds_session.pop(event.channel_id, None)
+            if scope in {"run", "all"}:
+                session = self.current_session_for_event(event)
+                scoped = self._budget_thresholds_run.get(event.channel_id)
+                if scoped is not None:
+                    scoped.pop(session, None)
+                    if not scoped:
+                        self._budget_thresholds_run.pop(event.channel_id, None)
             await self.reply(sink, f"Budget thresholds cleared for {scope}.")
             return
         await self.reply_forbidden(sink, "Usage: !c budget [status] | !c budget set ... | !c budget clear ...")
@@ -1788,13 +1855,19 @@ class Router:
     ) -> None:
         """Run Codex with streaming callbacks and audit logging."""
         channel_id = event.channel_id
-        if await self._budget_hard_blocked(event, sink):
+        if await self._budget_hard_blocked(event, sink, session):
             return
         started_at = time.monotonic()
         last_output = ""
         output_events = 0
         usage_before = self.get_usage(channel_id, session)
         before_total = usage_before.total_tokens if usage_before else 0
+        budget_monitor = _RunBudgetMonitor(
+            session=session or DEFAULT_SESSION,
+            before_total=before_total,
+            run_thresholds=self._budget_run_threshold(channel_id, session),
+            session_thresholds=self._budget_session_threshold(channel_id, session),
+        )
 
         async def _capture_output(text: str) -> None:
             nonlocal last_output, output_events
@@ -1858,7 +1931,7 @@ class Router:
                         args=args_to_run,
                         env=self.cfg.codex.env,
                         on_jsonl=lambda line: self.on_jsonl(
-                            sink, channel_id, session, repo_name, entry, line, relay_output
+                            sink, channel_id, session, repo_name, entry, line, relay_output, event, budget_monitor
                         ),
                         on_thread=lambda tid: self.on_thread(
                             channel_id, session, repo_name, repo_path, model, reasoning_effort, entry, tid
@@ -1908,7 +1981,8 @@ class Router:
                 after_total = usage_after.total_tokens if usage_after else 0
                 delta_total = max(0, after_total - before_total)
                 if delta_total:
-                    self._budget_record_usage(event, channel_id, delta_total)
+                    self._budget_record_usage(event, channel_id, session, delta_total)
+                    await self._budget_run_notify_if_needed(event, sink, session, delta_total, after_total, budget_monitor)
                 if relay_output:
                     await self._send_run_completion_summary(
                         sink,
@@ -1960,26 +2034,39 @@ class Router:
         user = self._budget_thresholds_user.get(self._budget_user_key(event), (0, 0))
         return ch, user
 
-    async def _budget_hard_blocked(self, event: MessageEvent, sink: ResponseSink) -> bool:
+    def _budget_session_threshold(self, channel_id: str, session: str) -> tuple[int, int]:
+        return self._budget_thresholds_session.get(channel_id, {}).get(session or DEFAULT_SESSION, (0, 0))
+
+    def _budget_run_threshold(self, channel_id: str, session: str) -> tuple[int, int]:
+        return self._budget_thresholds_run.get(channel_id, {}).get(session or DEFAULT_SESSION, (0, 0))
+
+    async def _budget_hard_blocked(self, event: MessageEvent, sink: ResponseSink, session: str) -> bool:
         ch_thr, user_thr = self._budget_thresholds(event)
         ch_used = self._budget_usage_channel.get(event.channel_id, 0)
         user_used = self._budget_usage_user.get(self._budget_user_key(event), 0)
+        session_usage = self.get_usage(event.channel_id, session or DEFAULT_SESSION)
+        session_used = session_usage.total_tokens if session_usage else 0
+        session_thr = self._budget_session_threshold(event.channel_id, session)
         ch_hard = ch_thr[1]
         user_hard = user_thr[1]
+        session_hard = session_thr[1]
         reasons: list[str] = []
         if ch_hard > 0 and ch_used >= ch_hard:
             reasons.append(f"channel hard budget reached ({ch_used}/{ch_hard})")
         if user_hard > 0 and user_used >= user_hard:
             reasons.append(f"user hard budget reached ({user_used}/{user_hard})")
+        if session_hard > 0 and session_used >= session_hard:
+            reasons.append(f"session hard budget reached ({session_used}/{session_hard})")
         if not reasons:
             return False
         await self.reply_forbidden(sink, "Budget limit reached: " + "; ".join(reasons) + ". Use `!c budget status`.")
         return True
 
-    def _budget_record_usage(self, event: MessageEvent, channel_id: str, total_tokens: int) -> None:
+    def _budget_record_usage(self, event: MessageEvent, channel_id: str, session: str, total_tokens: int) -> None:
         self._budget_usage_channel[channel_id] = self._budget_usage_channel.get(channel_id, 0) + total_tokens
         user_key = self._budget_user_key(event)
         self._budget_usage_user[user_key] = self._budget_usage_user.get(user_key, 0) + total_tokens
+        self._budget_last_run_total.setdefault(channel_id, {})[session or DEFAULT_SESSION] = total_tokens
 
     async def _budget_soft_notify_if_needed(self, event: MessageEvent, sink: ResponseSink) -> None:
         ch_thr, user_thr = self._budget_thresholds(event)
@@ -1999,11 +2086,55 @@ class Router:
         ch_thr, user_thr = self._budget_thresholds(event)
         ch_used = self._budget_usage_channel.get(event.channel_id, 0)
         user_used = self._budget_usage_user.get(self._budget_user_key(event), 0)
+        session = self.current_session_for_event(event)
+        session_stats = self.get_usage(event.channel_id, session)
+        session_used = session_stats.total_tokens if session_stats else 0
+        session_thr = self._budget_session_threshold(event.channel_id, session)
+        run_thr = self._budget_run_threshold(event.channel_id, session)
+        last_run = self._budget_last_run_total.get(event.channel_id, {}).get(session, 0)
         return (
             "Budgets:\n"
             f"- Channel usage: {ch_used} tokens | soft={ch_thr[0]} hard={ch_thr[1]}\n"
-            f"- User usage: {user_used} tokens | soft={user_thr[0]} hard={user_thr[1]}"
+            f"- User usage: {user_used} tokens | soft={user_thr[0]} hard={user_thr[1]}\n"
+            f"- Session usage ({session}): {session_used} tokens | soft={session_thr[0]} hard={session_thr[1]}\n"
+            f"- Last run ({session}): {last_run} tokens | soft={run_thr[0]} hard={run_thr[1]}"
         )
+
+    async def _budget_run_notify_if_needed(
+        self,
+        event: MessageEvent,
+        sink: ResponseSink,
+        session: str,
+        run_total: int,
+        session_total: int,
+        monitor: Optional[_RunBudgetMonitor] = None,
+    ) -> None:
+        notices: list[str] = []
+        run_soft, run_hard = self._budget_run_threshold(event.channel_id, session)
+        session_soft, session_hard = self._budget_session_threshold(event.channel_id, session)
+        emitted = monitor.sent if monitor is not None else set()
+        if run_hard > 0 and run_total >= run_hard and "run_hard" not in emitted:
+            notices.append(
+                f"run hard budget reached ({run_total}/{run_hard}) for session '{session or DEFAULT_SESSION}'"
+            )
+            emitted.add("run_hard")
+        elif run_soft > 0 and run_total >= run_soft and "run_soft" not in emitted:
+            notices.append(
+                f"run soft budget reached ({run_total}/{run_soft}) for session '{session or DEFAULT_SESSION}'"
+            )
+            emitted.add("run_soft")
+        if session_hard > 0 and session_total >= session_hard and "session_hard" not in emitted:
+            notices.append(
+                f"session hard budget reached ({session_total}/{session_hard}) for session '{session or DEFAULT_SESSION}'; consider `!c choose compact` or `!c reset` before another run"
+            )
+            emitted.add("session_hard")
+        elif session_soft > 0 and session_total >= session_soft and "session_soft" not in emitted:
+            notices.append(
+                f"session soft budget reached ({session_total}/{session_soft}) for session '{session or DEFAULT_SESSION}'; consider `!c choose compact` or `!c reset` soon"
+            )
+            emitted.add("session_soft")
+        if notices:
+            await self.reply(sink, "Budget notice: " + "; ".join(notices) + ".")
 
     async def _run_heartbeat(self, sink: ResponseSink, session: str, started_at: float) -> None:
         """Emit periodic run heartbeat messages while a job is active."""
@@ -2049,6 +2180,8 @@ class Router:
         entry: Optional[Entry],
         line: str,
         relay_output: bool,
+        event: Optional[MessageEvent] = None,
+        budget_monitor: Optional[_RunBudgetMonitor] = None,
     ) -> None:
         """Handle a JSONL line from Codex and relay output."""
         self._session_log.append(
@@ -2076,6 +2209,18 @@ class Router:
             return
         self.update_usage(channel_id, session, evt)
         self.update_activity(channel_id, session)
+        if event is not None and budget_monitor is not None:
+            current = self.get_usage(channel_id, session or DEFAULT_SESSION)
+            current_total = current.total_tokens if current else 0
+            run_total = max(0, current_total - budget_monitor.before_total)
+            await self._budget_run_notify_if_needed(
+                event,
+                sink,
+                session,
+                run_total,
+                current_total,
+                budget_monitor,
+            )
         for msg in display_texts(evt):
             text = strip_control_codes(msg)
             if needs_user_input(text):

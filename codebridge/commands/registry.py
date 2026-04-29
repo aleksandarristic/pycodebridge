@@ -155,7 +155,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec("stats", "stats [session]", "show usage totals", "General", _cmd_stats, AUTH_OPEN, aliases=("usage",)),
         CommandSpec(
             "budget",
-            "budget [status] | budget set channel <soft> <hard> | budget set user <soft> <hard> | budget clear [channel|user|all]",
+            "budget [status] | budget set <channel|user|session|run> <soft> <hard> | budget clear [channel|user|session|run|all]",
             "usage budget visibility and controls",
             "General",
             _cmd_budget,
