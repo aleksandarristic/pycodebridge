@@ -108,7 +108,7 @@ network_access = true
 - `log_dir` (required) — directory for runtime logs (`bridge.log`, `codex_errors.log`, unified `session_jsonl/` logs) and audit artifacts.
 - `lock_timeout_seconds` (default `600`) — stale lock timeout.
 - `conflict_ttl_seconds` (default `60`) — conflict prompt TTL.
-- `session_idle_ttl_seconds` (default `0`) — when >0, sessions idle longer than this require explicit `continue` or `new` before resuming.
+- `session_idle_ttl_seconds` (default `14400`) — sessions idle longer than this require explicit `continue`, `compact`, or `new` before resuming. Set `0` to disable expiry.
 
 ### `runtime`
 - `log_level` (default `info`) — `debug|info|warn|error`.
@@ -206,7 +206,7 @@ TOTP required for GitHub CLI unless gh scope is unlocked (controlled by `discord
 TOTP required unless the chat is unlocked:
 - `!c start [session]`
 - `!c resume [session] <prompt>`
-- `!c choose [session] continue|new`
+- `!c choose [session] continue|new|compact`
 - `!continue` / `!cont` (shortcut for `!c choose continue` when a conflict prompt is pending)
 - `!c use <session>` (alias `select`)
 - `!c model [session] <id> [reasoning]`
@@ -276,7 +276,7 @@ Security:
 
 Sessions:
 - `start` (alias: `run`), `resume` (alias: `rs`), `choose` (alias: `pick`) `[unlock/default]`
-  - `choose` accepts `continue|new` (`resume|replace` still supported as aliases).
+  - `choose` accepts `continue|new|compact` (`resume|replace|summary` still supported as aliases).
   - Shortcut: `!continue` / `!cont` maps to `choose continue` while a conflict is pending.
 - `use` (alias: `select`), `model` (alias: `mdl`), `models` (alias: `mdls`), `thread` (alias: `tid`), `reset`, `spec` (alias: `plan`) (`models` is `[open]`, others `[unlock/default]`)
 

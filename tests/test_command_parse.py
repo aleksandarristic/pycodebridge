@@ -18,6 +18,8 @@ def test_parse_choose_supports_continue_and_new_aliases():
     assert parse_choose("continue") == ("continue", "")
     assert parse_choose("cont") == ("cont", "")
     assert parse_choose("new") == ("new", "")
+    assert parse_choose("compact") == ("compact", "")
     assert parse_choose("alpha continue") == ("continue", "alpha")
     assert parse_choose("alpha cont") == ("cont", "alpha")
     assert parse_choose("alpha new") == ("new", "alpha")
+    assert parse_choose("alpha compact") == ("compact", "alpha")

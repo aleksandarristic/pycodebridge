@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0025] Session compaction and idle-expiry defaults for token control.
+  - Completed: 2026-04-29
+  - Notes: Enabled a 4-hour default session idle TTL, added `!c choose compact` for expired-session restarts from a concise summary instead of full thread history, cleared stale thread ids before fresh-start paths, and added targeted parser/config/integration coverage for compact restart behavior.
+
 - [TASK-0027] Cache-first model listing to avoid unnecessary Codex `/model` runs.
   - Completed: 2026-04-29
   - Notes: `!c models` now serves cached model data by default, supports explicit refresh (`refresh`, `--refresh`, `-r`) to re-query Codex, and includes targeted tests for cache-hit and refresh behavior.

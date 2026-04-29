@@ -29,7 +29,7 @@ Source of truth: `codebridge/commands/registry.py`.
 | `lock ...` | `lk` | Channel | repo channel/thread | mixed | security state | essential |
 | `start [session]` | `run` | Channel | repo channel/thread | unlock/default | codex | essential |
 | `resume [session] <prompt>` | `rs` | Channel | repo channel/thread | unlock/default | codex | essential |
-| `choose [session] continue\|new` | `pick` | Channel | repo channel/thread | unlock/default | state/codex | essential |
+| `choose [session] continue\|new\|compact` | `pick` | Channel | repo channel/thread | unlock/default | state/codex | essential |
 | `use <session>` | `select` | Channel | repo channel/thread | unlock/default | state | essential |
 | `model [session] <id> [reasoning]` | `mdl` | Channel | repo channel/thread | unlock/default | state/codex config | convenience |
 | `models [session]` | `mdls` | Channel | repo channel/thread | open | codex/cache | convenience |

@@ -622,6 +622,11 @@ def test_load_config_session_idle_ttl_seconds(tmp_path, monkeypatch):
     assert cfg.state.session_idle_ttl_seconds == 7200
 
 
+def test_config_default_session_idle_ttl_seconds_is_enabled():
+    cfg = cfgmod.Config()
+    assert cfg.state.session_idle_ttl_seconds == 14400
+
+
 def test_load_config_session_idle_ttl_seconds_validation(tmp_path, monkeypatch):
     code_root = tmp_path / "code"
     data_dir = tmp_path / "data"

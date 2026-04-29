@@ -213,7 +213,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec("resume", "resume [session] <prompt>", "resume with prompt", "Sessions", _cmd_resume, AUTH_UNLOCK, aliases=("rs",)),
         CommandSpec(
             "choose",
-            "choose [session] continue|new",
+            "choose [session] continue|new|compact",
             "resolve session conflict prompt",
             "Sessions",
             _cmd_choose,
@@ -460,7 +460,7 @@ async def _cmd_resume(router: Any, message: MessageEvent, sink: ResponseSink, re
 async def _cmd_choose(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     choice, sess = parse_choose(rest)
     if not choice:
-        await router.reply_forbidden(sink, "Usage: !c choose [session] continue|new")
+        await router.reply_forbidden(sink, "Usage: !c choose [session] continue|new|compact")
         return
     session_name = await _resolve_session_name(router, message, sink, sess)
     if not session_name:

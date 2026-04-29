@@ -66,18 +66,6 @@ Ordered by estimated ROI (highest first), balancing user impact, implementation 
     - Reply behavior remains correct for long outputs and contextual sinks.
     - Targeted tests cover long-message chunking behavior after the refactor.
 
-- [TASK-0025] Session compaction and idle-expiry defaults for token control.
-  - Goal: reduce token spend from endlessly resumed long-lived Codex threads.
-  - Scope:
-    - Revisit the default `state.session_idle_ttl_seconds` so sessions do not implicitly live forever.
-    - Add a compaction flow that captures a short structured session summary before starting a fresh thread.
-    - Reuse the compacted summary when restarting instead of dragging full historical thread context forward.
-    - Expose the operator-facing behavior clearly in command replies/docs (`continue`, `new`, compacted restart).
-  - Acceptance criteria:
-    - Idle sessions can be configured to expire by default instead of resuming indefinitely.
-    - Operators have a supported path to restart from a compact summary rather than full prior context.
-    - Targeted tests cover idle-expiry prompting and compacted restart behavior.
-
 - [TASK-0030] Add in-memory state caching for hot read paths.
   - Goal: avoid repeated lock + JSON disk reads on message-handling and status-heavy paths.
   - Scope:
