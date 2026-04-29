@@ -161,15 +161,6 @@ Ordered by estimated ROI (highest first), balancing user impact, implementation 
 
 - [TASK-0004] Role-based permissions model (Discord-role driven access tiers).
 
-- [TASK-0003] Compose + global skill defaults for cross-repo persistence (deferred).
-  - Goal: define and document a non-`AGENTS.md` channel for durable operator defaults across repos/sessions.
-  - Approach:
-    - Use user-level Codex skills persisted in mounted Codex home (`CODEX_AUTH_HOST -> /workspace/home/.codex` in Compose).
-    - Optionally set `codex.env.CODEX_HOME=/workspace/home/.codex` in `config.docker.yaml` for explicit subprocess behavior.
-  - Deliverables:
-    - Add docs snippet with host-side skill path, minimal `SKILL.md` example, and Compose restart/apply steps.
-    - Clarify precedence/coexistence with per-repo `AGENTS.md`.
-
 - [TASK-0020] Add Gemini CLI integration with operator-controlled delegation.
   - Goal: allow work to be delegated to Gemini CLI instead of Codex when requested.
   - Scope:

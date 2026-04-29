@@ -164,3 +164,44 @@ Run device auth inside the Compose service:
 ```bash
 docker compose run --rm --entrypoint codex codebridge login --device-auth
 ```
+
+## Global skill defaults across repos (TASK-0003)
+
+Use Codex user-level skills for durable defaults that apply across repositories/sessions without editing each repo `AGENTS.md`.
+
+Host-side skill path (when `CODEX_AUTH_HOST` is mounted to `/workspace/home/.codex`):
+
+```text
+${CODEX_AUTH_HOST}/skills/<skill-name>/SKILL.md
+```
+
+Minimal example:
+
+```bash
+mkdir -p "${CODEX_AUTH_HOST}/skills/default-bridge-guidance"
+cat > "${CODEX_AUTH_HOST}/skills/default-bridge-guidance/SKILL.md" <<'EOF'
+# default-bridge-guidance
+- Keep responses concise.
+- Run targeted tests only for changed code.
+EOF
+```
+
+Optional explicit subprocess home in `config.docker.yaml`:
+
+```yaml
+codex:
+  env:
+    CODEX_HOME: "/workspace/home/.codex"
+```
+
+Apply steps:
+
+1. Create/update skill files under `${CODEX_AUTH_HOST}/skills/...`.
+2. Restart service: `docker compose restart codebridge` (or restart `run_docker.sh` container).
+3. Verify in a bridge session that defaults are present.
+
+Precedence/coexistence with repo `AGENTS.md`:
+
+- Use global skill defaults for stable personal/operator conventions across repos.
+- Use repo `AGENTS.md` for repository-specific policy and workflow requirements.
+- When both exist, keep global defaults generic and repo instructions specific to avoid conflicts.

@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0003] Compose + global skill defaults for cross-repo persistence (deferred).
+  - Completed: 2026-04-29
+  - Notes: Added Docker docs for user-level skill storage under `${CODEX_AUTH_HOST}/skills/...`, optional `codex.env.CODEX_HOME` override, restart/apply workflow, and guidance for coexistence with repo `AGENTS.md`.
+
 - [TASK-0033] Command surface inventory and capability matrix.
   - Completed: 2026-04-29
   - Notes: Added `docs/COMMAND_SURFACE.md` with full channel/shortcut/DM command inventory and classification, and linked it from README for follow-on redesign tasks.
