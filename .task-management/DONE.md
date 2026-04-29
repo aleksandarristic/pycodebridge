@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0028] Lean default prompt profiles for lower recurring token overhead.
+  - Completed: 2026-04-29
+  - Notes: Shortened built-in `start_prompt`/`spec_prompt` defaults, updated config examples with routine-vs-complex model/reasoning recommendations, and documented a lightweight prompt-profile pattern in README.
+
 - [TASK-0029] Parallelize independent helper subprocesses on read-only command paths.
   - Completed: 2026-04-29
   - Notes: Parallelized independent subprocesses in `showchanges` and `updates` via `asyncio.gather` while preserving output ordering and existing error behavior; added targeted helper tests covering concurrent-start behavior.

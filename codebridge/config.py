@@ -24,18 +24,13 @@ DEFAULT_MAX_UPLOAD_MB = 200
 DEFAULT_GIT_CREDENTIAL_HELPER = "!gh auth git-credential"
 
 DEFAULT_START_PROMPT = (
-    "Hello. This is a Discord-bridged Codex session for repo: {{REPO_NAME}}.\n"
-    "Operate inside this repo directory. Stream outputs plainly. Be concise in your responses.\n"
+    "Discord bridge session for {{REPO_NAME}}. Work only in this repo and keep replies concise.\n"
 )
 
 DEFAULT_SPEC_PROMPT = (
-    "Please ask me for a project spec for repo {{REPO_NAME}}.\n"
-    "When the spec is finalized, write it to instructions/spec.md.\n"
-    "Then create instructions/tasks/pending.md with a numbered task list and "
-    "append a milestone entry to instructions/progress_log.md, "
-    "following the pattern used in this repo.\n"
-    "After writing the files, summarize what you produced."
-    "Be concise in your responses.\n"
+    "For {{REPO_NAME}}, ask for the project spec.\n"
+    "When finalized, write `instructions/spec.md`, create `instructions/tasks/pending.md` with numbered tasks, "
+    "append a milestone to `instructions/progress_log.md`, and summarize results concisely.\n"
 )
 
 

@@ -28,11 +28,10 @@ codex:
   ask_for_approval: "on-request"  # untrusted|on-failure|on-request|never
   network_access: false  # when true, adds -c sandbox_workspace_write.network_access=true
   json: true
-  model: ""
-  model_reasoning_effort: ""
+  model: ""  # recommended default: gpt-5.4 (routine), gpt-5.5 (complex)
+  model_reasoning_effort: ""  # recommended: medium (routine), high (complex)
   start_prompt: |
-    Hello. This is a Discord-bridged Codex session for repo: {{REPO_NAME}}.
-    Operate inside this repo directory. Stream outputs plainly.
+    Discord bridge session for {{REPO_NAME}}. Work only in this repo and keep replies concise.
   env: {}
 
 state:
@@ -76,4 +75,4 @@ files:
 
 repo_bootstrap:
   agents_template: ""
-  spec_prompt: ""
+  spec_prompt: ""  # optional prompt profile override for `!c spec`

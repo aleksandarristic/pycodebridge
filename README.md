@@ -143,6 +143,19 @@ network_access = true
 - `agents_template` (default empty) — optional AGENTS.md template for `!c create`.
 - `spec_prompt` (default template) — prompt used by `!c spec`.
 
+### Prompt profiles and model defaults
+- Routine coding/support tasks:
+  - Model: `gpt-5.4`
+  - Reasoning: `medium`
+  - Keep `codex.start_prompt` minimal and repo-focused.
+- Complex refactors/investigations:
+  - Model: `gpt-5.5`
+  - Reasoning: `high`
+  - Use a richer `repo_bootstrap.spec_prompt` only when needed.
+- Lightweight profile pattern:
+  - Keep `codex.start_prompt` as a short default.
+  - Store longer, task-specific prompts in repo docs (for example `instructions/`) and reference them from commands/workflows instead of embedding large static text in every new session.
+
 ## Commands
 Command inventory and taxonomy baseline: `docs/COMMAND_SURFACE.md`
 

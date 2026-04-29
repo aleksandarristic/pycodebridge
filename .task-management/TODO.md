@@ -124,18 +124,6 @@ Ordered by estimated ROI (highest first), balancing user impact, implementation 
     - User-visible last message is always terminal status for the run.
     - Regression test covers out-of-order event delivery scenario.
 
-- [TASK-0028] Lean default prompt profiles for lower recurring token overhead.
-  - Goal: reduce repeated prompt boilerplate on new sessions and spec flows.
-  - Scope:
-    - Shorten the default start/session bootstrap prompt while preserving required operational guidance.
-    - Review the default spec prompt and move durable instructions into repo files/docs where practical.
-    - Add a lightweight notion of prompt profiles or recommended defaults for common task classes.
-    - Document recommended model/reasoning defaults for routine vs complex work.
-  - Acceptance criteria:
-    - Default prompts are materially shorter without regressing expected bridge behavior.
-    - Spec/setup instructions avoid repeating large static guidance in every fresh session.
-    - Docs include a brief recommendation for model and reasoning settings by task complexity.
-
 - [TASK-0032] Async/batched session JSONL logging for high-output runs.
   - Goal: lower per-event filesystem overhead during active Codex streams.
   - Scope:
