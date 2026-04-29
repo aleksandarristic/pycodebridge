@@ -17,6 +17,11 @@ Important paths in `config.docker.yaml` are already container-friendly:
 - `state.data_dir: /workspace/state`
 - `state.log_dir: /workspace/state/logs`
 
+Default Docker sandbox recommendation:
+- Set `codex.sandbox: danger-full-access` in Docker/Compose.
+- Reason: Codex `workspace-write` mode may use an inner sandbox (`bwrap`) for tool execution, and that can fail inside containers even when the container itself is privileged and the repo mount is writable.
+- Only use `workspace-write` in Docker if your container runtime is known to support that inner sandbox path.
+
 ## 2) Prepare host paths
 
 Choose host directories for repos and state (set in shell or in repo `.env`):
@@ -138,6 +143,7 @@ Behavior:
 - The Docker image installs `codex` via npm (`@openai/codex`).
 - The image preinstalls common CLI tools used by Codex/agents: `ripgrep` (`rg`), `fd-find` (`fdfind`), `bat` (`batcat`), `gh`, `jq`, `less`, `procps`, `git`, `curl`.
 - Compose runs as `HOST_UID:HOST_GID` and sets `HOME=/workspace/home` to avoid host bind-mount permission mismatches.
+- If Discord sessions report `bwrap`/namespace errors while trying to read files, check `config.docker.yaml`: `codex.sandbox` should usually be `danger-full-access` for containerized runs.
 - If Codex reports workspace read-only while config says `workspace-write`, run `!c health` and check `Runtime uid:gid` plus `Env sanity` path statuses (`ok(rw)` expected for `code_root`).
 - If `~/.codex` is not mounted or not authenticated, exec into the container and run Codex login flow there.
 - For local non-Docker runs, use `./run.sh`.

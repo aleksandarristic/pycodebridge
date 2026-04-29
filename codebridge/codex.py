@@ -8,6 +8,11 @@ import subprocess
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Dict, Optional
 
+try:
+    import pty
+except ImportError:  # pragma: no cover - Windows fallback.
+    pty = None  # type: ignore[assignment]
+
 from .util.ansi import strip_control_codes
 from .util.prompt import needs_user_input
 
@@ -126,8 +131,9 @@ class Options:
 
 class Process:
     """Handle to a running Codex process."""
-    def __init__(self, proc: asyncio.subprocess.Process) -> None:
+    def __init__(self, proc: asyncio.subprocess.Process, stdin_fd: Optional[int] = None) -> None:
         self._proc = proc
+        self._stdin_fd = stdin_fd
         self._thread_id = ""
 
     @property
@@ -142,9 +148,7 @@ class Process:
 
     async def stop(self) -> None:
         """Send ESC to request a graceful stop."""
-        if self._proc.stdin:
-            self._proc.stdin.write(b"\x1b")
-            await self._proc.stdin.drain()
+        await self._write_bytes(b"\x1b")
 
     async def interrupt(self) -> None:
         """Send an interrupt signal (SIGINT/CTRL_BREAK)."""
@@ -164,13 +168,31 @@ class Process:
 
     async def write(self, text: str) -> None:
         """Write raw text to Codex stdin."""
-        if self._proc.stdin:
-            self._proc.stdin.write(text.encode("utf-8"))
-            await self._proc.stdin.drain()
+        await self._write_bytes(text.encode("utf-8"))
 
     async def wait(self) -> int:
         """Wait for process exit and return returncode."""
-        return await self._proc.wait()
+        try:
+            return await self._proc.wait()
+        finally:
+            self.close_stdin()
+
+    async def _write_bytes(self, data: bytes) -> None:
+        if self._stdin_fd is not None:
+            os.write(self._stdin_fd, data)
+            return
+        if self._proc.stdin:
+            self._proc.stdin.write(data)
+            await self._proc.stdin.drain()
+
+    def close_stdin(self) -> None:
+        """Close the parent-side stdin handle, if any."""
+        if self._stdin_fd is not None:
+            try:
+                os.close(self._stdin_fd)
+            except OSError:
+                pass
+            self._stdin_fd = None
 
 
 class Runner:
@@ -237,17 +259,30 @@ class Runner:
         creationflags = 0
         if os.name == "nt":
             creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
-        proc = await asyncio.create_subprocess_exec(
-            self.binary,
-            *opts.args,
-            cwd=opts.repo_path,
-            env=env,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            creationflags=creationflags,
-        )
-        process = Process(proc)
+        stdin = asyncio.subprocess.PIPE
+        stdin_fd: Optional[int] = None
+        stdin_slave_fd: Optional[int] = None
+        if os.name != "nt" and pty is not None:
+            stdin_fd, stdin_slave_fd = pty.openpty()
+            stdin = stdin_slave_fd
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                self.binary,
+                *opts.args,
+                cwd=opts.repo_path,
+                env=env,
+                stdin=stdin,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                creationflags=creationflags,
+            )
+        finally:
+            if stdin_slave_fd is not None:
+                try:
+                    os.close(stdin_slave_fd)
+                except OSError:
+                    pass
+        process = Process(proc, stdin_fd)
 
         async def _read_stdout() -> Optional[BaseException]:
             """Read stdout JSONL and forward to callbacks."""

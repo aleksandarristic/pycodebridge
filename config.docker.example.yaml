@@ -24,7 +24,7 @@ discord:
 codex:
   binary: "codex"
   code_root: "/workspace/code_root"
-  sandbox: "workspace-write"
+  sandbox: "danger-full-access"
   ask_for_approval: "on-request"  # untrusted|on-failure|on-request|never
   network_access: false  # when true, adds -c sandbox_workspace_write.network_access=true
   json: true

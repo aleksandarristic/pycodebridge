@@ -47,6 +47,7 @@ Quick start:
    - `docker exec -it pycodebridge codex login --device-auth`
 6) Headless with Compose: `docker compose up -d --build`
 7) Full Docker details: `DOCKER.md`
+   - For Docker/Compose, prefer `codex.sandbox: danger-full-access`. `workspace-write` can fail inside containers when Codex's inner sandbox path relies on `bwrap`/user namespaces.
 8) One-shot update + redeploy:
    - Preflight only: `./update.sh --check`
    - Update current branch and redeploy: `./update.sh`

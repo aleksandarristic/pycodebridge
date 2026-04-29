@@ -1,10 +1,13 @@
+import asyncio
 import itertools
+import os
 import shutil
 import subprocess
+import sys
 
 import pytest
 
-from codebridge.codex import Runner, _toml_string, display_texts, parse_event
+from codebridge.codex import Options, Runner, _toml_string, display_texts, parse_event
 
 
 def test_parse_event_agent_message():
@@ -167,6 +170,41 @@ def test_runner_build_args_skip_workspace_network_override_when_not_workspace_wr
     runner = Runner("codex", "read-only", {}, "on-request", network_access=True)
     args = runner.build_start_args("/tmp/repo", "hello", "", "")
     assert "sandbox_workspace_write.network_access=true" not in args
+
+
+def test_runner_presents_tty_stdin_on_posix(tmp_path):
+    if os.name == "nt":
+        pytest.skip("PTY-backed stdin is POSIX-only")
+
+    fake_codex = tmp_path / "fake_codex.py"
+    fake_codex.write_text(
+        "import json, sys\n"
+        "print(json.dumps({"
+        "'type': 'item.completed', "
+        "'item': {'type': 'agent_message', 'text': 'tty=' + str(sys.stdin.isatty()).lower()}"
+        "}), flush=True)\n",
+        encoding="utf-8",
+    )
+    runner = Runner(sys.executable, "danger-full-access", {}, "")
+    outputs: list[str] = []
+
+    async def run() -> int:
+        proc = await runner.run(
+            Options(
+                repo_path=str(tmp_path),
+                args=[str(fake_codex)],
+                env={},
+                on_output=lambda text: _append_output(outputs, text),
+            )
+        )
+        return await proc.wait()
+
+    assert asyncio.run(run()) == 0
+    assert outputs == ["tty=true"]
+
+
+async def _append_output(outputs: list[str], text: str) -> None:
+    outputs.append(text)
 
 
 def test_toml_string_escapes_control_chars():
