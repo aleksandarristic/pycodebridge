@@ -148,6 +148,34 @@ class _FakeRunner:
         return self.last_proc
 
 
+class _LateOutputRunner:
+    def __init__(self, *, initial_line: str = "", late_line: str = "", rc: int = 0, delay: float = 0.02) -> None:
+        self.calls = []
+        self.last_proc = None
+        self.initial_line = initial_line
+        self.late_line = late_line
+        self.rc = rc
+        self.delay = delay
+
+    async def run(self, opts: Options):
+        self.calls.append(opts.args)
+        if opts.on_thread:
+            await opts.on_thread("thread-1")
+        if self.initial_line and opts.on_jsonl:
+            await opts.on_jsonl(self.initial_line)
+
+        async def _late() -> None:
+            await asyncio.sleep(self.delay)
+            if self.late_line and opts.on_jsonl:
+                await opts.on_jsonl(self.late_line)
+            if opts.on_exit:
+                await opts.on_exit(None, self.rc)
+
+        asyncio.create_task(_late())
+        self.last_proc = _ProcDone(self.rc)
+        return self.last_proc
+
+
 class _CapturingRealRunner(Runner):
     def __init__(self, sandbox: str, ask_for_approval: str, network_access: bool) -> None:
         super().__init__("codex", sandbox, {}, ask_for_approval, network_access)
@@ -1537,6 +1565,53 @@ def test_integration_run_heartbeat_message(tmp_path, monkeypatch):
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
     assert any("Still running in session 'default'" in t for t in texts)
+
+
+def test_integration_late_progress_is_suppressed_after_terminal_summary(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    runner = _LateOutputRunner(
+        initial_line='{"type":"item.completed","item":{"type":"agent_message","text":"First output"}}',
+        late_line='{"type":"item.completed","item":{"type":"agent_message","text":"Late progress"}}',
+    )
+    router, _ = _build_router(tmp_path, runner=runner)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    router._runtime_options_channels["chan"] = {"run_completion_min_seconds": 0}
+
+    async def run():
+        await router.run_codex(_discord_event("!c start", "codex-repo"), sink, "repo", str(repo), "default", "", "", ["start"])
+        await asyncio.sleep(0.05)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("First output" in t for t in texts)
+    assert not any("Late progress" in t for t in texts)
+    assert texts[-1].startswith("Run complete for session 'default'")
+
+
+def test_integration_budget_notice_precedes_terminal_summary(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    runner = _LateOutputRunner(
+        initial_line='{"type":"item.completed","usage":{"input_tokens":2,"output_tokens":3,"total_tokens":5},"item":{"type":"agent_message","text":"Done"}}'
+    )
+    router, _ = _build_router(tmp_path, runner=runner)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    router._runtime_options_channels["chan"] = {"run_completion_min_seconds": 0}
+    router._budget_thresholds_channel["chan"] = (1, 0)
+
+    async def run():
+        await router.run_codex(_discord_event("!c start", "codex-repo"), sink, "repo", str(repo), "default", "", "", ["start"])
+        await asyncio.sleep(0.05)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any(t.startswith("Budget notice:") for t in texts)
+    assert texts[-1].startswith("Run complete for session 'default'")
 
 
 # ---------------------------------------------------------------------------

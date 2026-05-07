@@ -8,6 +8,7 @@ import shlex
 import subprocess
 import time
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
@@ -103,6 +104,21 @@ class _RunBudgetMonitor:
         self.sent: set[str] = set()
 
 
+@dataclass
+class _RunRelayState:
+    """Track relay lifecycle so terminal status stays authoritative."""
+
+    channel_id: str
+    session: str
+    terminal_status: str = ""
+    terminal_code: int | None = None
+    suppressed_progress_events: int = 0
+
+    @property
+    def is_terminal(self) -> bool:
+        return bool(self.terminal_status)
+
+
 def _git_commit_hash() -> str:
     try:
         root = Path(__file__).resolve().parents[2]
@@ -156,6 +172,7 @@ class Router:
         self._budget_thresholds_session: Dict[str, Dict[str, tuple[int, int]]] = {}
         self._budget_thresholds_run: Dict[str, Dict[str, tuple[int, int]]] = {}
         self._budget_last_run_total: Dict[str, Dict[str, int]] = {}
+        self._run_relays: Dict[tuple[str, str], _RunRelayState] = {}
         self._runtime_defaults = {
             "run_heartbeat_seconds": max(1, min(86400, int(getattr(self.cfg.runtime, "run_heartbeat_seconds", _RUN_HEARTBEAT_SECONDS)))),
             "run_completion_min_seconds": max(
@@ -1869,6 +1886,7 @@ class Router:
             run_thresholds=self._budget_run_threshold(channel_id, session),
             session_thresholds=self._budget_session_threshold(channel_id, session),
         )
+        run_state = self._begin_run_relay(channel_id, session)
 
         async def _capture_output(text: str) -> None:
             nonlocal last_output, output_events
@@ -1932,7 +1950,7 @@ class Router:
                         args=args_to_run,
                         env=self.cfg.codex.env,
                         on_jsonl=lambda line: self.on_jsonl(
-                            sink, channel_id, session, repo_name, entry, line, relay_output, event, budget_monitor
+                            sink, channel_id, session, repo_name, entry, line, relay_output, event, budget_monitor, run_state
                         ),
                         on_thread=lambda tid: self.on_thread(
                             channel_id, session, repo_name, repo_path, model, reasoning_effort, entry, tid
@@ -1943,6 +1961,7 @@ class Router:
                     )
                 )
             except Exception as exc:
+                self._clear_run_relay(channel_id, session)
                 self._append_codex_error_log(
                     channel_id=channel_id,
                     session=session,
@@ -1984,6 +2003,8 @@ class Router:
                 if delta_total:
                     self._budget_record_usage(event, channel_id, session, delta_total)
                     await self._budget_run_notify_if_needed(event, sink, session, delta_total, after_total, budget_monitor)
+                await self._budget_soft_notify_if_needed(event, sink)
+                self._mark_run_terminal(channel_id, session, "success", 0)
                 if relay_output:
                     await self._send_run_completion_summary(
                         sink,
@@ -1997,7 +2018,7 @@ class Router:
                     channel_id,
                     session or DEFAULT_SESSION,
                     "run.complete",
-                    {"code": 0, "output_events": output_events},
+                    {"code": 0, "output_events": output_events, "terminal": True, "status": "success"},
                     repo_name=repo_name,
                 )
             else:
@@ -2012,6 +2033,8 @@ class Router:
                     stderr_lines=stderr_tail,
                     note="non-zero exit",
                 )
+                await self._budget_soft_notify_if_needed(event, sink)
+                self._mark_run_terminal(channel_id, session, "failed", rc)
                 detail = f"Codex exited with code {rc}."
                 if stderr_tail:
                     detail += f" Last stderr: {stderr_tail[-1]}"
@@ -2021,11 +2044,10 @@ class Router:
                     channel_id,
                     session or DEFAULT_SESSION,
                     "run.failed",
-                    {"code": rc, "stderr_tail": list(stderr_tail[-5:])},
+                    {"code": rc, "stderr_tail": list(stderr_tail[-5:]), "terminal": True, "status": "failed"},
                     repo_name=repo_name,
                 )
             self._audit_helper.close(entry)
-        await self._budget_soft_notify_if_needed(event, sink)
 
     def _budget_user_key(self, event: MessageEvent) -> str:
         return f"{event.platform}:{event.author_id}"
@@ -2141,6 +2163,9 @@ class Router:
         """Emit periodic run heartbeat messages while a job is active."""
         while True:
             await asyncio.sleep(self._runtime_option_value(sink.channel_id, "run_heartbeat_seconds"))
+            run_state = self._run_relay(sink.channel_id, session)
+            if run_state is not None and run_state.is_terminal:
+                return
             elapsed = int(max(1.0, time.monotonic() - started_at))
             await self.reply(sink, f"Still running in session '{session}' ({self._format_duration(elapsed)} elapsed).")
 
@@ -2183,6 +2208,7 @@ class Router:
         relay_output: bool,
         event: Optional[MessageEvent] = None,
         budget_monitor: Optional[_RunBudgetMonitor] = None,
+        run_state: Optional[_RunRelayState] = None,
     ) -> None:
         """Handle a JSONL line from Codex and relay output."""
         self._session_log.append(
@@ -2196,7 +2222,7 @@ class Router:
         evt = parse_event(line)
         if not evt:
             text = strip_control_codes(line).strip()
-            if text and relay_output:
+            if text and relay_output and not (run_state and run_state.is_terminal):
                 for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
                     self._audit_helper.append_output(entry, chunk)
                     self._session_log.append(
@@ -2207,9 +2233,15 @@ class Router:
                         repo_name=repo_name,
                     )
                     await self.reply(sink, chunk)
+            elif text and run_state and run_state.is_terminal:
+                run_state.suppressed_progress_events += 1
             return
         self.update_usage(channel_id, session, evt)
         self.update_activity(channel_id, session)
+        if run_state is not None and run_state.is_terminal:
+            if display_texts(evt):
+                run_state.suppressed_progress_events += 1
+            return
         if event is not None and budget_monitor is not None:
             current = self.get_usage(channel_id, session or DEFAULT_SESSION)
             current_total = current.total_tokens if current else 0
@@ -2285,6 +2317,19 @@ class Router:
             {"code": rc},
             repo_name=repo_name,
         )
+        run_state = self._clear_run_relay(channel_id, session)
+        if run_state and run_state.terminal_status:
+            self._session_log.append(
+                channel_id,
+                session or DEFAULT_SESSION,
+                "run.terminal",
+                {
+                    "status": run_state.terminal_status,
+                    "code": run_state.terminal_code,
+                    "suppressed_progress_events": run_state.suppressed_progress_events,
+                },
+                repo_name=repo_name,
+            )
 
     async def reply(self, sink: ResponseSink, content: str) -> None:
         """Send a reply to a channel, chunking as needed."""
@@ -2307,6 +2352,27 @@ class Router:
         sessions.pop(session, None)
         if not sessions:
             self._awaiting_input.pop(channel_id, None)
+
+    def _run_relay_key(self, channel_id: str, session: str) -> tuple[str, str]:
+        return (channel_id, session or DEFAULT_SESSION)
+
+    def _begin_run_relay(self, channel_id: str, session: str) -> _RunRelayState:
+        state = _RunRelayState(channel_id=channel_id, session=session or DEFAULT_SESSION)
+        self._run_relays[self._run_relay_key(channel_id, session)] = state
+        return state
+
+    def _run_relay(self, channel_id: str, session: str) -> Optional[_RunRelayState]:
+        return self._run_relays.get(self._run_relay_key(channel_id, session))
+
+    def _mark_run_terminal(self, channel_id: str, session: str, status: str, code: int) -> None:
+        state = self._run_relay(channel_id, session)
+        if state is None or state.is_terminal:
+            return
+        state.terminal_status = status
+        state.terminal_code = code
+
+    def _clear_run_relay(self, channel_id: str, session: str) -> Optional[_RunRelayState]:
+        return self._run_relays.pop(self._run_relay_key(channel_id, session), None)
 
     def _prune_awaiting_input(self, channel_id: str) -> dict[str, float]:
         sessions = self._awaiting_input.get(channel_id, {})
