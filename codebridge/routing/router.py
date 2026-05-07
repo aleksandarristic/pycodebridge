@@ -83,6 +83,7 @@ _RUN_HEARTBEAT_SECONDS = 120
 _RUN_COMPLETION_MIN_SECONDS = 300
 _RUN_KEY_RESULT_MAX = 180
 _RUNTIME_OPTION_KEYS = ("run_heartbeat_seconds", "run_completion_min_seconds", "show_reasoning_details")
+_TOP_LEVEL_SHORTCUT_ALIASES = (("!reset", "reset"),)
 
 
 class _RunBudgetMonitor:
@@ -550,7 +551,7 @@ class Router:
 
     def _shortcut_cmdline(self, content: str) -> str:
         """Translate top-level !<command> forms into canonical command lines."""
-        return normalize_bang_shortcut(content, self._command_registry.keys())
+        return normalize_bang_shortcut(content, self._command_registry.keys(), aliases=_TOP_LEVEL_SHORTCUT_ALIASES)
 
     async def handle_start(self, event: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, session: str) -> None:
         """Start a new Codex session for a channel/session."""
