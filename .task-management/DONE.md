@@ -12,6 +12,38 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0035] Command information architecture, naming, and help-system rewrite.
+  - Completed: 2026-05-07
+  - Notes: Reorganized help and docs around a golden path, limited promoted shortcuts to the intended active-run shorthands, and aligned command docs with the redesigned surface.
+
+- [TASK-0034] Command model redesign around a minimal core workflow.
+  - Completed: 2026-05-07
+  - Notes: Added explicit command-model metadata and documented the minimal core workflow and namespace/surface structure for follow-on command cleanup.
+
+- [TASK-0032] Async/batched session JSONL logging for high-output runs.
+  - Completed: 2026-05-07
+  - Notes: Batched hot session JSONL writes while preserving immediate flush behavior for terminal and error events, with targeted logging coverage.
+
+- [TASK-0030] Add in-memory state caching for hot read paths.
+  - Completed: 2026-05-07
+  - Notes: Added validated in-memory snapshot reuse for hot `state.load()` paths with invalidation on local writes and regression coverage for external changes.
+
+- [TASK-0031] Reduce reply-path overhead from repeated chunking and nested send loops.
+  - Completed: 2026-05-07
+  - Notes: Centralized chunk ownership in the reply path so helpers and contextual sinks stop pre-chunking the same output multiple times.
+
+- [TASK-0002] Final-message ordering hardening for run lifecycle output.
+  - Completed: 2026-05-07
+  - Notes: Added terminal-event ordering guards so late progress output is suppressed after run completion, with regressions for delayed post-exit output and budget-notice ordering.
+
+- [TASK-0009] Intermittent `!reset` top-level alias is not parsed as `!c reset`.
+  - Completed: 2026-05-07
+  - Notes: Hardened explicit top-level `!reset` shortcut parsing and added direct parser plus integration coverage for channel and thread scopes.
+
+- [TASK-0010] Discord thread bootstrap message leaks into parent channel on thread creation.
+  - Completed: 2026-05-07
+  - Notes: Fixed first-message thread context and reply targeting so Discord thread bootstrap output stays inside the created thread, with regression coverage.
+
 - [TASK-0005] Knowledge shortcuts/macros for repeatable repo workflows.
   - Completed: 2026-05-07
   - Notes: Added a bounded `!c workflow` / `!c wf` command with built-in `inspect`, `fix`, `review`, and `ship` macros that expand into standardized Codex prompts via the normal resume path, plus help/docs and targeted routing coverage.

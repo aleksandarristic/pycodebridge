@@ -10,48 +10,4 @@ Rules:
 
 ## Bug backlog
 
-- [TASK-0010] Discord thread bootstrap message leaks into parent channel on thread creation.
-  - Symptom:
-    - Creating a Discord thread in a channel (example title: `Tasks`) and sending the first message (example: `Hi`) in the new thread causes bridge replies to appear in the parent channel instead of staying isolated to the thread.
-    - The leak appears limited to the first thread message/bootstrap path; follow-up messages in the same thread may route correctly.
-    - Observed parent-channel output included the thread title, user text, and Codex bootstrap/prompt messages, for example:
-      - `CodeBridge Codex asks: Hi. What do you want to work on in pycodebridge?`
-      - `CodeBridge I'll check the task-management files and summarize current tasks ...`
-  - Reproduction:
-    - In a Discord channel, create a new thread.
-    - Name the thread `Tasks`.
-    - Send `Hi` as the first message in that thread.
-    - Observe that bootstrap reply messages are posted in the parent channel feed.
-    - Send a second message in the same thread and confirm whether routing returns to the thread (current report: often yes).
-  - Expected:
-    - Thread messages and all bridge responses remain scoped to the created thread context only.
-    - Parent channel should not receive mirrored bootstrap/session output from thread-local conversation starts.
-  - Impact:
-    - Breaks channel hygiene by leaking thread-only conversation context into shared parent channel.
-    - Risks exposing thread work context to unintended channel participants.
-    - Creates confusion about active session location and reply target.
-  - Investigation scope:
-    - Verify Discord adapter/router reply-target resolution for newly created threads specifically during first-message bootstrap/initial session creation.
-    - Check whether session mapping initializes against parent channel ID before thread ID is finalized.
-    - Add/expand targeted tests for first-message routing behavior in newly created Discord threads.
-  - Acceptance criteria:
-    - For newly created threads, first and subsequent bridge replies are always posted to that thread, never the parent channel.
-    - Add regression coverage for the thread-creation + first-message path (`Hi`) to prevent reintroduction.
-
-- [TASK-0009] Intermittent `!reset` top-level alias is not parsed as `!c reset`.
-  - Symptom:
-    - In session/chatroom usage, sending `!reset` sometimes does not execute the expected reset flow (`!c reset` equivalent).
-  - Impact:
-    - Operators cannot reliably recover session state using the documented top-level command pattern.
-    - Inconsistent command UX across rooms/contexts increases risk of stuck or stale sessions.
-  - Investigation scope:
-    - Reevaluate top-level command parsing and alias normalization in mapped repo channels/threads/chatrooms.
-    - Validate behavior parity between prefixed commands (`!c reset`) and top-level shortcuts (`!reset`) across:
-      - parent channels
-      - Discord threads
-      - active-session chat relay paths
-    - Confirm command parsing order does not incorrectly route `!reset` into plain prompt/session input handling.
-  - Acceptance criteria:
-    - `!reset` is parsed and handled identically to `!c reset` in supported channel/thread contexts.
-    - Behavior is deterministic (no intermittent parse misses across repeated runs).
-    - Add targeted integration tests for top-level `!reset` parsing in parent channel + thread/session contexts.
+None right now.
