@@ -39,3 +39,64 @@ def test_session_jsonl_cleanup_archives_old_active_files(tmp_path):
     with tarfile.open(archives[0], "r:gz") as tar:
         members = tar.getnames()
     assert "repo-repo__session-default.jsonl" in members
+
+
+def test_session_jsonl_buffers_hot_events_until_forced_flush(tmp_path):
+    logger = SessionJsonlLogger(str(tmp_path), flush_interval_seconds=3600, max_buffered_events=100)
+    path = tmp_path / "session_jsonl" / "active" / "chan" / "repo-repo__session-default.jsonl"
+
+    logger.append("chan", "default", "codex.jsonl", {"line": "a"}, repo_name="repo")
+    logger.append("chan", "default", "discord.output", {"chunk": "b"}, repo_name="repo")
+    assert not path.exists()
+
+    logger.append("chan", "default", "run.complete", {"code": 0}, repo_name="repo")
+    lines = path.read_text(encoding="utf-8").strip().splitlines()
+    assert [json.loads(line)["event"] for line in lines] == ["codex.jsonl", "discord.output", "run.complete"]
+
+
+def test_session_jsonl_flushes_when_buffer_threshold_is_hit(tmp_path):
+    logger = SessionJsonlLogger(str(tmp_path), flush_interval_seconds=3600, max_buffered_events=2)
+    path = tmp_path / "session_jsonl" / "active" / "chan" / "repo-repo__session-default.jsonl"
+
+    logger.append("chan", "default", "codex.jsonl", {"line": "a"}, repo_name="repo")
+    assert not path.exists()
+    logger.append("chan", "default", "codex.jsonl", {"line": "b"}, repo_name="repo")
+
+    lines = path.read_text(encoding="utf-8").strip().splitlines()
+    assert [json.loads(line)["data"]["line"] for line in lines] == ["a", "b"]
+
+
+def test_session_jsonl_session_paths_flushes_pending_entries(tmp_path):
+    logger = SessionJsonlLogger(str(tmp_path), flush_interval_seconds=3600, max_buffered_events=100)
+    logger.append("chan", "default", "codex.jsonl", {"line": "a"}, repo_name="repo")
+
+    paths = logger.session_paths("chan", "default", repo_name="repo")
+    active = tmp_path / "session_jsonl" / "active" / "chan" / "repo-repo__session-default.jsonl"
+    assert active in paths
+    assert active.read_text(encoding="utf-8").strip()
+
+
+def test_session_jsonl_retries_buffered_lines_after_flush_failure(tmp_path, monkeypatch):
+    logger = SessionJsonlLogger(str(tmp_path), flush_interval_seconds=3600, max_buffered_events=2)
+    path = tmp_path / "session_jsonl" / "active" / "chan" / "repo-repo__session-default.jsonl"
+    attempts = 0
+    original = logger._append_lines
+
+    def fail_once(target, lines):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError("disk busy")
+        return original(target, lines)
+
+    monkeypatch.setattr(logger, "_append_lines", fail_once)
+    logger.append("chan", "default", "codex.jsonl", {"line": "a"}, repo_name="repo")
+    try:
+        logger.append("chan", "default", "codex.jsonl", {"line": "b"}, repo_name="repo")
+    except OSError:
+        pass
+
+    assert not path.exists()
+    logger.append("chan", "default", "run.complete", {"code": 0}, repo_name="repo")
+    lines = path.read_text(encoding="utf-8").strip().splitlines()
+    assert [json.loads(line)["event"] for line in lines] == ["codex.jsonl", "codex.jsonl", "run.complete"]
