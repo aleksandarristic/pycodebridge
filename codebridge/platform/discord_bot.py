@@ -74,7 +74,8 @@ class BridgeClient(discord.Client):
     async def on_message(self, message: discord.Message) -> None:
         """Dispatch incoming messages to the Router."""
         event = self.adapter.event_from_message(message)
-        sink = self.adapter.sink_for_channel(message.channel)
+        sink_channel = getattr(message, "thread", None) or message.channel
+        sink = self.adapter.sink_for_channel(sink_channel)
         await self.router.handle_message(event, sink)
 
     async def on_guild_join(self, guild: discord.Guild) -> None:

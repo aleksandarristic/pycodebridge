@@ -109,3 +109,31 @@ def test_discord_adapter_thread_mapping(monkeypatch):
 
     event = adapter.event_from_message(message)
     assert event.platform_thread_id == "thread-1"
+
+
+def test_discord_adapter_uses_attached_thread_for_starter_messages(monkeypatch):
+    adapter = DiscordAdapter()
+
+    class _DummyThread(_FakeChannel):
+        pass
+
+    monkeypatch.setattr(discord, "Thread", _DummyThread)
+    parent = _FakeChannel("chan-parent", "codex-repo")
+    thread = _DummyThread("thread-1", "Tasks")
+    message = type(
+        "FakeMessage",
+        (),
+        {
+            "channel": parent,
+            "thread": thread,
+            "content": "hello",
+            "id": "msg",
+            "author": _FakeAuthor("user"),
+            "guild": _FakeGuild("guild"),
+        },
+    )()
+
+    event = adapter.event_from_message(message)
+    assert event.channel_id == "chan-parent"
+    assert event.channel_name == "codex-repo"
+    assert event.platform_thread_id == "thread-1"

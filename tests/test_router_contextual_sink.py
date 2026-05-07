@@ -148,3 +148,34 @@ def test_normalize_event_context_uses_parent_channel_metadata_for_threads():
     normalized = normalize_event_context(event)
     assert normalized.channel_id == "discord:chan-parent:thread-1"
     assert normalized.channel_name == "codex-repo"
+
+
+def test_normalize_event_context_uses_attached_thread_parent_for_starter_messages():
+    parent = _FakeDiscordChannel(is_private=True, channel_id="chan-parent", channel_name="codex-repo")
+    thread = _FakeDiscordChannel(
+        is_private=True,
+        channel_id="thread-1",
+        channel_name="topic-a",
+        channel_type="public_thread",
+        parent=parent,
+        parent_id="chan-parent",
+    )
+    message = _FakeDiscordMessage(parent)
+    message.thread = thread
+    event = MessageEvent(
+        platform="discord",
+        content="Hi",
+        channel_id="chan-parent",
+        channel_name="codex-repo",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=False,
+        message_id="m1",
+        platform_thread_id="thread-1",
+        guild_id="guild",
+        raw_event=message,
+    )
+
+    normalized = normalize_event_context(event)
+    assert normalized.channel_id == "discord:chan-parent:thread-1"
+    assert normalized.channel_name == "codex-repo"

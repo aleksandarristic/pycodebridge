@@ -22,8 +22,11 @@ class DiscordAdapter:
         channel_name = channel.name if hasattr(channel, "name") and channel.name else str(channel.id)
         guild_id = str(message.guild.id) if message.guild else None
         thread_id = ""
+        attached_thread = getattr(message, "thread", None)
         if isinstance(channel, discord.Thread):
             thread_id = str(channel.id)
+        elif isinstance(attached_thread, discord.Thread):
+            thread_id = str(attached_thread.id)
         attachments = []
         for att in getattr(message, "attachments", []) or []:
             attachments.append(

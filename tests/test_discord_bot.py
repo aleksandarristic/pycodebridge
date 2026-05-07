@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import asyncio
+import discord
 
 from codebridge.platform.discord_bot import BridgeClient
 
@@ -44,6 +45,20 @@ class _FakeGuild:
 
     async def leave(self) -> None:
         self.left = True
+
+
+class _FakeChannel:
+    def __init__(self, channel_id: str, name: str) -> None:
+        self.id = channel_id
+        self.name = name
+        self.sent: list[str] = []
+
+    async def send(self, content: str) -> None:
+        self.sent.append(content)
+
+
+class _FakeThread(_FakeChannel):
+    pass
 
 
 def test_startup_dm_includes_summary_and_runs_once():
@@ -114,3 +129,43 @@ def test_enforce_guild_lock_leaves_unconfigured_guilds():
     asyncio.run(run())
     assert allowed.left is False
     assert foreign.left is True
+
+
+def test_on_message_uses_attached_thread_sink_for_starter_messages(monkeypatch):
+    class _CapturingRouter(_FakeRouter):
+        def __init__(self):
+            super().__init__()
+            self.calls = []
+
+        async def handle_message(self, event, sink) -> None:
+            self.calls.append((event, sink))
+            await sink.send("reply", thread_id=event.platform_thread_id or None)
+
+    router = _CapturingRouter()
+    client = BridgeClient(router)
+    monkeypatch.setattr(discord, "Thread", _FakeThread)
+    parent = _FakeChannel("chan-parent", "codex-repo")
+    thread = _FakeThread("thread-1", "Tasks")
+    message = type(
+        "FakeMessage",
+        (),
+        {
+            "channel": parent,
+            "thread": thread,
+            "content": "Hi",
+            "id": "msg",
+            "author": SimpleNamespace(id="1", bot=False),
+            "guild": SimpleNamespace(id="42"),
+            "attachments": [],
+        },
+    )()
+
+    async def run():
+        await client.on_message(message)
+
+    asyncio.run(run())
+    assert len(router.calls) == 1
+    event, _ = router.calls[0]
+    assert event.platform_thread_id == "thread-1"
+    assert parent.sent == []
+    assert thread.sent == ["reply"]

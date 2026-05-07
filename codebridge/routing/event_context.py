@@ -26,7 +26,9 @@ def normalize_event_context(event: MessageEvent) -> MessageEvent:
 def discord_parent_context(event: MessageEvent) -> tuple[str, str]:
     """Return parent channel id/name for a Discord thread event."""
     message = event.raw_event
-    channel = getattr(message, "channel", None) if message is not None else None
+    channel = getattr(message, "thread", None) if message is not None else None
+    if channel is None:
+        channel = getattr(message, "channel", None) if message is not None else None
     if channel is None:
         return "", ""
     parent = getattr(channel, "parent", None)
