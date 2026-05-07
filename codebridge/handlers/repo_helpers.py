@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 from ..routing.helpers import TESTS_TIMEOUT, build_tree, run_limited_command, trim_output
 from ..platform.transport import ResponseSink
 from ..util.ansi import strip_control_codes
-from ..util.chunk import chunk_text
 
 if TYPE_CHECKING:
     from ..routing.router import Router
@@ -18,8 +17,7 @@ async def handle_showrepo(router: "Router", sink: ResponseSink, repo_path: str) 
     """Show a pruned repo tree for orientation."""
     text = build_tree(repo_path, max_depth=3)
     text = trim_output(text, 300, 6000)
-    for chunk in chunk_text(text, router.cfg.discord.max_discord_message_chars):
-        await router.reply(sink, chunk)
+    await router.reply(sink, text)
 
 
 async def handle_showchanges(router: "Router", sink: ResponseSink, repo_path: str) -> None:
@@ -32,8 +30,7 @@ async def handle_showchanges(router: "Router", sink: ResponseSink, repo_path: st
     if err or err2:
         text = f"showchanges error: {err or err2}\n{text}"
     text = "```diff\n" + text + "\n```"
-    for chunk in chunk_text(text, router.cfg.discord.max_discord_message_chars):
-        await router.reply(sink, chunk)
+    await router.reply(sink, text)
 
 
 async def handle_tests(router: "Router", sink: ResponseSink, repo_path: str) -> None:
@@ -46,5 +43,4 @@ async def handle_tests(router: "Router", sink: ResponseSink, repo_path: str) -> 
         if isinstance(err, asyncio.TimeoutError):
             reason = "Tests timed out"
         text = f"{reason}: {err}\n{text}"
-    for chunk in chunk_text(text, router.cfg.discord.max_discord_message_chars):
-        await router.reply(sink, chunk)
+    await router.reply(sink, text)

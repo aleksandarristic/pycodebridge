@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 from ..routing.helpers import run_limited_command, trim_output
 from ..platform.transport import ResponseSink
 from ..util.ansi import strip_control_codes
-from ..util.chunk import chunk_text
 from ..util import path as pathutil
 
 if TYPE_CHECKING:
@@ -31,8 +30,7 @@ async def handle_gh(router: "Router", sink: ResponseSink, repo_path: str, rest: 
         text = "gh command completed successfully (no output)."
     else:
         text = text.strip()
-    for chunk in chunk_text(text, router.cfg.discord.max_discord_message_chars):
-        await router.reply(sink, chunk)
+    await router.reply(sink, text)
     if not err:
         completion = _gh_clone_completion_hint(fields)
         if completion:

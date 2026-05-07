@@ -9,7 +9,6 @@ from ..commands.parse import parse_log_count
 from ..routing.helpers import find_unsafe_git_flag, has_forbidden_flags, run_limited_command, trim_output
 from ..platform.transport import ResponseSink
 from ..util.ansi import strip_control_codes
-from ..util.chunk import chunk_text
 
 if TYPE_CHECKING:
     from ..routing.router import Router
@@ -103,8 +102,7 @@ async def handle_git(router: "Router", sink: ResponseSink, repo_path: str, rest:
         text = f"git {sub} error: {err}\n{text}"
     elif not text.strip():
         text = f"git {sub} completed successfully (no output)."
-    for chunk in chunk_text(text, router.cfg.discord.max_discord_message_chars):
-        await router.reply(sink, chunk)
+    await router.reply(sink, text)
 
 
 async def handle_branch(router: "Router", sink: ResponseSink, repo_path: str) -> None:
@@ -117,8 +115,7 @@ async def handle_branch(router: "Router", sink: ResponseSink, repo_path: str) ->
     else:
         branch, is_clean = _summarize_branch_status(text)
         rendered = f"Current branch: {branch}\nWorking tree: {'clean' if is_clean else 'not clean'}"
-    for chunk in chunk_text(rendered, router.cfg.discord.max_discord_message_chars):
-        await router.reply(sink, chunk)
+    await router.reply(sink, rendered)
 
 
 def _summarize_branch_status(text: str) -> tuple[str, bool]:

@@ -35,7 +35,6 @@ from ..commands import registry as command_registry
 from ..commands.parse import parse_session_quit_alias, parse_session_slash_prompt
 from ..commands.shortcuts import normalize_bang_shortcut
 from ..services.file_transfer import FileTransferService
-from .reply import send_forbidden, send_reply
 from ..util.ansi import strip_control_codes
 from ..util.chunk import chunk_text
 from ..util.coerce import parse_bool
@@ -49,6 +48,7 @@ from .helpers import (
     MAX_SESSIONS_PER_CHANNEL,
     PendingConflict,
     UsageStats,
+    forbidden_message,
     normalize_session,
     normalize_thread_session_name,
     usage_from_event,
@@ -913,8 +913,7 @@ class Router:
                 f"started:{started} ended:{ended}"
             )
         text = "\n".join(lines)
-        for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
-            await self.reply(sink, chunk)
+        await self.reply(sink, text)
 
     async def handle_audit_list(self, sink: ResponseSink, session: str, limit: int) -> None:
         """Show audit summaries with request command context."""
@@ -2223,16 +2222,7 @@ class Router:
         if not evt:
             text = strip_control_codes(line).strip()
             if text and relay_output and not (run_state and run_state.is_terminal):
-                for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
-                    self._audit_helper.append_output(entry, chunk)
-                    self._session_log.append(
-                        channel_id,
-                        session or DEFAULT_SESSION,
-                        "discord.output",
-                        {"chunk": chunk},
-                        repo_name=repo_name,
-                    )
-                    await self.reply(sink, chunk)
+                await self._relay_output_text(sink, channel_id, session, repo_name, entry, text)
             elif text and run_state and run_state.is_terminal:
                 run_state.suppressed_progress_events += 1
             return
@@ -2260,16 +2250,7 @@ class Router:
                 self._mark_awaiting_input(channel_id, session)
                 text = f"Codex asks: {text}"
             if relay_output:
-                for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
-                    self._audit_helper.append_output(entry, chunk)
-                    self._session_log.append(
-                        channel_id,
-                        session or DEFAULT_SESSION,
-                        "discord.output",
-                        {"chunk": chunk},
-                        repo_name=repo_name,
-                    )
-                    await self.reply(sink, chunk)
+                await self._relay_output_text(sink, channel_id, session, repo_name, entry, text)
 
     async def on_thread(
         self,
@@ -2333,11 +2314,11 @@ class Router:
 
     async def reply(self, sink: ResponseSink, content: str) -> None:
         """Send a reply to a channel, chunking as needed."""
-        await send_reply(sink, content, self.cfg.discord.max_discord_message_chars)
+        await sink.send(strip_control_codes(content))
 
     async def reply_forbidden(self, sink: ResponseSink, detail: str) -> None:
         """Send a standardized forbidden/invalid response."""
-        await send_forbidden(sink, detail, self.cfg.discord.max_discord_message_chars)
+        await self.reply(sink, forbidden_message(detail))
 
     def _mark_awaiting_input(self, channel_id: str, session: str) -> None:
         session = session or DEFAULT_SESSION
@@ -2373,6 +2354,27 @@ class Router:
 
     def _clear_run_relay(self, channel_id: str, session: str) -> Optional[_RunRelayState]:
         return self._run_relays.pop(self._run_relay_key(channel_id, session), None)
+
+    async def _relay_output_text(
+        self,
+        sink: ResponseSink,
+        channel_id: str,
+        session: str,
+        repo_name: str,
+        entry: Optional[Entry],
+        text: str,
+    ) -> None:
+        clean = strip_control_codes(text)
+        for chunk in chunk_text(clean, self.cfg.discord.max_discord_message_chars):
+            self._audit_helper.append_output(entry, chunk)
+            self._session_log.append(
+                channel_id,
+                session or DEFAULT_SESSION,
+                "discord.output",
+                {"chunk": chunk},
+                repo_name=repo_name,
+            )
+            await sink.send(chunk)
 
     def _prune_awaiting_input(self, channel_id: str) -> dict[str, float]:
         sessions = self._awaiting_input.get(channel_id, {})
