@@ -1,10 +1,11 @@
 """State persistence for channel/session mappings."""
 
+import copy
 import json
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 from filelock import FileLock
 from ..util import path as pathutil
@@ -53,11 +54,14 @@ class Store:
         self.lock_path = self.path + ".lock"
         self.lock_timeout_seconds = max(lock_timeout_seconds, 1)
         self._lock = FileLock(self.lock_path, timeout=self.lock_timeout_seconds)
+        self._cached_state: Optional[FileState] = None
+        self._cached_signature: tuple[int, int] | None = None
+        self._cached_missing = False
 
     def load(self) -> FileState:
         """Load state from disk or return an empty default."""
         with self._lock:
-            return self._read_unlocked()
+            return self._clone_state(self._load_current_unlocked())
 
     def save(self, state: FileState) -> None:
         """Persist state to disk."""
@@ -67,15 +71,32 @@ class Store:
     def update(self, mutator: Callable[[FileState], None]) -> FileState:
         """Update state via a mutator callback under lock."""
         with self._lock:
-            state = self._read_unlocked()
+            state = self._clone_state(self._load_current_unlocked())
             mutator(state)
             self._write_unlocked(state)
-            return state
+            return self._clone_state(state)
 
-    def _read_unlocked(self) -> FileState:
-        """Read state without acquiring the file lock."""
-        if not os.path.exists(self.path):
-            return FileState(version=CURRENT_VERSION, channels={})
+    def _load_current_unlocked(self) -> FileState:
+        """Load current state, reusing the in-memory snapshot when unchanged."""
+        signature = self._path_signature()
+        if signature is None:
+            if self._cached_missing and self._cached_state is not None:
+                return self._cached_state
+            state = FileState(version=CURRENT_VERSION, channels={})
+            self._set_cache(state, None, missing=True)
+            return state
+        if (
+            not self._cached_missing
+            and self._cached_state is not None
+            and self._cached_signature == signature
+        ):
+            return self._cached_state
+        state = self._read_file_unlocked()
+        self._set_cache(state, signature, missing=False)
+        return state
+
+    def _read_file_unlocked(self) -> FileState:
+        """Read state from disk without acquiring the file lock."""
         with open(self.path, "r", encoding="utf-8") as f:
             data = json.load(f)
         return _from_dict(data)
@@ -89,6 +110,23 @@ class Store:
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(_to_dict(state), f, indent=2)
         os.replace(tmp, self.path)
+        self._set_cache(state, self._path_signature(), missing=False)
+
+    def _path_signature(self) -> tuple[int, int] | None:
+        """Return a cheap file signature for cache validation."""
+        try:
+            stat = os.stat(self.path)
+        except FileNotFoundError:
+            return None
+        return (stat.st_mtime_ns, stat.st_size)
+
+    def _set_cache(self, state: FileState, signature: tuple[int, int] | None, *, missing: bool) -> None:
+        self._cached_state = self._clone_state(state)
+        self._cached_signature = signature
+        self._cached_missing = missing
+
+    def _clone_state(self, state: FileState) -> FileState:
+        return copy.deepcopy(state)
 
 
 def _from_dict(data: Dict[str, Any]) -> FileState:

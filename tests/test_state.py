@@ -112,3 +112,51 @@ def test_state_load_normalizes_runtime_boolean_strings(tmp_path):
     assert state.runtime_options_channels["chan"]["show_reasoning_details"] is False
     assert state.runtime_options_channels["chan"]["run_heartbeat_seconds"] == 120
     assert "chan2" not in state.runtime_options_channels
+
+
+def test_state_load_reuses_cached_snapshot_when_file_unchanged(tmp_path, monkeypatch):
+    store = Store(str(tmp_path))
+    (tmp_path / "state.json").write_text(json.dumps({"version": 1, "channels": {}}), encoding="utf-8")
+    reads = 0
+    original = store._read_file_unlocked
+
+    def wrapped():
+        nonlocal reads
+        reads += 1
+        return original()
+
+    monkeypatch.setattr(store, "_read_file_unlocked", wrapped)
+    store.load()
+    store.load()
+    assert reads == 1
+
+
+def test_state_load_invalidates_cache_after_external_write(tmp_path):
+    store = Store(str(tmp_path))
+    first = store.load()
+    assert first.channels == {}
+
+    path = tmp_path / "state.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "channels": {
+                    "chan": {
+                        "sessions": {
+                            "default": {
+                                "repo_name": "repo",
+                                "repo_path": "/tmp/repo",
+                                "thread_id": "thread-2",
+                            }
+                        },
+                        "sticky": {},
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = store.load()
+    assert loaded.channels["chan"].sessions["default"].thread_id == "thread-2"
