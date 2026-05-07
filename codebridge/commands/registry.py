@@ -55,6 +55,7 @@ COMMAND_MODEL_META: Dict[str, Dict[str, str]] = {
     "models": {"surface": SURFACE_ADVANCED, "namespace": "session"},
     "thread": {"surface": SURFACE_ADMIN, "namespace": "session"},
     "reset": {"surface": SURFACE_CORE, "namespace": "session"},
+    "workflow": {"surface": SURFACE_SUPPORT, "namespace": "session"},
     "purge": {"surface": SURFACE_ADMIN, "namespace": "session"},
     "session": {"surface": SURFACE_ADMIN, "namespace": "session"},
     "spec": {"surface": SURFACE_ADVANCED, "namespace": "session"},
@@ -99,6 +100,40 @@ _REASONING_ALIASES = {
 _TTL_RE = re.compile(r"^(\d+)\s*([mhd])$", re.IGNORECASE)
 
 _DEFAULT_MODELS_CACHE = os.path.expanduser("~/.codex/models_cache.json")
+_WORKFLOW_SPECS: Dict[str, Dict[str, str]] = {
+    "inspect": {
+        "summary": "inspect repo state before changing anything",
+        "prompt": (
+            "Inspect the current repository state before making changes. "
+            "Summarize the current branch, working tree status, relevant files, and immediate risks. "
+            "Do not make code changes unless they are clearly required to answer the request."
+        ),
+    },
+    "fix": {
+        "summary": "investigate and fix a focused problem",
+        "prompt": (
+            "Investigate and fix the requested problem in this repository. "
+            "Start by reproducing or locating the issue, make the smallest safe change, run targeted validation, "
+            "and summarize the fix plus any remaining risk."
+        ),
+    },
+    "review": {
+        "summary": "review current changes with findings first",
+        "prompt": (
+            "Review the current repository state or pending changes with a code-review mindset. "
+            "Prioritize bugs, behavioral regressions, risky assumptions, and missing tests. "
+            "Present findings first with file references and keep summary second."
+        ),
+    },
+    "ship": {
+        "summary": "prepare current work for handoff",
+        "prompt": (
+            "Prepare the current work for handoff. "
+            "Check the working tree state, run or identify targeted validation, summarize user-visible changes and risks, "
+            "and note the next release or follow-up step without expanding scope."
+        ),
+    },
+}
 
 
 def _looks_like_model_id(token: str) -> bool:
@@ -126,6 +161,56 @@ def _normalize_reasoning_level(value: str) -> str | None:
     if token in {"default", "auto", "none"}:
         return ""
     return _REASONING_ALIASES.get(token)
+
+
+def _parse_workflow_request(rest: str) -> tuple[str, str, str]:
+    """Parse workflow requests into `(session, workflow, focus)`."""
+    raw = (rest or "").strip()
+    if not raw:
+        return "", "", ""
+    parts = raw.split()
+    first = parts[0].lower()
+    if first in {"list", "ls"} and len(parts) == 1:
+        return "", "list", ""
+    if first in _WORKFLOW_SPECS:
+        focus = raw[len(parts[0]) :].strip()
+        return "", first, focus
+    if len(parts) >= 2 and parts[1].lower() in _WORKFLOW_SPECS:
+        prefix = f"{parts[0]} {parts[1]}"
+        focus = raw[len(prefix) :].strip()
+        return parts[0], parts[1].lower(), focus
+    return "", "", ""
+
+
+def _build_workflow_prompt(workflow: str, repo_name: str, focus: str) -> str:
+    """Render the built-in workflow prompt for Codex."""
+    spec = _WORKFLOW_SPECS[workflow]
+    lines = [
+        spec["prompt"],
+        f"Repository: {repo_name}.",
+        "Follow the repository AGENTS.md and any repo-local instructions.",
+    ]
+    detail = (focus or "").strip()
+    if detail.startswith("--"):
+        detail = detail[2:].strip()
+    if detail:
+        lines.append(f"Focus: {detail}")
+    return "\n".join(lines)
+
+
+def _render_workflow_listing(prefix: str = "!c") -> str:
+    """Render built-in workflow macro help."""
+    pref = (prefix or "!c").strip()
+    lines = [
+        "Built-in workflows:",
+        *[f"- `{name}`: {spec['summary']}" for name, spec in _WORKFLOW_SPECS.items()],
+        f"Usage: `{pref} workflow [session] <{'|'.join(_WORKFLOW_SPECS.keys())}> [focus]`",
+        "Examples:",
+        f"- `{pref} workflow inspect auth flow`",
+        f"- `{pref} workflow review`",
+        f"- `{pref} workflow fix failing tests`",
+    ]
+    return "\n".join(lines)
 
 
 def _read_models_cache(path: str = _DEFAULT_MODELS_CACHE) -> List[str]:
@@ -286,6 +371,15 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         ),
         CommandSpec("thread", "thread [session] <id>", "set thread id", "Sessions", _cmd_thread, AUTH_UNLOCK, aliases=("tid",)),
         CommandSpec("reset", "reset [session]", "reset session context", "Sessions", _cmd_reset, AUTH_UNLOCK),
+        CommandSpec(
+            "workflow",
+            "workflow [session] <inspect|fix|review|ship> [focus] | workflow list",
+            "run a built-in repo workflow macro",
+            "Sessions",
+            _cmd_workflow,
+            AUTH_UNLOCK,
+            aliases=("wf",),
+        ),
         CommandSpec("purge", "purge [session] | purge stale <ttl>", "reset session and purge session artifacts", "Sessions", _cmd_purge, AUTH_UNLOCK),
         CommandSpec(
             "session",
@@ -805,6 +899,24 @@ async def _cmd_spec(router: Any, message: MessageEvent, sink: ResponseSink, repo
     if not session:
         return
     await router.handle_spec(message, sink, repo_name, repo_path, session)
+
+
+async def _cmd_workflow(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    session_token, workflow, focus = _parse_workflow_request(rest)
+    if not workflow:
+        await router.reply_forbidden(
+            sink,
+            "Usage: !c workflow [session] <inspect|fix|review|ship> [focus] | !c workflow list",
+        )
+        return
+    if workflow == "list":
+        await router.reply(sink, _render_workflow_listing(router._transport_prefix(message)))
+        return
+    session = await _resolve_session_name(router, message, sink, session_token)
+    if not session:
+        return
+    prompt = _build_workflow_prompt(workflow, repo_name, focus)
+    await router.handle_resume(message, sink, repo_name, repo_path, session, prompt)
 
 
 async def _cmd_createrepo(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

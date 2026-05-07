@@ -98,6 +98,15 @@ COMMAND_DETAILS = {
             "!c options set show_reasoning_details false global --totp 123456",
         ),
     },
+    "workflow": {
+        "details": "Expands a small set of built-in repo workflow macros into standardized Codex prompts.",
+        "examples": (
+            "!c workflow list",
+            "!c workflow inspect auth flow",
+            "!c workflow review",
+            "!c workflow fix failing tests",
+        ),
+    },
 }
 
 

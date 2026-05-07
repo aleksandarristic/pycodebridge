@@ -30,6 +30,9 @@ def test_command_registry_aliases():
     assert "session" in registry
     assert "sess" in registry
     assert registry["sess"] is registry["session"]
+    assert "workflow" in registry
+    assert "wf" in registry
+    assert registry["wf"] is registry["workflow"]
     assert "budget" in registry
     assert "budgets" in registry
     assert registry["budgets"] is registry["budget"]
@@ -78,6 +81,7 @@ def test_command_registry_help_text():
     assert "**`!c help [command]`**" in text
     assert "**`!c use <session>`**" in text
     assert "**`!c reset [session]`**" in text
+    assert "**`!c workflow [session] <inspect|fix|review|ship> [focus]`**" in text
     assert "**`!a <text>`**" in text
     assert "**`!s <text>`**" in text
     assert "**`!y`**" in text
@@ -101,6 +105,18 @@ def test_command_registry_detailed_help_uses_examples():
     assert "Namespace:" in text
     assert "Examples:" in text
     assert "`!c git status`" in text
+
+
+def test_command_registry_workflow_help_uses_examples():
+    registry, _ = build_registry()
+    from codebridge.commands.help import render_help_command
+
+    text = render_help_command(registry["workflow"], prefix="!c")
+    assert "**Help: `workflow`**" in text
+    assert "`!c workflow list`" in text
+    assert "`!c workflow inspect auth flow`" in text
+    assert "`!c workflow review`" in text
+    assert "`!c workflow fix failing tests`" in text
 
 
 def test_command_registry_command_model_metadata():

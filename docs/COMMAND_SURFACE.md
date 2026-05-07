@@ -8,7 +8,7 @@ The inventory below is still the full compatibility surface, but the preferred h
 
 - Golden path: `help`, `status`, `start`, `resume`, `use`, `reset`, `answer`, `steer`, `approve`, `deny`, `stop`, `wait`, `show`, `changes`, `tests`, `branch`, `git`, `gh`
 - Promoted run shortcuts only: `!a`, `!s`, `!y`, `!n`
-- Support/advanced commands after the golden path: `choose`, `interrupt`, `/quit`, `cancel`, `ps`, `model`, `models`, `spec`, `download`, `rerun`, `peek`, `updates`, `health`
+- Support/advanced commands after the golden path: `choose`, `workflow`, `interrupt`, `/quit`, `cancel`, `ps`, `model`, `models`, `spec`, `download`, `rerun`, `peek`, `updates`, `health`
 - Admin/maintenance commands last: security/runtime config, session maintenance, repo lifecycle, audit/log inspection
 
 Docs and help should prefer canonical `!c ...` examples for most commands and treat generic top-level `!<command>` forms as compatibility surface rather than the main interface.
@@ -46,6 +46,7 @@ Source of truth: `codebridge/commands/registry.py`.
 | `models [session]` | `mdls` | Channel | repo channel/thread | open | codex/cache | convenience |
 | `thread [session] <id>` | `tid` | Channel | repo channel/thread | unlock/default | state | admin-only |
 | `reset [session]` | none | Channel | repo channel/thread | unlock/default | state | essential |
+| `workflow [session] <inspect\|fix\|review\|ship> [focus]` | `wf` | Channel | repo channel/thread | unlock/default | codex | convenience |
 | `purge [session] \| purge stale <ttl>` | none | Channel | repo channel/thread | unlock/default | state/filesystem | admin-only |
 | `session ...` | `sess` | Channel | repo channel/thread | unlock/default | state/filesystem | admin-only |
 | `spec [session]` | `plan` | Channel | repo channel/thread | unlock/default | codex | convenience |

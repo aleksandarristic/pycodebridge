@@ -216,6 +216,7 @@ TOTP required unless the chat is unlocked:
 - `!c purge [session]`
 - `!c purge stale <ttl>`
 - `!c spec [session]`
+- `!c workflow [session] <inspect|fix|review|ship> [focus]`
 - `!c stop [session]`
 - `!c interrupt [session]` (aliases: `int`, `esc`, `escape`)
 - `!c kill [session]`
@@ -280,7 +281,10 @@ Sessions:
 - `start` (alias: `run`), `resume` (alias: `rs`), `choose` (alias: `pick`) `[unlock/default]`
   - `choose` accepts `continue|new|compact` (`resume|replace|summary` still supported as aliases).
   - Shortcut: `!continue` / `!cont` maps to `choose continue` while a conflict is pending.
-- `use` (alias: `select`), `model` (alias: `mdl`), `models` (alias: `mdls`), `thread` (alias: `tid`), `reset`, `spec` (alias: `plan`) (`models` is `[open]`, others `[unlock/default]`)
+- `use` (alias: `select`), `model` (alias: `mdl`), `models` (alias: `mdls`), `thread` (alias: `tid`), `reset`, `workflow` (alias: `wf`), `spec` (alias: `plan`) (`models` is `[open]`, others `[unlock/default]`)
+  - `workflow` expands built-in repo macros: `inspect`, `fix`, `review`, `ship`.
+  - Example: `!c workflow inspect auth flow`
+  - Example: `!c workflow fix failing tests`
 
 Repo lifecycle:
 - `create` (aliases: `createrepo`, `new`) `[totp]`

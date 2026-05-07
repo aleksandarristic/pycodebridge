@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0005] Knowledge shortcuts/macros for repeatable repo workflows.
+  - Completed: 2026-05-07
+  - Notes: Added a bounded `!c workflow` / `!c wf` command with built-in `inspect`, `fix`, `review`, and `ship` macros that expand into standardized Codex prompts via the normal resume path, plus help/docs and targeted routing coverage.
+
 - [TASK-0026] Budget-aware token guardrails for oversized runs and sessions.
   - Completed: 2026-04-29
   - Notes: Extended `!c budget` with `session` and `run` scopes, added session-hard pre-run blocking, surfaced run/session soft and hard notices during and after runs, recorded per-session last-run token totals, and updated status/docs plus targeted budget integration coverage.

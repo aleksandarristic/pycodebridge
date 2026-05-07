@@ -1201,6 +1201,50 @@ def test_integration_resume_and_download(tmp_path):
     assert sink.files == [(str(target), "note.txt", None, None)]
 
 
+def test_integration_workflow_command_expands_prompt_and_respects_session(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    captured = {"prompt": "", "session": ""}
+
+    def _build_start_args(repo_path: str, prompt: str, model: str, reasoning: str) -> list[str]:
+        _ = (repo_path, model, reasoning)
+        captured["prompt"] = prompt
+        return ["start"]
+
+    runner.build_start_args = _build_start_args
+    original_handle_resume = router.handle_resume
+
+    async def _capture_handle_resume(self, event, sink_obj, repo_name, repo_path, session, prompt, skip_idle_ttl_check=False):
+        _ = (event, sink_obj, repo_name, repo_path, skip_idle_ttl_check)
+        captured["session"] = session
+        await original_handle_resume(event, sink, repo_name, repo_path, session, prompt, skip_idle_ttl_check=skip_idle_ttl_check)
+
+    router.handle_resume = MethodType(_capture_handle_resume, router)
+
+    async def run():
+        await router.handle_message(
+            _discord_event(
+                "!c workflow release fix failing tests",
+                "release",
+                channel_id="thread-chan",
+                platform_thread_id="thread-1",
+                parent_channel_name="codex-repo",
+            ),
+            sink,
+        )
+
+    asyncio.run(run())
+    assert captured["session"] == "release"
+    assert "Investigate and fix the requested problem" in captured["prompt"]
+    assert "Repository: repo." in captured["prompt"]
+    assert "Focus: failing tests" in captured["prompt"]
+    assert any(args == ["start"] for args in runner.calls)
+
+
 def test_integration_updates_command_dispatches(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -1222,6 +1266,25 @@ def test_integration_updates_command_dispatches(tmp_path):
     asyncio.run(run())
     assert called == [str(repo)]
     assert any("updates-ok" in msg for msg, _, _ in sink.sent)
+
+
+def test_integration_workflow_list_shows_available_macros(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c workflow list", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert runner.calls == []
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Built-in workflows:" in t for t in texts)
+    assert any("`inspect`" in t for t in texts)
+    assert any("`fix`" in t for t in texts)
 
 
 def test_integration_answer_command_relays_to_active_session(tmp_path):
