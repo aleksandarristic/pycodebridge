@@ -19,6 +19,23 @@ HELP_SHORTCUT_TRIGGERS = {
     "answer": ("!a <text>", "!a:<session> <text>"),
 }
 
+PROMOTED_PREFERRED_TRIGGERS = {
+    "answer": "!a <text>",
+    "steer": "!s <text>",
+    "approve": "!y",
+    "deny": "!n",
+}
+
+NAMESPACE_LABELS = {
+    "general": "Orientation",
+    "session": "Session lifecycle",
+    "run": "Active run control",
+    "repo": "Repo inspection",
+    "diag": "Diagnostics and queue",
+    "admin": "Security and runtime config",
+    "repo-admin": "Repo lifecycle",
+}
+
 COMMAND_DETAILS = {
     "branch": {
         "details": "Shows the current branch and whether the working tree is clean.",
@@ -85,20 +102,21 @@ COMMAND_DETAILS = {
 
 
 def render_help_index(specs: Sequence[object], prefix: str = "!c") -> str:
-    """Render grouped command index."""
-    grouped = _group_specs(specs)
+    """Render help around the preferred operator workflow."""
+    core_specs = [spec for spec in specs if _spec_surface(spec) == "core"]
+    support_specs = [spec for spec in specs if _spec_surface(spec) == "support"]
+    advanced_specs = [spec for spec in specs if _spec_surface(spec) == "advanced"]
+    admin_specs = [spec for spec in specs if _spec_surface(spec) == "admin"]
     lines = [
         "Commands:",
-        "Auth tags: [open]=no TOTP, [unlock/default]=default unlock or --totp, [unlock/gh]=gh unlock or --totp, [totp]=always --totp, [mixed]=depends on subcommand",
+        "Golden path first. Prefer `!c ...` commands for most actions.",
+        "Promoted run shortcuts: `!a <text>`, `!s <text>`, `!y`, `!n`.",
+        "Other aliases and top-level `!<command>` forms remain supported for compatibility but are not listed first.",
         "",
     ]
-    for group in _ordered_groups(grouped):
-        lines.append(f"{group}:")
-        for spec in grouped[group]:
-            auth_text = AUTH_LABELS.get(spec.auth, spec.auth)
-            triggers = ", ".join(f"**`{trig}`**" for trig in help_triggers(spec, prefix))
-            lines.append(f"- {triggers} - {spec.description} [{auth_text}]")
-        lines.append("")
+    _append_help_section(lines, "Golden path", core_specs, prefix)
+    _append_help_section(lines, "Advanced and support", support_specs + advanced_specs, prefix)
+    _append_help_section(lines, "Admin and maintenance", admin_specs, prefix)
     return "\n".join(lines).strip()
 
 
@@ -106,12 +124,22 @@ def render_help_command(spec: object, prefix: str = "!c") -> str:
     """Render detailed help for a single command."""
     auth_text = AUTH_LABELS.get(spec.auth, spec.auth)
     detail = COMMAND_DETAILS.get(spec.name, {})
+    preferred = preferred_help_trigger(spec, prefix)
+    also_available = [trigger for trigger in help_triggers(spec, prefix) if trigger != preferred]
     lines = [
         f"**Help: `{spec.name}`**",
-        f"Triggers: {', '.join(f'**`{t}`**' for t in help_triggers(spec, prefix))}",
+        f"Preferred: **`{preferred}`**",
+    ]
+    if also_available:
+        lines.append(f"Also available: {', '.join(f'**`{t}`**' for t in also_available)}")
+    lines.extend(
+        [
+        f"Surface: `{_spec_surface(spec)}`",
+        f"Namespace: `{_namespace_label(spec)}`",
         f"Auth: `[{auth_text}]`",
         f"Description: {spec.description}",
-    ]
+        ]
+    )
     extra = detail.get("details")
     if extra:
         lines.append(f"Details: {extra}")
@@ -160,11 +188,22 @@ def help_triggers(spec: object, prefix: str = "!c") -> list[str]:
     return deduped
 
 
+def preferred_help_trigger(spec: object, prefix: str = "!c") -> str:
+    promoted = PROMOTED_PREFERRED_TRIGGERS.get(spec.name)
+    if promoted:
+        return promoted
+    pref = (prefix or "!c").strip()
+    forms = [f.strip() for f in spec.usage.split(" | ") if f.strip()]
+    if not forms:
+        return f"{pref} {spec.name}".strip()
+    form = forms[0]
+    parts = form.split(maxsplit=1)
+    tail = f" {parts[1]}" if len(parts) > 1 else ""
+    return f"{pref} {spec.name}{tail}".strip()
+
+
 def default_examples(spec: object, prefix: str) -> tuple[str, ...]:
-    head = f"{prefix} {spec.name}".strip()
-    if " " in spec.usage:
-        return (f"{head}",)
-    return (head,)
+    return (preferred_help_trigger(spec, prefix),)
 
 
 def _group_specs(specs: Sequence[object]) -> dict[str, list[object]]:
@@ -186,3 +225,57 @@ def _ordered_groups(grouped: dict[str, list[object]]) -> list[str]:
         if group not in seen:
             out.append(group)
     return out
+
+
+def _append_help_section(lines: list[str], heading: str, specs: Sequence[object], prefix: str) -> None:
+    if not specs:
+        return
+    lines.append(f"{heading}:")
+    grouped = _group_by_namespace(specs)
+    for namespace in _ordered_namespaces(grouped):
+        lines.append(f"{_namespace_heading(namespace)}:")
+        for spec in grouped[namespace]:
+            auth_text = AUTH_LABELS.get(spec.auth, spec.auth)
+            lines.append(f"- **`{preferred_help_trigger(spec, prefix)}`** - {spec.description} [{auth_text}]")
+        lines.append("")
+
+
+def _group_by_namespace(specs: Sequence[object]) -> dict[str, list[object]]:
+    grouped: dict[str, list[object]] = {}
+    for spec in specs:
+        grouped.setdefault(_spec_namespace(spec), []).append(spec)
+    return grouped
+
+
+def _ordered_namespaces(grouped: dict[str, list[object]]) -> list[str]:
+    order = ("general", "session", "run", "repo", "diag", "admin", "repo-admin")
+    out: list[str] = []
+    seen = set()
+    for namespace in order:
+        if namespace in grouped:
+            out.append(namespace)
+            seen.add(namespace)
+    for namespace in grouped.keys():
+        if namespace not in seen:
+            out.append(namespace)
+    return out
+
+
+def _namespace_heading(namespace: str) -> str:
+    return NAMESPACE_LABELS.get(namespace, namespace.replace("-", " ").title())
+
+
+def _namespace_label(spec: object) -> str:
+    return _namespace_heading(_spec_namespace(spec))
+
+
+def _spec_surface(spec: object) -> str:
+    from . import registry as command_registry
+
+    return command_registry.command_surface(spec)
+
+
+def _spec_namespace(spec: object) -> str:
+    from . import registry as command_registry
+
+    return command_registry.command_namespace(spec)

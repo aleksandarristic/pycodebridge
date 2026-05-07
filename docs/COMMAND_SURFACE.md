@@ -2,6 +2,17 @@
 
 This document inventories all operator-facing command entry points in `pycodebridge`.
 
+## Preferred operator workflow (TASK-0035)
+
+The inventory below is still the full compatibility surface, but the preferred help/docs order is now:
+
+- Golden path: `help`, `status`, `start`, `resume`, `use`, `reset`, `answer`, `steer`, `approve`, `deny`, `stop`, `wait`, `show`, `changes`, `tests`, `branch`, `git`, `gh`
+- Promoted run shortcuts only: `!a`, `!s`, `!y`, `!n`
+- Support/advanced commands after the golden path: `choose`, `interrupt`, `/quit`, `cancel`, `ps`, `model`, `models`, `spec`, `download`, `rerun`, `peek`, `updates`, `health`
+- Admin/maintenance commands last: security/runtime config, session maintenance, repo lifecycle, audit/log inspection
+
+Docs and help should prefer canonical `!c ...` examples for most commands and treat generic top-level `!<command>` forms as compatibility surface rather than the main interface.
+
 ## Classification legend
 
 - Audience: `Channel`, `DM`, or `DM admin`.

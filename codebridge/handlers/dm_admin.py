@@ -184,9 +184,15 @@ def _render_dm_help_index(prefix: str, is_admin: bool) -> str:
     lines = [
         "DM Commands:",
         "",
-        "Repo-bound / session controls:",
+        "Golden path first. Prefer `!c ...` in DM; top-level aliases remain compatibility-only.",
+        "",
+        "Repo-bound workflow:",
     ]
-    for cmd in _DM_HELP_OVERVIEW_ORDER:
+    for cmd in ("help", "bind", "repo", "status", "answer", "approve", "deny", "gh"):
+        usage, desc = _DM_HELP_DETAILS[cmd]
+        lines.append(f"- `{prefix} {usage}` - {desc}")
+    lines.extend(["", "Secondary operator commands:"])
+    for cmd in ("use", "unbind", "updates", "health", "options", "unlock", "lock"):
         usage, desc = _DM_HELP_DETAILS[cmd]
         lines.append(f"- `{prefix} {usage}` - {desc}")
     if is_admin:
@@ -204,7 +210,7 @@ def _render_dm_help_command(prefix: str, cmd: str, is_admin: bool) -> str | None
     if cmd not in allowed:
         return None
     usage, desc = _DM_HELP_DETAILS[cmd]
-    return f"DM help `{cmd}`:\n- Usage: `{prefix} {usage}`\n- {desc}"
+    return f"DM help `{cmd}`:\n- Preferred: `{prefix} {usage}`\n- {desc}"
 
 
 def _require_dangerous_confirmation_token(router: "Router", rest: str) -> tuple[bool, str]:

@@ -67,44 +67,26 @@ def test_command_registry_help_text():
     _, specs = build_registry()
     text = render_help(specs, prefix="!c")
     assert "Commands:" in text
-    assert "General:" in text
-    assert "Auth tags: [open]=no TOTP" in text
+    assert "Golden path:" in text
+    assert "Promoted run shortcuts:" in text
+    assert "Orientation:" in text
+    assert "Session lifecycle:" in text
+    assert "Active run control:" in text
+    assert "Repo inspection:" in text
+    assert "Advanced and support:" in text
+    assert "Admin and maintenance:" in text
     assert "**`!c help [command]`**" in text
-    assert "**`!c commands [command]`**" in text
-    assert "**`!help [command]`**" in text
-    assert "**`!commands [command]`**" in text
-    assert "**`!cfg`**" in text
-    assert "**`!opts [show]`**" in text
-    assert "**`!health`**" in text
-    assert "**`!diag`**" in text
-    assert "**`!c unlock [gh|all] [status|ttl]`**" in text
-    assert "**`!c ul [gh|all] [status|ttl]`**" in text
-    assert "**`!unlock [gh|all] [status|ttl]`**" in text
-    assert "**`!ul [gh|all] [status|ttl]`**" in text
-    assert "**`!c lock [gh|all]`**" in text
-    assert "**`!c lk [gh|all]`**" in text
-    assert "**`!lock [gh|all]`**" in text
     assert "**`!c use <session>`**" in text
-    assert "**`!c select <session>`**" in text
     assert "**`!c reset [session]`**" in text
-    assert "**`!c purge [session]`**" in text
-    assert "**`!c purge stale <ttl>`**" in text
-    assert "**`!c create`**" in text
-    assert "**`!c createrepo`**" in text
-    assert "**`!c new`**" in text
-    assert "Repo helpers:" in text
-    assert "**`!c branch`**" in text
-    assert "**`!branch`**" in text
-    assert "**`!git <status|log|branches|branch|show|diff|remote|fetch|pull|add|commit|push|merge>`**" in text
-    assert "**`!gh <args>`**" in text
-    assert "**`!steer <text>`**" in text
     assert "**`!a <text>`**" in text
-    assert "**`!stop [session]`**" in text
-    assert "**`!interrupt [session]`**" in text
-    assert "**`!int [session]`**" in text
-    assert "**`!esc [session]`**" in text
-    assert "**`!escape [session]`**" in text
-    assert "**`!w`**" in text
+    assert "**`!s <text>`**" in text
+    assert "**`!y`**" in text
+    assert "**`!n`**" in text
+    assert "**`!c branch`**" in text
+    assert "**`!c git <status|log|branches|branch|show|diff|remote|fetch|pull|add|commit|push|merge>`**" in text
+    assert "**`!c gh <args>`**" in text
+    assert "**`!c unlock [gh|all] [status|ttl]`**" in text
+    assert "**`!c create`**" in text
 
 
 def test_command_registry_detailed_help_uses_examples():
@@ -113,6 +95,10 @@ def test_command_registry_detailed_help_uses_examples():
 
     text = render_help_command(registry["git"], prefix="!c")
     assert "**Help: `git`**" in text
+    assert "Preferred:" in text
+    assert "Also available:" in text
+    assert "Surface:" in text
+    assert "Namespace:" in text
     assert "Examples:" in text
     assert "`!c git status`" in text
 

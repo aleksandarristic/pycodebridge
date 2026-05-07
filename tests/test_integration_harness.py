@@ -2226,6 +2226,7 @@ def test_integration_misc_shortcuts_dispatch(tmp_path):
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
     assert any("Commands:" in t for t in texts)
+    assert any("Golden path:" in t for t in texts)
     assert any("Repo: repo" in t for t in texts)
     assert any("Related: !c start" in t for t in texts)
     assert any("updates-ok" in t for t in texts)
@@ -2258,6 +2259,7 @@ def test_integration_help_command_details(tmp_path):
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
     assert any("Help: `git`" in t for t in texts)
+    assert any("Preferred:" in t for t in texts)
     assert any("!c git status" in t for t in texts)
 
 
@@ -2276,7 +2278,7 @@ def test_integration_repo_help_is_chunked_for_discord_limit(tmp_path):
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
     assert len(texts) > 1
-    assert any("Commands:" in t for t in texts)
+    assert any("Golden path:" in t for t in texts)
 
 
 def test_integration_repo_help_chunks_stay_within_limit_with_lock_prefix(tmp_path):
@@ -2353,6 +2355,7 @@ def test_integration_dm_shortcuts_and_help_details(tmp_path):
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
     assert any("DM Commands:" in t for t in texts)
+    assert any("Repo-bound workflow:" in t for t in texts)
     assert any("`!c gh <args>`" in t for t in texts)
     assert any("Unknown DM command `git`." in t for t in texts)
     assert any("`!c bind <repo>`" in t for t in texts)
@@ -2377,7 +2380,7 @@ def test_integration_dm_help_is_chunked_for_discord_limit(tmp_path):
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
     assert len(texts) > 1
-    assert any("Commands:" in t for t in texts)
+    assert any("DM Commands:" in t for t in texts)
 
 
 # ---------------------------------------------------------------------------
