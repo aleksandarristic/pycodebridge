@@ -30,6 +30,59 @@ AUTH_UNLOCK = "unlock"
 AUTH_UNLOCK_GH = "unlock-gh"
 AUTH_TOTP = "totp"
 AUTH_MIXED = "mixed"
+SURFACE_CORE = "core"
+SURFACE_SUPPORT = "support"
+SURFACE_ADVANCED = "advanced"
+SURFACE_ADMIN = "admin"
+
+COMMAND_MODEL_META: Dict[str, Dict[str, str]] = {
+    "help": {"surface": SURFACE_CORE, "namespace": "general"},
+    "status": {"surface": SURFACE_CORE, "namespace": "general"},
+    "stats": {"surface": SURFACE_ADMIN, "namespace": "diag"},
+    "budget": {"surface": SURFACE_ADMIN, "namespace": "diag"},
+    "peek": {"surface": SURFACE_ADVANCED, "namespace": "diag"},
+    "updates": {"surface": SURFACE_ADVANCED, "namespace": "diag"},
+    "health": {"surface": SURFACE_ADVANCED, "namespace": "diag"},
+    "config": {"surface": SURFACE_ADMIN, "namespace": "admin"},
+    "options": {"surface": SURFACE_ADMIN, "namespace": "admin"},
+    "unlock": {"surface": SURFACE_ADMIN, "namespace": "admin"},
+    "lock": {"surface": SURFACE_ADMIN, "namespace": "admin"},
+    "start": {"surface": SURFACE_CORE, "namespace": "session"},
+    "resume": {"surface": SURFACE_CORE, "namespace": "session"},
+    "choose": {"surface": SURFACE_SUPPORT, "namespace": "session"},
+    "use": {"surface": SURFACE_CORE, "namespace": "session"},
+    "model": {"surface": SURFACE_ADVANCED, "namespace": "session"},
+    "models": {"surface": SURFACE_ADVANCED, "namespace": "session"},
+    "thread": {"surface": SURFACE_ADMIN, "namespace": "session"},
+    "reset": {"surface": SURFACE_CORE, "namespace": "session"},
+    "purge": {"surface": SURFACE_ADMIN, "namespace": "session"},
+    "session": {"surface": SURFACE_ADMIN, "namespace": "session"},
+    "spec": {"surface": SURFACE_ADVANCED, "namespace": "session"},
+    "create": {"surface": SURFACE_ADMIN, "namespace": "repo-admin"},
+    "clone": {"surface": SURFACE_ADMIN, "namespace": "repo-admin"},
+    "copy": {"surface": SURFACE_ADMIN, "namespace": "repo-admin"},
+    "stop": {"surface": SURFACE_CORE, "namespace": "run"},
+    "interrupt": {"surface": SURFACE_SUPPORT, "namespace": "run"},
+    "kill": {"surface": SURFACE_ADMIN, "namespace": "run"},
+    "/quit": {"surface": SURFACE_SUPPORT, "namespace": "run"},
+    "steer": {"surface": SURFACE_CORE, "namespace": "run"},
+    "answer": {"surface": SURFACE_CORE, "namespace": "run"},
+    "approve": {"surface": SURFACE_CORE, "namespace": "run"},
+    "deny": {"surface": SURFACE_CORE, "namespace": "run"},
+    "wait": {"surface": SURFACE_CORE, "namespace": "run"},
+    "show": {"surface": SURFACE_CORE, "namespace": "repo"},
+    "changes": {"surface": SURFACE_CORE, "namespace": "repo"},
+    "tests": {"surface": SURFACE_CORE, "namespace": "repo"},
+    "branch": {"surface": SURFACE_CORE, "namespace": "repo"},
+    "git": {"surface": SURFACE_CORE, "namespace": "repo"},
+    "gh": {"surface": SURFACE_CORE, "namespace": "repo"},
+    "download": {"surface": SURFACE_ADVANCED, "namespace": "repo"},
+    "logs": {"surface": SURFACE_ADMIN, "namespace": "diag"},
+    "audit": {"surface": SURFACE_ADMIN, "namespace": "diag"},
+    "ps": {"surface": SURFACE_SUPPORT, "namespace": "diag"},
+    "cancel": {"surface": SURFACE_SUPPORT, "namespace": "run"},
+    "rerun": {"surface": SURFACE_ADVANCED, "namespace": "run"},
+}
 
 _MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{1,63}$")
 _REASONING_ALIASES = {
@@ -351,6 +404,16 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         for alias in spec.aliases:
             registry[alias] = spec
     return registry, specs
+
+
+def command_surface(spec: CommandSpec) -> str:
+    """Return the redesign surface classification for a command."""
+    return COMMAND_MODEL_META.get(spec.name, {}).get("surface", SURFACE_ADVANCED)
+
+
+def command_namespace(spec: CommandSpec) -> str:
+    """Return the redesign namespace/family for a command."""
+    return COMMAND_MODEL_META.get(spec.name, {}).get("namespace", "general")
 
 
 def render_help(specs: Sequence[CommandSpec], prefix: str = "!c") -> str:

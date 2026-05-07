@@ -1,4 +1,12 @@
-from codebridge.commands.registry import build_registry, render_help
+from codebridge.commands.registry import (
+    SURFACE_ADMIN,
+    SURFACE_CORE,
+    SURFACE_SUPPORT,
+    build_registry,
+    command_namespace,
+    command_surface,
+    render_help,
+)
 
 
 def test_command_registry_aliases():
@@ -107,6 +115,19 @@ def test_command_registry_detailed_help_uses_examples():
     assert "**Help: `git`**" in text
     assert "Examples:" in text
     assert "`!c git status`" in text
+
+
+def test_command_registry_command_model_metadata():
+    registry, _ = build_registry()
+    assert command_surface(registry["status"]) == SURFACE_CORE
+    assert command_namespace(registry["status"]) == "general"
+    assert command_surface(registry["reset"]) == SURFACE_CORE
+    assert command_namespace(registry["reset"]) == "session"
+    assert command_surface(registry["choose"]) == SURFACE_SUPPORT
+    assert command_surface(registry["audit"]) == SURFACE_ADMIN
+    assert command_namespace(registry["audit"]) == "diag"
+    assert command_surface(registry["create"]) == SURFACE_ADMIN
+    assert command_namespace(registry["create"]) == "repo-admin"
 
 
 def test_help_not_found_has_suggestions():
