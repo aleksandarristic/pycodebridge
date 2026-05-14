@@ -184,7 +184,7 @@ class FileTransferService:
             for name in sorted(os.listdir(repo_path)):
                 if name.startswith("."):
                     continue
-                if name in {".git", "node_modules", "vendor"}:
+                if name in {"node_modules", "vendor"}:
                     continue
                 full = os.path.join(repo_path, name)
                 if os.path.isdir(full):

@@ -56,8 +56,6 @@ def _validate_repo_name(repo_name: str) -> None:
     """Validate repo names against allowed characters and separators."""
     if not repo_name or not _REPO_NAME_RE.match(repo_name):
         raise ValueError(f"invalid repo name {repo_name!r}")
-    if any(c in repo_name for c in ("/", "\\", ":")) or repo_name == "..":
-        raise ValueError(f"invalid repo name {repo_name!r}")
 
 
 def _abs_clean(path: str) -> str:

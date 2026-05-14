@@ -10,7 +10,4 @@ Rules:
 
 ## Bug backlog
 
-- [TASK-0036] Fix missing `import re` in `audit.py` — `Redactor` crashes at runtime.
-  - `codebridge/observability/audit.py:200` calls `re.compile()` but `re` is never imported.
-  - Breaks all `test_audit_redaction` tests; if `audit.redact: true` is set, the bridge crashes at startup.
-  - Fix: add `import re` to the imports in `audit.py`.
+None right now.

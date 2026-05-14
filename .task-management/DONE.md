@@ -12,6 +12,30 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0041] Clarify misleading double `_purge_session_artifacts` call.
+  - Completed: 2026-05-14
+  - Notes: Consolidated into a single call preceded by two `asyncio.sleep(0)` yields; added comment explaining the yields are needed to let exit callbacks flush before deletion.
+
+- [TASK-0040] Remove redundant `.git` filter in `_suggest_upload_paths`.
+  - Completed: 2026-05-14
+  - Notes: Removed `.git` from the explicit exclusion set; already excluded by the `startswith(".")` check above it.
+
+- [TASK-0039] Replace `assert` statements in production code with proper guards.
+  - Completed: 2026-05-14
+  - Notes: Replaced all three: `codex.py` returns a `RuntimeError` from the reader if stdout is absent; `router.py` lock-extend raises `RuntimeError` if `ttl_seconds` is None; reset-all handler uses an `isinstance` `if`-guard instead of asserting.
+
+- [TASK-0038] Remove dead validation branch in `_validate_repo_name`.
+  - Completed: 2026-05-14
+  - Notes: Removed the unreachable second condition; the regex already excludes all the characters it checked for.
+
+- [TASK-0037] Deduplicate bool-parsing logic in `state.py`.
+  - Completed: 2026-05-14
+  - Notes: Removed `_BOOL_TRUE`/`_BOOL_FALSE` sets and rewrote `_normalize_bool` to delegate to `parse_bool` from `util/coerce.py`, returning `None` on `ValueError`.
+
+- [TASK-0036] Fix missing `import re` in `audit.py`.
+  - Completed: 2026-05-14
+  - Notes: Added `import re`; fixes `Redactor` crash and all three `test_audit_redaction` test failures.
+
 - [TASK-0035] Command information architecture, naming, and help-system rewrite.
   - Completed: 2026-05-07
   - Notes: Reorganized help and docs around a golden path, limited promoted shortcuts to the intended active-run shorthands, and aligned command docs with the redesigned surface.

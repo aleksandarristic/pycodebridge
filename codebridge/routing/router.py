@@ -1155,7 +1155,8 @@ class Router:
             await self._reply_unlock_status(event, sink, scope)
             return
         if action == "extend":
-            assert ttl_seconds is not None
+            if ttl_seconds is None:
+                raise RuntimeError("extend action requires ttl_seconds")
             await self._extend_unlock_window(event, sink, scope, ttl_seconds)
             return
         if scope == "all":
@@ -1488,8 +1489,8 @@ class Router:
                 entry = status_by_key.setdefault(key, {"queued_ids": [], "running": False})
                 if st.status == "queued":
                     queued_ids = entry["queued_ids"]
-                    assert isinstance(queued_ids, list)
-                    queued_ids.append(st.job_id)
+                    if isinstance(queued_ids, list):
+                        queued_ids.append(st.job_id)
                 elif st.status == "running":
                     entry["running"] = True
 
@@ -1578,11 +1579,10 @@ class Router:
             removed = await self.coordinator.reset_session(channel_id, session)
             self.clear_awaiting_input(channel_id, session)
             if purge:
-                # Allow exit callbacks to flush any final log events before purge deletion.
+                # Two yields let pending exit callbacks flush log events before deletion.
+                await asyncio.sleep(0)
                 await asyncio.sleep(0)
                 purged_artifacts = self._purge_session_artifacts(channel_id, session, repo_name)
-                await asyncio.sleep(0)
-                purged_artifacts += self._purge_session_artifacts(channel_id, session, repo_name)
         return {
             "channel_id": channel_id,
             "session": session,

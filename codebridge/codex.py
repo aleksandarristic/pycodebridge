@@ -286,7 +286,8 @@ class Runner:
 
         async def _read_stdout() -> Optional[BaseException]:
             """Read stdout JSONL and forward to callbacks."""
-            assert proc.stdout
+            if not proc.stdout:
+                return RuntimeError("Codex process has no stdout")
             try:
                 async for raw in proc.stdout:
                     line = raw.decode("utf-8", errors="replace").rstrip("\n")
