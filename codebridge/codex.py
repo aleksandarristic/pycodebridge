@@ -386,7 +386,10 @@ def _merge_env(base: Dict[str, str], extra: Dict[str, str]) -> Dict[str, str]:
 
 def _toml_string(value: str) -> str:
     """Return a TOML-safe quoted string for --config overrides."""
-    return json.dumps(value or "")
+    s = value or ""
+    if not s.isascii():
+        raise ValueError(f"non-ASCII characters are not supported in config values: {s!r}")
+    return json.dumps(s)
 
 
 def _reasoning_args(reasoning_effort: str) -> list[str]:

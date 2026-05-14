@@ -4,11 +4,18 @@ from __future__ import annotations
 
 
 def parse_session_and_prompt(rest: str) -> tuple[str, str]:
-    """Parse an optional session name and prompt string from a command tail."""
+    """Parse an optional session name and prompt string from a command tail.
+
+    A single token is always treated as prompt text, never as a session name,
+    so callers that need a session name must supply it as the first of at least
+    two tokens (e.g. ``my-session do something``).
+    """
     rest = rest.strip()
     if not rest:
-        return "default", ""
+        return "", ""
     fields = rest.split()
+    if len(fields) == 1:
+        return "", fields[0]
     session = fields[0]
     prompt = rest[len(session) :].strip()
     return session, prompt

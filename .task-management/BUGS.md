@@ -10,6 +10,3 @@ Rules:
 
 ## Bug backlog
 
-- [TASK-0057] [Low] Single-token input to `parse_session_and_prompt` always treated as session name.
-  - `commands/parse.py` — `!c run hello` treats `hello` as a session name and produces an empty prompt, resulting in an error or empty Codex invocation. New users trying short prompts will always hit this.
-  - Fix: if the token does not match a known session name, treat it as the start of the prompt.

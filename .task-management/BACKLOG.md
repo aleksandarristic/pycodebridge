@@ -27,10 +27,3 @@ Rules:
 
 - [TASK-0006] Web-based/dashboard features (status/admin web surface, browser ops views).
 
-- [TASK-0058] Audit sequence sort relies on consistent zero-padding.
-  - `observability/audit.py` — summaries are sorted lexicographically by `seq` string; a corrupted `.latest` file producing a differently-padded counter silently mis-sorts audit entries.
-  - Fix: sort by `int(s.seq)` instead of string comparison.
-
-- [TASK-0059] `_toml_string()` uses `json.dumps` for TOML string values.
-  - `codex.py:382` — works for ASCII content but TOML and JSON string escaping diverge for some Unicode codepoints; a model name or approval policy containing non-ASCII characters could be mis-parsed by Codex CLI.
-  - Fix: use a proper TOML string encoder or validate that values are ASCII-safe before passing to `--config`.

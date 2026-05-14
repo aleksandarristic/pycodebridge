@@ -12,6 +12,18 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0059] `_toml_string()` uses `json.dumps` for TOML string values.
+  - Completed: 2026-05-14
+  - Notes: Added ASCII guard — raises ValueError for non-ASCII input rather than silently producing a value that Codex CLI may mis-parse.
+
+- [TASK-0058] Audit sequence sort relies on consistent zero-padding.
+  - Completed: 2026-05-14
+  - Notes: Changed sort key from `s.seq` (lexicographic) to `int(s.seq)` so a corrupted counter with inconsistent padding doesn't mis-sort entries.
+
+- [TASK-0057] Single-token input to `parse_session_and_prompt` always treated as session name.
+  - Completed: 2026-05-14
+  - Notes: Changed `parse_session_and_prompt` to return `("", token)` for single-token input. Updated `_cmd_start` to extract session name via direct split (not the parser). Removed now-redundant single-token guard from `_cmd_resume`.
+
 - [TASK-0055] Multi-file upload path traversal check weaker than single-file.
   - Completed: 2026-05-14
   - Notes: Replaced manual `startswith("..")` check with `pathutil.resolve_repo_file_path`, matching single-file upload validation and handling symlink resolution.

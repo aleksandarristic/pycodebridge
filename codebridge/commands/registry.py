@@ -592,10 +592,7 @@ async def _cmd_health(router: Any, message: MessageEvent, sink: ResponseSink, re
 
 
 async def _cmd_start(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
-    if not (rest or "").strip():
-        session_name = ""
-    else:
-        session_name, _ = parse_session_and_prompt(rest)
+    session_name = (rest or "").strip().split()[0] if (rest or "").strip() else ""
     session_name = await _resolve_session_name(router, message, sink, session_name)
     if not session_name:
         return
@@ -604,10 +601,6 @@ async def _cmd_start(router: Any, message: MessageEvent, sink: ResponseSink, rep
 
 async def _cmd_resume(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     session_name, prompt = parse_session_and_prompt(rest)
-    # In single-session scope mode, treat a lone token as prompt text.
-    if session_name and not prompt:
-        prompt = session_name
-        session_name = ""
     session_name = await _resolve_session_name(router, message, sink, session_name)
     if not session_name:
         return

@@ -186,7 +186,7 @@ class Logger:
                             _LOG.warning("audit.summaries.read_failed path=%s error=%s", path, exc)
                             continue
 
-        summaries.sort(key=lambda s: s.seq, reverse=True)
+        summaries.sort(key=lambda s: int(s.seq), reverse=True)
         if limit > 0:
             summaries = summaries[:limit]
         return summaries
