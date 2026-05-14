@@ -1067,7 +1067,7 @@ class Router:
             ended_at = self._format_job_time(s.ended_at)
             lines.append(
                 f"{s.job_id} [{s.status}] session:{s.session or DEFAULT_SESSION}{pos} "
-                f"queued:{queued_at} started:{started_at} ended:{ended_at} {s.command}"
+                f"queued:{queued_at} started:{started_at} ended:{ended_at}"
             )
         await self.reply(sink, "\n".join(lines))
 
