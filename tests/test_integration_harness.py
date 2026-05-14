@@ -89,10 +89,10 @@ class _FakeProc:
         self.stopped = True
         self._done.set()
 
-    async def interrupt(self) -> None:
+    def interrupt(self) -> None:
         self.interrupted = True
 
-    async def kill(self) -> None:
+    def kill(self) -> None:
         self.killed = True
         self._done.set()
 
@@ -110,10 +110,10 @@ class _ProcDone:
     async def stop(self) -> None:
         return None
 
-    async def interrupt(self) -> None:
+    def interrupt(self) -> None:
         return None
 
-    async def kill(self) -> None:
+    def kill(self) -> None:
         return None
 
     async def write(self, data: str) -> None:

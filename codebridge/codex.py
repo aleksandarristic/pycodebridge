@@ -152,7 +152,7 @@ class Process:
         """Send ESC to request a graceful stop."""
         await self._write_bytes(b"\x1b")
 
-    async def interrupt(self) -> None:
+    def interrupt(self) -> None:
         """Send an interrupt signal (SIGINT/CTRL_BREAK)."""
         if self._proc.returncode is None:
             if os.name == "nt":
@@ -163,7 +163,7 @@ class Process:
             else:
                 self._proc.send_signal(signal.SIGINT)
 
-    async def kill(self) -> None:
+    def kill(self) -> None:
         """Force-kill the process."""
         if self._proc.returncode is None:
             self._proc.kill()
@@ -181,7 +181,7 @@ class Process:
 
     async def _write_bytes(self, data: bytes) -> None:
         if self._stdin_fd is not None:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, os.write, self._stdin_fd, data)
             return
         if self._proc.stdin:

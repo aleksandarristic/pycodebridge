@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Optional
 
 from .audit import Entry, Logger as AuditLogger
@@ -10,7 +11,7 @@ from .audit import Entry, Logger as AuditLogger
 class AuditHelper:
     """Wrap audit logging with safe error handling."""
 
-    def __init__(self, audit: Optional[AuditLogger], logger) -> None:
+    def __init__(self, audit: Optional[AuditLogger], logger: logging.Logger) -> None:
         self._audit = audit
         self._logger = logger
 

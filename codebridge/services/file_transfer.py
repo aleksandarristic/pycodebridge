@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from typing import Awaitable, Callable, Dict
@@ -15,7 +16,7 @@ from ..util import path as pathutil
 class FileTransferService:
     """Manage upload/download flows across transports."""
 
-    def __init__(self, cfg: cfgmod.Config, logger) -> None:
+    def __init__(self, cfg: cfgmod.Config, logger: logging.Logger) -> None:
         self.cfg = cfg
         self.logger = logger
         self._pending_uploads: Dict[str, PendingUpload] = {}

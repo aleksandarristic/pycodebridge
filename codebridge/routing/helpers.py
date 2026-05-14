@@ -89,11 +89,6 @@ def normalize_thread_session_name(name: str) -> str:
         return DEFAULT_SESSION
 
 
-def pending_key(channel_id: str, session: str) -> str:
-    """Build a stable key for pending conflicts."""
-    return f"{channel_id}:{session or DEFAULT_SESSION}"
-
-
 def has_forbidden_flags(args: list[str]) -> bool:
     """Return True if args include disallowed flags."""
     for a in args:

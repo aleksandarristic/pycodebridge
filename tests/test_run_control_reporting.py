@@ -20,10 +20,10 @@ class _FakeProc:
     async def stop(self) -> None:
         self.stopped = True
 
-    async def interrupt(self) -> None:
+    def interrupt(self) -> None:
         self.interrupted = True
 
-    async def kill(self) -> None:
+    def kill(self) -> None:
         self.killed = True
 
     async def write(self, text: str) -> None:

@@ -51,10 +51,10 @@ class _FakeProc:
     async def stop(self) -> None:
         self._done.set()
 
-    async def interrupt(self) -> None:
+    def interrupt(self) -> None:
         return None
 
-    async def kill(self) -> None:
+    def kill(self) -> None:
         self._done.set()
 
     async def write(self, data: str) -> None:

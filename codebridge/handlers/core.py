@@ -391,7 +391,7 @@ async def handle_stop(router: "Router", sink: ResponseSink, session: str) -> Non
     if proc is not None:
         await proc.stop()
         await asyncio.sleep(0.5)
-        await proc.interrupt()
+        proc.interrupt()
         await router.reply(
             sink,
             f"Sent stop (ESC then SIGINT) to session '{session or DEFAULT_SESSION}'.{_usage_suffix(router, sink.channel_id, session)}",
@@ -417,7 +417,7 @@ async def handle_kill(router: "Router", sink: ResponseSink, session: str) -> Non
     """Force-kill a running Codex process."""
     proc = await router.get_active(sink.channel_id, session)
     if proc is not None:
-        await proc.kill()
+        proc.kill()
         await router.reply(
             sink,
             f"Sent kill to session '{session or DEFAULT_SESSION}'.{_usage_suffix(router, sink.channel_id, session)}",

@@ -1522,7 +1522,7 @@ class Router:
 
             proc = await self.get_active(channel_id, session)
             if proc is not None:
-                await proc.kill()
+                proc.kill()
                 killed_processes += 1
             elif running_job:
                 blocked_running += 1
@@ -2551,7 +2551,8 @@ class Router:
                 continue
             try:
                 self._runtime_options_global[key] = self._sanitize_runtime_option(key, value)
-            except Exception:
+            except Exception as exc:
+                self.logger.warning("router.runtime_option.invalid_global", extra={"key": key, "error": str(exc)})
                 continue
         for channel_id, options in channel_raw.items():
             if not isinstance(options, dict):
@@ -2562,7 +2563,8 @@ class Router:
                     continue
                 try:
                     scoped[key] = self._sanitize_runtime_option(key, value)
-                except Exception:
+                except Exception as exc:
+                    self.logger.warning("router.runtime_option.invalid_channel", extra={"channel_id": channel_id, "key": key, "error": str(exc)})
                     continue
             if scoped:
                 self._runtime_options_channels[str(channel_id)] = scoped
