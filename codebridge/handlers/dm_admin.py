@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import time
 from typing import TYPE_CHECKING, Awaitable, Callable, Optional
 
@@ -432,12 +433,7 @@ async def dm_delete_repo(
     if await router.repo_busy(repo_name):
         return RuntimeError("Repo has active or queued jobs. Stop/kill them first.")
     try:
-        for root, dirs, files in os.walk(repo_path, topdown=False):
-            for name in files:
-                os.remove(os.path.join(root, name))
-            for name in dirs:
-                os.rmdir(os.path.join(root, name))
-        os.rmdir(repo_path)
+        shutil.rmtree(repo_path)
     except Exception as exc:
         return exc
     router.state.update(lambda fs: prune_state_for_repo(fs, repo_name, repo_path))

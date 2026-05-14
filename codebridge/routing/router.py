@@ -3158,12 +3158,12 @@ class Router:
         repo_key = self._repo_key(repo_name)
         state = self.state.load()
         for channel_id, ch in state.channels.items():
-            for sess in ch.sessions.values():
+            for sess_name, sess in ch.sessions.items():
                 if self._repo_key(sess.repo_name) == repo_key:
-                    if await self.has_active(channel_id):
+                    if await self.get_active(channel_id, sess_name):
                         return True
                     statuses = await self.coordinator.snapshot(channel_id)
-                    if statuses:
+                    if any(s.session == sess_name for s in statuses):
                         return True
         return False
 

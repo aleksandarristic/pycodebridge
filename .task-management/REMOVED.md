@@ -12,3 +12,7 @@ Format:
 
 ## Removed tasks
 
+- [TASK-0047] Wrong Discord attribute used for thread detection in sink routing.
+  - Removed: 2026-05-14
+  - Reason: Not a real bug. `message.thread` is the thread created by a starter message; routing replies there is intentional and tested. `message.channel` is already a thread object for in-thread messages, so both paths are correct.
+

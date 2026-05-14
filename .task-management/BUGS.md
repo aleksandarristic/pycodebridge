@@ -32,10 +32,6 @@ Rules:
   - `handlers/dm_admin.py:435` — manual `os.walk` + `os.rmdir` fails on directory-like symlinks (submodules, toolchain links), leaving the repo partially deleted and still visible in `!c repos`.
   - Fix: replace manual walk with `shutil.rmtree(repo_path)`.
 
-- [TASK-0047] [High] Wrong Discord attribute used for thread detection in sink routing.
-  - `platform/discord_bot.py:77` — `message.thread` is the thread *created by* the message, not the channel the message was *sent in*; replies can silently be routed to the wrong channel.
-  - Fix: use `message.channel` directly; check `isinstance(message.channel, discord.Thread)` where thread detection is needed.
-
 - [TASK-0048] [High] `_discord_repo_channel_is_private()` fails open on all error paths.
   - `routing/router.py:3044` — API exceptions, missing category, `AttributeError`, and `None`-channel all return `False` (allow access), silently granting repo access on any environmental anomaly.
   - Fix: return `True` (deny/treat as private) on ambiguous or error paths.

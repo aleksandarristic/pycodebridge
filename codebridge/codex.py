@@ -16,6 +16,8 @@ except ImportError:  # pragma: no cover - Windows fallback.
 from .util.ansi import strip_control_codes
 from .util.prompt import needs_user_input
 
+_background_tasks: set[asyncio.Task[Any]] = set()
+
 
 @dataclass
 class Event:
@@ -179,7 +181,8 @@ class Process:
 
     async def _write_bytes(self, data: bytes) -> None:
         if self._stdin_fd is not None:
-            os.write(self._stdin_fd, data)
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, os.write, self._stdin_fd, data)
             return
         if self._proc.stdin:
             self._proc.stdin.write(data)
@@ -336,7 +339,9 @@ class Runner:
             if opts.on_exit:
                 await opts.on_exit(err, rc)
 
-        asyncio.create_task(_waiter())
+        _task = asyncio.create_task(_waiter())
+        _background_tasks.add(_task)
+        _task.add_done_callback(_background_tasks.discard)
         return process
 
 
