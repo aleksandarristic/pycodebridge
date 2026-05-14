@@ -29,7 +29,7 @@ class BridgeClient(discord.Client):
             return
         self._startup_notified = True
         cfg = self.router.cfg.discord
-        recipients = cfg.dm_admin_user_ids or cfg.allowed_user_ids
+        recipients = cfg.dm_admin_user_ids
         if not recipients:
             return
         summary = await self.router.startup_summary()
@@ -55,7 +55,7 @@ class BridgeClient(discord.Client):
             return
         self._shutdown_notified = True
         cfg = self.router.cfg.discord
-        recipients = cfg.dm_admin_user_ids or cfg.allowed_user_ids
+        recipients = cfg.dm_admin_user_ids
         if not recipients:
             return
         summary = await self.router.shutdown_summary()

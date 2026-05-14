@@ -76,7 +76,7 @@ async def start_health_server(
         body = b""
         content_type = "application/json"
         try:
-            raw = await reader.read(8192)
+            raw = await asyncio.wait_for(reader.readline(), timeout=5.0)
             request_line = raw.splitlines()[0].decode("utf-8", errors="replace") if raw else ""
             parts = request_line.split()
             method = parts[0] if len(parts) >= 1 else ""

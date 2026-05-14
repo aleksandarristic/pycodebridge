@@ -37,8 +37,7 @@ def _extract_line_version(text: str) -> str:
 async def handle_updates(router: "Router", sink: ResponseSink, repo_path: str) -> None:
     """Compare installed Codex CLI version with latest npm release."""
     binary = getattr(router.runner, "binary", "codex") or "codex"
-    npm_env = os.environ.copy()
-    npm_env.setdefault("NPM_CONFIG_CACHE", "/tmp/npm-cache")
+    npm_env = {"PATH": os.environ.get("PATH", ""), "NPM_CONFIG_CACHE": "/tmp/npm-cache"}
     current_task = run_limited_command(
         repo_path,
         [binary, "--version"],

@@ -1189,9 +1189,7 @@ async def _cmd_audit(router: Any, message: MessageEvent, sink: ResponseSink, rep
         await router.handle_audit_find(sink, term, limit)
         return
     session_name, limit = parse_session_or_limit(rest)
-    if limit <= 0:
-        await router.reply_forbidden(sink, "Limit must be >= 1")
-        return
+    limit = limit or 10
     if session_name:
         session_name = await _normalize_session_or_reply(router, sink, session_name)
         if not session_name:

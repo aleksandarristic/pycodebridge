@@ -111,11 +111,13 @@ class FileTransferService:
             dest = target_path
             if is_dir:
                 filename = self._safe_attachment_filename(att.filename)
-                candidate = os.path.realpath(os.path.join(target_path, filename))
-                if os.path.relpath(candidate, repo_root).startswith(".."):
+                try:
+                    dest = pathutil.resolve_repo_file_path(
+                        upload.repo_path, os.path.join(rel_path.rstrip("/\\"), filename)
+                    )
+                except Exception:
                     await reply_forbidden(sink, f"Invalid attachment filename: {att.filename}")
                     return True
-                dest = candidate
             dest = self._unique_path(dest)
             planned.append((att, dest))
         saved = []

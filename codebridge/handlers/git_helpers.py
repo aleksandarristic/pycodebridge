@@ -74,7 +74,7 @@ async def handle_git(router: "Router", sink: ResponseSink, repo_path: str, rest:
             await router.reply_forbidden(sink, "Usage: !c git commit <message>")
             return
         msg = " ".join(args)
-        git_args = ["commit", "-am", msg]
+        git_args = ["commit", "-m", msg]
     elif sub == "push":
         dangerous_reason = _dangerous_git_reason(sub, args)
         ok, args = await _allow_dangerous_or_reply(router, sink, dangerous_reason, args)

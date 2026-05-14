@@ -12,6 +12,50 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0055] Multi-file upload path traversal check weaker than single-file.
+  - Completed: 2026-05-14
+  - Notes: Replaced manual `startswith("..")` check with `pathutil.resolve_repo_file_path`, matching single-file upload validation and handling symlink resolution.
+
+- [TASK-0054] Health endpoint body read silently truncated at 8192 bytes.
+  - Completed: 2026-05-14
+  - Notes: Changed `reader.read(8192)` to `asyncio.wait_for(reader.readline(), timeout=5.0)`; only the request line is needed, eliminating truncation and adding a 5s connection timeout.
+
+- [TASK-0053] `!c git commit` auto-stages all tracked changes via `-a` without warning.
+  - Completed: 2026-05-14
+  - Notes: Changed `commit -am` to `commit -m`; requires explicit staging.
+
+- [TASK-0052] Bare `!c audit` always errors instead of showing recent entries.
+  - Completed: 2026-05-14
+  - Notes: Replaced `if limit <= 0: error` with `limit = limit or 10`; no-arg invocation now defaults to 10 entries.
+
+- [TASK-0051] `handle_updates` subprocess inherits full host environment including secrets.
+  - Completed: 2026-05-14
+  - Notes: Replaced `os.environ.copy()` + `setdefault` with a minimal `{"PATH": ..., "NPM_CONFIG_CACHE": ...}` dict, matching the allowlist pattern used by the Codex runner.
+
+- [TASK-0050] Startup DM sent to all `allowed_user_ids` when no admin list is configured.
+  - Completed: 2026-05-14
+  - Notes: Dropped `or cfg.allowed_user_ids` fallback in both `on_ready` and `_send_shutdown_summary`; startup/shutdown DMs now only fire when `dm_admin_user_ids` is explicitly set.
+
+- [TASK-0049] `repo_busy()` checks channel-wide activity instead of per-repo activity.
+  - Completed: 2026-05-14
+  - Notes: Rewrote to iterate `ch.sessions.items()` and check `get_active(channel_id, sess_name)` plus filter snapshot statuses by session name.
+
+- [TASK-0046] Repo deletion fails on symlinked subdirectories, leaving partial state.
+  - Completed: 2026-05-14
+  - Notes: Replaced manual `os.walk`/`os.rmdir` with `shutil.rmtree(repo_path)`; added `import shutil`.
+
+- [TASK-0044] Fire-and-forget `_waiter` task can be GC'd before `on_exit` runs.
+  - Completed: 2026-05-14
+  - Notes: Added module-level `_background_tasks` set; task is added on creation and discarded via `done_callback`.
+
+- [TASK-0043] Blocking `os.write()` on PTY fd can freeze the entire event loop.
+  - Completed: 2026-05-14
+  - Notes: Wrapped with `loop.run_in_executor(None, os.write, self._stdin_fd, data)`.
+
+- [TASK-0042] `!c ps` crashes with AttributeError on every invocation.
+  - Completed: 2026-05-14
+  - Notes: Removed stale `{s.command}` reference from `handle_ps` format string; `JobStatus` has no `command` field.
+
 - [TASK-0041] Clarify misleading double `_purge_session_artifacts` call.
   - Completed: 2026-05-14
   - Notes: Consolidated into a single call preceded by two `asyncio.sleep(0)` yields; added comment explaining the yields are needed to let exit callbacks flush before deletion.
