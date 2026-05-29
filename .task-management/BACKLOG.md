@@ -27,14 +27,6 @@ Rules:
 
 - [TASK-0006] Web-based/dashboard features (status/admin web surface, browser ops views).
 
-- [TASK-0062] Reconcile the `compact` option with the start-conflict prompt.
-  - Goal: make `choose compact` discoverable, or remove the shortcut if compaction is no longer an offered path.
-  - Scope:
-    - Decide whether the start-conflict message should advertise `!compact` alongside `!cont`/`!new`.
-    - If kept, ensure compact-from-start-conflict produces a sensible prompt (start conflicts carry no `prompt`, so the "new request" is currently empty).
-  - Acceptance criteria:
-    - The compact shortcut is either surfaced consistently or intentionally retired, with tests reflecting the decision.
-
 - [TASK-0063] Decide expired-session recovery policy (auto-new vs preserve context).
   - Goal: confirm whether unconditionally discarding the prior thread on expiry is desired, or whether expired auto-start should compact prior context and/or be configurable.
   - Scope:

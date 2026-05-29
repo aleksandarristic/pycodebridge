@@ -1469,7 +1469,7 @@ class Router:
             return user_prompt or self.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name)
         summary = self._build_session_archive_text(channel_id, session, sess, repo_name or sess.repo_name, repo_path or sess.repo_path)
         lines = [
-            "Session summary from previous expired thread. Treat this summary as prior context instead of loading the old thread.",
+            "Session summary from the previous thread. Treat this summary as prior context instead of loading the old thread.",
             "",
             summary,
         ]

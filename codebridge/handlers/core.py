@@ -60,7 +60,8 @@ async def handle_start(
         await router.reply(
             sink,
             f"Session '{session}' already exists for this channel.\n"
-            "Choose one:\n!cont – keep existing session\n!new  – start fresh",
+            "Choose one:\n!cont – keep existing session\n!new  – start fresh\n"
+            "!compact – summarize prior context, then start fresh",
         )
         return
 

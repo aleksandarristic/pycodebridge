@@ -2026,6 +2026,48 @@ def test_integration_start_conflict_bang_cont_shortcut_continues(tmp_path):
     assert not any(args == ["start"] for args in runner.calls)
 
 
+def test_integration_start_conflict_bang_compact_summarizes_and_starts_fresh(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    captured_prompt = {"value": ""}
+
+    def _build_start_args(repo_path: str, prompt: str, model: str, reasoning: str) -> list[str]:
+        _ = (repo_path, model, reasoning)
+        captured_prompt["value"] = prompt
+        return ["start"]
+
+    runner.build_start_args = _build_start_args
+
+    def _seed(fs):
+        from codebridge.sessions.state import ChannelState, SessionState
+
+        ch = fs.channels.get("chan") or ChannelState()
+        ch.sessions["default"] = SessionState(
+            repo_name="repo",
+            repo_path=str(repo),
+            thread_id="thread-old",
+        )
+        fs.channels["chan"] = ch
+
+    router.state.update(_seed)
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!compact", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("already exists" in t for t in texts)
+    assert any("!compact" in t for t in texts)
+    assert "Session summary from the previous thread" in captured_prompt["value"]
+    assert any(args == ["start"] for args in runner.calls)
+    assert not any(args == ["resume", "thread-old"] for args in runner.calls)
+
+
 def test_integration_budget_status_and_set(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()

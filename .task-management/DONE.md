@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0062] Reconcile the `compact` option with the start-conflict prompt.
+  - Completed: 2026-05-29
+  - Notes: Surfaced `!compact – summarize prior context, then start fresh` in the start-conflict prompt (`handle_start`), so the `!compact`/`!cpt` shortcuts are discoverable. Fixed `build_compacted_session_prompt` lead-in wording ("the previous thread" instead of "previous expired thread") so it reads correctly for start-conflicts too. Added integration test covering `!compact` after a start-conflict (summarizes + starts fresh, no resume).
+
 - [TASK-0061] Remove orphaned `session_expired` conflict handling in `handle_choose`.
   - Completed: 2026-05-29
   - Notes: Collapsed the dead `conflict.reason == "session_expired"` ternary in `codebridge/handlers/core.py` (replace path now always uses the configured start prompt). No flow produced that reason after 42e73ff; confirmed zero remaining references in `codebridge/` and `tests/`. Conflict/choose integration tests pass.
