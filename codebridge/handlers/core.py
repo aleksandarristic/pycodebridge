@@ -60,7 +60,7 @@ async def handle_start(
         await router.reply(
             sink,
             f"Session '{session}' already exists for this channel.\n"
-            "Choose one:\n!c choose continue\n!c choose new",
+            "Choose one:\n!cont – keep existing session\n!new  – start fresh",
         )
         return
 
@@ -95,28 +95,24 @@ async def handle_resume(
     if sess and idle_ttl_seconds > 0 and not skip_idle_ttl_check:
         idle_seconds = _session_idle_seconds(sess.last_used_at or sess.created_at)
         if idle_seconds >= idle_ttl_seconds:
-            thread_id = sess.thread_id
-            await router.coordinator.set_pending_conflict(
-                channel_id,
-                session,
-                PendingConflict(
-                    repo_name=repo_name,
-                    session=session,
-                    thread_id=thread_id,
-                    user_id=event.author_id,
-                    expires_at=time.time() + router.cfg.state.conflict_ttl_seconds,
-                    reason="session_expired",
-                    prompt=(prompt or "").strip(),
-                ),
+            router.logger.info(
+                "session.expired.auto_new",
+                extra={"channel_id": channel_id, "session": session, "idle_seconds": idle_seconds},
             )
+            router.clear_session_thread(channel_id, session)
+            model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)
+            start_prompt = (prompt or "").strip() or router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name)
+            args = router.runner.build_start_args(repo_path, start_prompt, model, reasoning)
             await router.reply(
                 sink,
-                (
-                    f"Session '{session}' is inactive (idle {router._format_duration(idle_seconds)}, "
-                    f"TTL {router._format_duration(idle_ttl_seconds)}).\n"
-                    "Choose one:\n!c choose continue\n!c choose compact\n!c choose new"
-                ),
+                f"Session expired (idle {router._format_duration(idle_seconds)}), starting a new session in '{session}'...",
             )
+
+            async def expired_job() -> None:
+                await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args)
+
+            pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, expired_job)
+            router.logger.info("enqueue.resume_auto_new", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
             return
     thread_id = existing_thread(state, channel_id, session)
     model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)

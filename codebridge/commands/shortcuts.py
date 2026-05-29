@@ -40,6 +40,10 @@ def normalize_bang_shortcut(
         return ("answer " + raw[len("!a") :].strip()).strip()
     if lower in {"!cont", "!continue"}:
         return "choose continue"
+    if lower == "!new":
+        return "choose new"
+    if lower in {"!compact", "!cpt"}:
+        return "choose compact"
 
     for bang, cmd in aliases:
         if lower == bang or lower.startswith(bang + " "):

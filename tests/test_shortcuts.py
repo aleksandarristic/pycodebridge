@@ -10,6 +10,10 @@ def test_normalize_bang_shortcut_short_forms():
     assert normalize_bang_shortcut("!s", {"status"}) == "steer"
     assert normalize_bang_shortcut("!a proceed", {"status"}) == "answer proceed"
     assert normalize_bang_shortcut("!continue", {"status"}) == "choose continue"
+    assert normalize_bang_shortcut("!cont", {"status"}) == "choose continue"
+    assert normalize_bang_shortcut("!new", {"status"}) == "choose new"
+    assert normalize_bang_shortcut("!compact", {"status"}) == "choose compact"
+    assert normalize_bang_shortcut("!cpt", {"status"}) == "choose compact"
 
 
 def test_normalize_bang_shortcut_generic_known_tokens():
