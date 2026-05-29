@@ -10,10 +10,4 @@ Rules:
 
 ## Active tasks
 
-- [TASK-0060] Document new bang shortcuts (`!new`, `!compact`, `!cpt`) in README and COMMAND_SURFACE.
-  - Goal: bring user-facing docs in line with shortcuts added in 42e73ff.
-  - Scope:
-    - Add `!new` -> `choose new` and `!compact`/`!cpt` -> `choose compact` to `docs/COMMAND_SURFACE.md` (alongside the existing `!cont` entry).
-    - Update `README.md` shortcut sections (~lines 211, 283) to list the new aliases and when they apply (while a conflict is pending).
-  - Acceptance criteria:
-    - Both files list all current `choose`-related shortcuts with accurate "while a conflict is pending" wording.
+None right now.

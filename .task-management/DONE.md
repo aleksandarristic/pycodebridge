@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0060] Document new bang shortcuts (`!new`, `!compact`, `!cpt`) in README and COMMAND_SURFACE.
+  - Completed: 2026-05-29
+  - Notes: Added `!new` -> `choose new` and `!compact`/`!cpt` -> `choose compact` to `docs/COMMAND_SURFACE.md` conflict-resolution shorthand and to both README shortcut sections, matching `codebridge/commands/shortcuts.py`. Docs-only change; no code/tests affected.
+
 - [TASK-0059] `_toml_string()` uses `json.dumps` for TOML string values.
   - Completed: 2026-05-14
   - Notes: Added ASCII guard — raises ValueError for non-ASCII input rather than silently producing a value that Codex CLI may mis-parse.
