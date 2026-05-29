@@ -97,23 +97,26 @@ async def handle_resume(
         idle_seconds = _session_idle_seconds(sess.last_used_at or sess.created_at)
         if idle_seconds >= idle_ttl_seconds:
             router.logger.info(
-                "session.expired.auto_new",
+                "session.expired.auto_compact",
                 extra={"channel_id": channel_id, "session": session, "idle_seconds": idle_seconds},
             )
-            router.clear_session_thread(channel_id, session)
             model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)
-            start_prompt = (prompt or "").strip() or router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name)
+            # Build the summary while the expired thread is still readable, then clear it.
+            start_prompt = router.build_compacted_session_prompt(
+                channel_id, session, repo_name, repo_path, (prompt or "").strip()
+            )
+            router.clear_session_thread(channel_id, session)
             args = router.runner.build_start_args(repo_path, start_prompt, model, reasoning)
             await router.reply(
                 sink,
-                f"Session expired (idle {router._format_duration(idle_seconds)}), starting a new session in '{session}'...",
+                f"Session expired (idle {router._format_duration(idle_seconds)}), compacting prior context into a new session in '{session}'...",
             )
 
             async def expired_job() -> None:
                 await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args)
 
             pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, expired_job)
-            router.logger.info("enqueue.resume_auto_new", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
+            router.logger.info("enqueue.resume_auto_compact", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
             return
     thread_id = existing_thread(state, channel_id, session)
     model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)

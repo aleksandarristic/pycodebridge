@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0063] Expired-session recovery policy: auto-compact instead of blank restart.
+  - Completed: 2026-05-29
+  - Notes: On idle-expiry, `handle_resume` now builds a compacted prompt from the prior thread (via `build_compacted_session_prompt`) before clearing it, then auto-starts a fresh session seeded with that summary plus the user's prompt — instead of discarding context. User message reworded to "compacting prior context into a new session". Log events renamed to `session.expired.auto_compact` / `enqueue.resume_auto_compact`. Updated the two expired-session integration tests to assert the compacted prompt and compaction message.
+
 - [TASK-0062] Reconcile the `compact` option with the start-conflict prompt.
   - Completed: 2026-05-29
   - Notes: Surfaced `!compact – summarize prior context, then start fresh` in the start-conflict prompt (`handle_start`), so the `!compact`/`!cpt` shortcuts are discoverable. Fixed `build_compacted_session_prompt` lead-in wording ("the previous thread" instead of "previous expired thread") so it reads correctly for start-conflicts too. Added integration test covering `!compact` after a start-conflict (summarizes + starts fresh, no resume).

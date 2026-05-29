@@ -1886,7 +1886,7 @@ def test_integration_session_archive_and_restore(tmp_path):
     assert any(args and args[0] == "resume" for args in runner.calls)
 
 
-def test_integration_resume_expired_session_auto_starts_new(tmp_path):
+def test_integration_resume_expired_session_auto_compacts(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
@@ -1918,11 +1918,12 @@ def test_integration_resume_expired_session_auto_starts_new(tmp_path):
     assert any("expired" in t.lower() for t in texts)
     assert not any("is inactive" in t for t in texts)
     assert not any("Choose one" in t for t in texts)
+    assert any("compact" in t.lower() for t in texts)
     assert not any(args == ["resume", "thread-old"] for args in runner.calls)
     assert any(args == ["start"] for args in runner.calls)
 
 
-def test_integration_resume_expired_session_preserves_original_prompt(tmp_path):
+def test_integration_resume_expired_session_compacts_with_original_prompt(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
@@ -1958,7 +1959,8 @@ def test_integration_resume_expired_session_preserves_original_prompt(tmp_path):
         await router.handle_message(_discord_event("!c resume default focus only tests", "codex-repo"), sink)
 
     asyncio.run(run())
-    assert captured_prompt["value"] == "focus only tests"
+    assert "Session summary from the previous thread" in captured_prompt["value"]
+    assert "New request:\nfocus only tests" in captured_prompt["value"]
     assert any(args == ["start"] for args in runner.calls)
     assert not any(args == ["resume", "thread-old"] for args in runner.calls)
 

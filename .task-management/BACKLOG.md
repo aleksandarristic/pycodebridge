@@ -27,11 +27,3 @@ Rules:
 
 - [TASK-0006] Web-based/dashboard features (status/admin web surface, browser ops views).
 
-- [TASK-0063] Decide expired-session recovery policy (auto-new vs preserve context).
-  - Goal: confirm whether unconditionally discarding the prior thread on expiry is desired, or whether expired auto-start should compact prior context and/or be configurable.
-  - Scope:
-    - Evaluate preserving the old "compact on expiry" behavior (summarize prior thread into the new prompt) vs. current blank start.
-    - Consider a config toggle (for example `session_idle_ttl` action: `new` | `compact` | `prompt`).
-  - Acceptance criteria:
-    - Documented decision; if a behavior/config change is chosen, implement with targeted tests.
-
