@@ -341,11 +341,7 @@ async def handle_choose(
     used_fallback_replace = choice != "replace"
     state = router.state.load()
     model, reasoning = _session_model_reasoning_from_state(router, state, event.channel_id, conflict.session)
-    start_prompt = (
-        (conflict.prompt or "").strip()
-        if conflict.reason == "session_expired"
-        else router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name)
-    ) or router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name)
+    start_prompt = router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name)
     router.clear_session_thread(event.channel_id, conflict.session)
     args = router.runner.build_start_args(repo_path, start_prompt, model, reasoning)
 

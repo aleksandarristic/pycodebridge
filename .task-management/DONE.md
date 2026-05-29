@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0061] Remove orphaned `session_expired` conflict handling in `handle_choose`.
+  - Completed: 2026-05-29
+  - Notes: Collapsed the dead `conflict.reason == "session_expired"` ternary in `codebridge/handlers/core.py` (replace path now always uses the configured start prompt). No flow produced that reason after 42e73ff; confirmed zero remaining references in `codebridge/` and `tests/`. Conflict/choose integration tests pass.
+
 - [TASK-0060] Document new bang shortcuts (`!new`, `!compact`, `!cpt`) in README and COMMAND_SURFACE.
   - Completed: 2026-05-29
   - Notes: Added `!new` -> `choose new` and `!compact`/`!cpt` -> `choose compact` to `docs/COMMAND_SURFACE.md` conflict-resolution shorthand and to both README shortcut sections, matching `codebridge/commands/shortcuts.py`. Docs-only change; no code/tests affected.

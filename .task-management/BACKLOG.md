@@ -27,14 +27,6 @@ Rules:
 
 - [TASK-0006] Web-based/dashboard features (status/admin web surface, browser ops views).
 
-- [TASK-0061] Remove orphaned `session_expired` conflict handling in `handle_choose`.
-  - Goal: drop unreachable code after expired sessions switched to auto-start (42e73ff).
-  - Scope:
-    - Remove/simplify the `conflict.reason == "session_expired"` branch in `codebridge/handlers/core.py` (~line 346); no flow creates that reason anymore.
-    - Confirm no remaining producers of `PendingConflict(reason="session_expired")` and update/remove related tests.
-  - Acceptance criteria:
-    - No references to `session_expired` remain except intentional ones; changed-area tests pass.
-
 - [TASK-0062] Reconcile the `compact` option with the start-conflict prompt.
   - Goal: make `choose compact` discoverable, or remove the shortcut if compaction is no longer an offered path.
   - Scope:
