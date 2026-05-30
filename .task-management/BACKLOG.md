@@ -27,3 +27,15 @@ Rules:
 
 - [TASK-0006] Web-based/dashboard features (status/admin web surface, browser ops views).
 
+- [TASK-0067] Choose and set a default `codex.model_reasoning_effort`.
+  - Context: `config.yaml` leaves `model_reasoning_effort` unset, so Codex runs at its built-in default (medium) for `gpt-5.3-codex`. Reasoning effort is the largest token lever the bridge controls; per-session/`!c model` overrides already exist. `codebridge/codex.py:_reasoning_args` emits no override when empty.
+  - Product decision: pick the default effort (e.g. `minimal`/`low`/`medium`) trading Codex token spend against answer quality for routine bridge work. Decide whether the default is global or per-repo/per-channel.
+  - Scope once decided: set the default in `config.example.yaml`/`config.yaml`, document the override path in README/COMMAND_SURFACE, and (optionally) add per-repo default config.
+  - Acceptance criteria: default applied when no session override is set; override still wins; docs updated; tests cover default-vs-override arg building.
+
+- [TASK-0068] Decide budget pricing policy for cached input tokens.
+  - Context: depends on [TASK-0066] tracking `cached_input_tokens`. Cache-read input tokens are billed far cheaper than fresh input by the API.
+  - Product decision: should `!c budget` count cached tokens at full price (simple, conservative) or apply a discount weight to better reflect real cost? If discounted, what weight?
+  - Scope once decided: apply the chosen weighting in `_budget_record_usage`/budget thresholds and reflect it in `!c budget status` output and docs.
+  - Acceptance criteria: budget accounting matches the chosen policy; status output explains how cached tokens are counted; tests cover the weighting.
+
