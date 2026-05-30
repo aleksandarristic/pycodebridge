@@ -40,12 +40,6 @@ Rules:
     - Tests cover the corrected accounting and cached-token parsing; existing usage/budget tests pass.
   - Blocked-on: a real `codex exec --json` usage line (field names + cumulative-vs-incremental) before the summation fix can be implemented safely. Moved to backlog 2026-05-30 pending that sample.
 
-- [TASK-0067] Choose and set a default `codex.model_reasoning_effort`.
-  - Context: `config.yaml` leaves `model_reasoning_effort` unset, so Codex runs at its built-in default (medium) for `gpt-5.3-codex`. Reasoning effort is the largest token lever the bridge controls; per-session/`!c model` overrides already exist. `codebridge/codex.py:_reasoning_args` emits no override when empty.
-  - Product decision: pick the default effort (e.g. `minimal`/`low`/`medium`) trading Codex token spend against answer quality for routine bridge work. Decide whether the default is global or per-repo/per-channel.
-  - Scope once decided: set the default in `config.example.yaml`/`config.yaml`, document the override path in README/COMMAND_SURFACE, and (optionally) add per-repo default config.
-  - Acceptance criteria: default applied when no session override is set; override still wins; docs updated; tests cover default-vs-override arg building.
-
 - [TASK-0068] Decide budget pricing policy for cached input tokens.
   - Context: depends on [TASK-0066] tracking `cached_input_tokens`. Cache-read input tokens are billed far cheaper than fresh input by the API.
   - Product decision: should `!c budget` count cached tokens at full price (simple, conservative) or apply a discount weight to better reflect real cost? If discounted, what weight?

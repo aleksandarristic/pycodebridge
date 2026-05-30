@@ -29,7 +29,10 @@ codex:
   network_access: false  # when true, adds -c sandbox_workspace_write.network_access=true
   json: true
   model: ""  # recommended default: gpt-5.4 (routine), gpt-5.5 (complex)
-  model_reasoning_effort: ""  # recommended: medium (routine), high (complex)
+  # Default reasoning effort. minimal = lowest token spend (good default for a
+  # chat bridge); raise to low/medium/high for harder tasks. Override per
+  # session with `!c model [session] <id> [reasoning]`. Empty = Codex default.
+  model_reasoning_effort: "minimal"
   start_prompt: |
     Discord bridge session for {{REPO_NAME}}. Work only in this repo and keep replies concise.
   env: {}

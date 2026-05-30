@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0067] Choose and set a default `codex.model_reasoning_effort`.
+  - Completed: 2026-05-30
+  - Notes: Product decision taken by user ("use decision 1" = first option = `minimal`; global scope, no per-repo config). Set `model_reasoning_effort: "minimal"` in `config.yaml` and `config.example.yaml` (with comments explaining the token/quality tradeoff and the per-session override). Documented the default + override in README codex-config section. The dataclass default stays `""` (= Codex built-in default when unconfigured); the runner mechanism (`_reasoning_args` -> `-c model_reasoning_effort=...`) and the `!c model [session] <id> [reasoning]` override were already in place and tested. Added `test_load_config_codex_model_reasoning_effort` covering yaml parsing. NOTE for user: `minimal` is the lowest-token setting and may reduce answer quality on harder tasks — bump to `low`/`medium`/`high` in config or per session if needed.
+
 - [TASK-0065] Coalesce Codex output relay into batched Discord sends.
   - Completed: 2026-05-30
   - Notes: Added `_OutputCoalescer` (in `router.py`): buffers streamed output and flushes when it nears `max_discord_message_chars`, after an idle window, or on explicit flush. `run_codex` creates one per run and flushes it in the post-`wait()` `finally` (before the completion summary / error reply, so output stays ordered ahead of "Run complete"). `on_jsonl` routes relay through a new `_emit_output` helper that coalesces when a coalescer is supplied and force-flushes on awaiting-input ("Codex asks:") so prompts are never delayed; direct/test `on_jsonl` calls (no coalescer) still relay immediately. Window is a static config knob `runtime.output_flush_seconds` (default 0.4; 0 disables), documented in `config.example.yaml`. Chunking at `max_discord_message_chars` preserved; audit/session-jsonl logging still reflects what is actually sent. Fixed a timer self-cancellation case (idle-timer-triggered flush clears its own handle before flushing). Added `tests/test_output_coalescer.py`. Integration/model/codex suites pass (minus the 3 pre-existing `await proc.kill()` failures).
