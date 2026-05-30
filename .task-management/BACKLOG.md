@@ -27,6 +27,19 @@ Rules:
 
 - [TASK-0006] Web-based/dashboard features (status/admin web surface, browser ops views).
 
+- [TASK-0066] Track cached input tokens and verify/fix per-event usage summation.
+  - Context: `usage_from_event` (`routing/helpers.py:113`) reads only `input_tokens`/`output_tokens`/`total_tokens` and discards `cached_input_tokens`. `update_usage` (`router.py:3272`) **sums** usage from every JSONL event; if Codex reports cumulative running totals within a single `exec` run, session/budget totals are over-counted.
+  - Goal: account for cached tokens and ensure run/session usage is counted correctly (incremental, not double-counted).
+  - Scope:
+    - Confirm the real `codex exec --json` usage event shape (incremental vs cumulative; field names for cached tokens) against live output, and record the finding in the ticket/commit. (Captured logs at `/Users/leka/Code/_bridge/logs` only contained `thread.started`/`turn.started`/`item.completed` with no usage event, so the shape still needs a live sample.)
+    - Capture `cached_input_tokens` (and `cachedInputTokens`) in `UsageStats`; surface it in `!c stats` and the run-completion summary.
+    - If usage is cumulative, fix `update_usage` to store the latest totals (or compute deltas) instead of summing.
+  - Acceptance criteria:
+    - Usage totals match Codex's reported totals for a multi-event run (no over-count).
+    - Cached tokens are tracked and visible in stats/summary output.
+    - Tests cover the corrected accounting and cached-token parsing; existing usage/budget tests pass.
+  - Blocked-on: a real `codex exec --json` usage line (field names + cumulative-vs-incremental) before the summation fix can be implemented safely. Moved to backlog 2026-05-30 pending that sample.
+
 - [TASK-0067] Choose and set a default `codex.model_reasoning_effort`.
   - Context: `config.yaml` leaves `model_reasoning_effort` unset, so Codex runs at its built-in default (medium) for `gpt-5.3-codex`. Reasoning effort is the largest token lever the bridge controls; per-session/`!c model` overrides already exist. `codebridge/codex.py:_reasoning_args` emits no override when empty.
   - Product decision: pick the default effort (e.g. `minimal`/`low`/`medium`) trading Codex token spend against answer quality for routine bridge work. Decide whether the default is global or per-repo/per-channel.
