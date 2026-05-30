@@ -93,6 +93,7 @@ class RuntimeConfig:
     run_heartbeat_seconds: int = 120
     run_completion_min_seconds: int = 300
     show_reasoning_details: bool = True
+    output_flush_seconds: float = 0.4
 
 
 @dataclass
@@ -286,6 +287,9 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.runtime.show_reasoning_details = _coerce_bool(
         runtime.get("show_reasoning_details", cfg.runtime.show_reasoning_details),
         "runtime.show_reasoning_details",
+    )
+    cfg.runtime.output_flush_seconds = max(
+        0.0, float(runtime.get("output_flush_seconds", cfg.runtime.output_flush_seconds))
     )
 
     audit = raw.get("audit", {}) or {}

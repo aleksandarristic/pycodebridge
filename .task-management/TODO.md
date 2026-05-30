@@ -10,19 +10,6 @@ Rules:
 
 ## Active tasks
 
-- [TASK-0065] Coalesce Codex output relay into batched Discord sends.
-  - Context: `router._relay_output_text` (`router.py` ~2358) sends one Discord message per output event/chunk, and `DiscordResponseSink.send` (`adapters/discord.py:114`) is a direct per-call network round-trip. Chatty runs emit many small `agent_message` events -> a burst of tiny messages that hits Discord's ~5 msg/s channel rate limit and stalls/spams the channel.
-  - Goal: buffer streamed output and flush in fewer, larger messages to cut latency and rate-limit stalls.
-  - Scope:
-    - Buffer relayed output per (channel, session) and flush on a short time window and/or size threshold (default near `max_discord_message_chars`), with an immediate flush on run completion, awaiting-input ("Codex asks:"), and terminal/error events so nothing is lost or delayed past the run.
-    - Make the flush window/size configurable with conservative defaults; preserve chunking at `max_discord_message_chars`.
-    - Keep audit/session-jsonl output logging accurate relative to what is actually sent.
-  - Acceptance criteria:
-    - A run emitting many small events produces materially fewer `sink.send` calls while preserving content and ordering.
-    - Awaiting-input prompts and final/key-result output are not delayed past their run.
-    - Targeted tests cover buffering, threshold/window flush, and forced flush on terminal/awaiting-input events.
-  - Note: the flush window is a UX/latency tunable (live-but-spammy vs batched-but-slightly-delayed); ship a conservative default, no blocking product decision.
-
 - [TASK-0066] Track cached input tokens and verify/fix per-event usage summation.
   - Context: `usage_from_event` (`routing/helpers.py:113`) reads only `input_tokens`/`output_tokens`/`total_tokens` and discards `cached_input_tokens`. `update_usage` (`router.py:3272`) **sums** usage from every JSONL event; if Codex reports cumulative running totals within a single `exec` run, session/budget totals are over-counted.
   - Goal: account for cached tokens and ensure run/session usage is counted correctly (incremental, not double-counted).

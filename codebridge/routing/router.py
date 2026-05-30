@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any, Awaitable, Callable, Dict, Optional, Set
 import json
 import tempfile
 import zipfile
@@ -129,6 +129,79 @@ class _OutputTracker:
 
     events: int = 0
     last: str = ""
+
+
+class _OutputCoalescer:
+    """Buffer streamed Codex output and flush it in fewer, larger sends.
+
+    A chatty run emits many small ``agent_message`` events; sending one Discord
+    message each hits the per-channel rate limit and spams the channel. Output
+    is buffered and flushed when it nears the message-size cap, after a short
+    idle window, or on an explicit ``flush`` (awaiting-input, run end). Ordering
+    is preserved and nothing is delayed past the run.
+    """
+
+    def __init__(
+        self,
+        relay: Callable[[str], Awaitable[None]],
+        max_chars: int,
+        flush_seconds: float,
+    ) -> None:
+        self._relay = relay
+        self._max_chars = max_chars if max_chars and max_chars > 0 else 0
+        self._flush_seconds = max(0.0, float(flush_seconds))
+        self._buf: list[str] = []
+        self._size = 0
+        self._lock = asyncio.Lock()
+        self._timer: Optional[asyncio.Task] = None
+
+    async def add(self, text: str) -> None:
+        async with self._lock:
+            extra = 1 if self._buf else 0
+            if self._max_chars and self._buf and self._size + extra + len(text) > self._max_chars:
+                await self._flush_locked()
+                extra = 0
+            self._buf.append(text)
+            self._size += len(text) + extra
+            if self._max_chars and self._size >= self._max_chars:
+                await self._flush_locked()
+            elif self._flush_seconds > 0:
+                self._arm_timer()
+            else:
+                await self._flush_locked()
+
+    async def flush(self) -> None:
+        async with self._lock:
+            await self._flush_locked()
+
+    async def _flush_locked(self) -> None:
+        self._cancel_timer()
+        if not self._buf:
+            return
+        text = "\n".join(self._buf)
+        self._buf.clear()
+        self._size = 0
+        await self._relay(text)
+
+    def _arm_timer(self) -> None:
+        if self._timer is not None and not self._timer.done():
+            return
+        self._timer = asyncio.create_task(self._flush_after_delay())
+
+    def _cancel_timer(self) -> None:
+        if self._timer is not None and not self._timer.done():
+            self._timer.cancel()
+        self._timer = None
+
+    async def _flush_after_delay(self) -> None:
+        try:
+            await asyncio.sleep(self._flush_seconds)
+        except asyncio.CancelledError:
+            return
+        # Drop our own handle before flushing so _flush_locked does not try to
+        # cancel the task that is currently running it.
+        self._timer = None
+        await self.flush()
 
 
 def _git_commit_hash() -> str:
@@ -1923,6 +1996,11 @@ class Router:
             repo_name=repo_name,
         )
         entry = self._audit_helper.start(channel_id, session or DEFAULT_SESSION, "pending", meta)
+        coalescer = _OutputCoalescer(
+            relay=lambda text: self._relay_output_text(sink, channel_id, session, repo_name, entry, text),
+            max_chars=self.cfg.discord.max_discord_message_chars,
+            flush_seconds=getattr(self.cfg.runtime, "output_flush_seconds", 0.4),
+        )
         stderr_tail: list[str] = []
 
         async def _on_stderr(line: str) -> None:
@@ -1953,6 +2031,7 @@ class Router:
                         on_jsonl=lambda line, evt=None: self.on_jsonl(
                             sink, channel_id, session, repo_name, entry, line, relay_output,
                             event, budget_monitor, run_state, evt=evt, tracker=tracker,
+                            coalescer=coalescer,
                         ),
                         on_thread=lambda tid: self.on_thread(
                             channel_id, session, repo_name, repo_path, model, reasoning_effort, entry, tid
@@ -1997,6 +2076,9 @@ class Router:
                     with contextlib.suppress(asyncio.CancelledError):
                         await heartbeat_task
                 await self.clear_active(channel_id, session)
+                # Flush any buffered output (and cancel the idle timer) before the
+                # completion summary / error reply so streamed output stays ordered.
+                await coalescer.flush()
 
             if rc == 0:
                 usage_after = self.get_usage(channel_id, session)
@@ -2213,11 +2295,13 @@ class Router:
         run_state: Optional[_RunRelayState] = None,
         evt: Optional[Event] = None,
         tracker: Optional[_OutputTracker] = None,
+        coalescer: Optional[_OutputCoalescer] = None,
     ) -> None:
         """Handle a JSONL line from Codex and relay output.
 
         ``evt`` may be a pre-parsed event supplied by the runner so the line is
         not JSON-parsed twice; it is parsed lazily here only when omitted.
+        ``coalescer``, when supplied, batches relayed output into fewer sends.
         """
         self._session_log.append(
             channel_id,
@@ -2232,7 +2316,7 @@ class Router:
         if not evt:
             text = strip_control_codes(line).strip()
             if text and relay_output and not (run_state and run_state.is_terminal):
-                await self._relay_output_text(sink, channel_id, session, repo_name, entry, text)
+                await self._emit_output(sink, channel_id, session, repo_name, entry, text, coalescer)
             elif text and run_state and run_state.is_terminal:
                 run_state.suppressed_progress_events += 1
             return
@@ -2256,14 +2340,19 @@ class Router:
             )
         for msg in display_texts(evt):
             text = strip_control_codes(msg)
-            if needs_user_input(text):
+            awaiting = needs_user_input(text)
+            if awaiting:
                 self._mark_awaiting_input(channel_id, session)
                 text = f"Codex asks: {text}"
             if tracker is not None and text.strip():
                 tracker.events += 1
                 tracker.last = text.strip()
             if relay_output:
-                await self._relay_output_text(sink, channel_id, session, repo_name, entry, text)
+                # Flush prompts immediately so the user is not left waiting on
+                # the idle window while Codex blocks for input.
+                await self._emit_output(
+                    sink, channel_id, session, repo_name, entry, text, coalescer, flush=awaiting
+                )
 
     async def on_thread(
         self,
@@ -2367,6 +2456,26 @@ class Router:
 
     def _clear_run_relay(self, channel_id: str, session: str) -> Optional[_RunRelayState]:
         return self._run_relays.pop(self._run_relay_key(channel_id, session), None)
+
+    async def _emit_output(
+        self,
+        sink: ResponseSink,
+        channel_id: str,
+        session: str,
+        repo_name: str,
+        entry: Optional[Entry],
+        text: str,
+        coalescer: Optional[_OutputCoalescer],
+        *,
+        flush: bool = False,
+    ) -> None:
+        """Relay output, coalescing into batched sends when a coalescer is set."""
+        if coalescer is None:
+            await self._relay_output_text(sink, channel_id, session, repo_name, entry, text)
+            return
+        await coalescer.add(text)
+        if flush:
+            await coalescer.flush()
 
     async def _relay_output_text(
         self,

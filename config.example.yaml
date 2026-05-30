@@ -48,6 +48,10 @@ runtime:
   run_heartbeat_seconds: 120
   run_completion_min_seconds: 300
   show_reasoning_details: true
+  # Idle window (seconds) for coalescing streamed Codex output into fewer
+  # Discord sends. Higher = fewer messages / less rate-limit pressure but
+  # slightly more latency; 0 disables coalescing (send each event immediately).
+  output_flush_seconds: 0.4
 
 audit:
   redact: false
