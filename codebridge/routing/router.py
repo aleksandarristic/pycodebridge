@@ -119,6 +119,18 @@ class _RunRelayState:
         return bool(self.terminal_status)
 
 
+@dataclass
+class _OutputTracker:
+    """Track relayed output for the run-completion summary.
+
+    Lives in ``run_codex``'s scope so it is unaffected by ``on_exit`` clearing
+    the relay state; ``on_jsonl`` updates it in place as lines stream in.
+    """
+
+    events: int = 0
+    last: str = ""
+
+
 def _git_commit_hash() -> str:
     try:
         root = Path(__file__).resolve().parents[2]
@@ -1875,8 +1887,7 @@ class Router:
         if await self._budget_hard_blocked(event, sink, session):
             return
         started_at = time.monotonic()
-        last_output = ""
-        output_events = 0
+        tracker = _OutputTracker()
         usage_before = self.get_usage(channel_id, session)
         before_total = usage_before.total_tokens if usage_before else 0
         budget_monitor = _RunBudgetMonitor(
@@ -1886,15 +1897,6 @@ class Router:
             session_thresholds=self._budget_session_threshold(channel_id, session),
         )
         run_state = self._begin_run_relay(channel_id, session)
-
-        async def _capture_output(text: str) -> None:
-            nonlocal last_output, output_events
-            clean = strip_control_codes((text or "").strip())
-            if clean:
-                output_events += 1
-                last_output = clean
-            if on_output:
-                await on_output(text)
 
         original_args = list(args)
         meta = {
@@ -1948,13 +1950,14 @@ class Router:
                         repo_path=repo_path,
                         args=args_to_run,
                         env=self.cfg.codex.env,
-                        on_jsonl=lambda line: self.on_jsonl(
-                            sink, channel_id, session, repo_name, entry, line, relay_output, event, budget_monitor, run_state
+                        on_jsonl=lambda line, evt=None: self.on_jsonl(
+                            sink, channel_id, session, repo_name, entry, line, relay_output,
+                            event, budget_monitor, run_state, evt=evt, tracker=tracker,
                         ),
                         on_thread=lambda tid: self.on_thread(
                             channel_id, session, repo_name, repo_path, model, reasoning_effort, entry, tid
                         ),
-                        on_output=_capture_output,
+                        on_output=on_output,
                         on_stderr=_on_stderr,
                         on_exit=lambda err, rc: self.on_exit(channel_id, session, repo_name, err, rc),
                     )
@@ -2010,14 +2013,14 @@ class Router:
                         channel_id,
                         session,
                         started_at,
-                        output_events,
-                        last_output,
+                        tracker.events,
+                        tracker.last,
                     )
                 self._session_log.append(
                     channel_id,
                     session or DEFAULT_SESSION,
                     "run.complete",
-                    {"code": 0, "output_events": output_events, "terminal": True, "status": "success"},
+                    {"code": 0, "output_events": tracker.events, "terminal": True, "status": "success"},
                     repo_name=repo_name,
                 )
             else:
@@ -2208,8 +2211,14 @@ class Router:
         event: Optional[MessageEvent] = None,
         budget_monitor: Optional[_RunBudgetMonitor] = None,
         run_state: Optional[_RunRelayState] = None,
+        evt: Optional[Event] = None,
+        tracker: Optional[_OutputTracker] = None,
     ) -> None:
-        """Handle a JSONL line from Codex and relay output."""
+        """Handle a JSONL line from Codex and relay output.
+
+        ``evt`` may be a pre-parsed event supplied by the runner so the line is
+        not JSON-parsed twice; it is parsed lazily here only when omitted.
+        """
         self._session_log.append(
             channel_id,
             session or DEFAULT_SESSION,
@@ -2218,7 +2227,8 @@ class Router:
             repo_name=repo_name,
         )
         self._audit_helper.append_codex(entry, line)
-        evt = parse_event(line)
+        if evt is None:
+            evt = parse_event(line)
         if not evt:
             text = strip_control_codes(line).strip()
             if text and relay_output and not (run_state and run_state.is_terminal):
@@ -2249,6 +2259,9 @@ class Router:
             if needs_user_input(text):
                 self._mark_awaiting_input(channel_id, session)
                 text = f"Codex asks: {text}"
+            if tracker is not None and text.strip():
+                tracker.events += 1
+                tracker.last = text.strip()
             if relay_output:
                 await self._relay_output_text(sink, channel_id, session, repo_name, entry, text)
 
@@ -2364,8 +2377,8 @@ class Router:
         entry: Optional[Entry],
         text: str,
     ) -> None:
-        clean = strip_control_codes(text)
-        for chunk in chunk_text(clean, self.cfg.discord.max_discord_message_chars):
+        # Callers pass text that has already had control codes stripped.
+        for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
             self._audit_helper.append_output(entry, chunk)
             self._session_log.append(
                 channel_id,

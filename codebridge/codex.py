@@ -50,15 +50,6 @@ def parse_event(line: str) -> Optional[Event]:
     )
 
 
-def extract_thread_id(line: str) -> str:
-    """Extract thread_id from a JSONL line if present."""
-    try:
-        payload = json.loads(line)
-    except json.JSONDecodeError:
-        return ""
-    return payload.get("thread_id") or payload.get("threadId") or ""
-
-
 def agent_texts(evt: Event) -> list[str]:
     """Extract agent-visible text blocks from an Event."""
     texts: list[str] = []
@@ -124,7 +115,7 @@ class Options:
     repo_path: str
     args: list[str]
     env: Dict[str, str]
-    on_jsonl: Optional[Callable[[str], Awaitable[None]]] = None
+    on_jsonl: Optional[Callable[[str, Optional[Event]], Awaitable[None]]] = None
     on_thread: Optional[Callable[[str], Awaitable[None]]] = None
     on_output: Optional[Callable[[str], Awaitable[None]]] = None
     on_stderr: Optional[Callable[[str], Awaitable[None]]] = None
@@ -294,21 +285,22 @@ class Runner:
             try:
                 async for raw in proc.stdout:
                     line = raw.decode("utf-8", errors="replace").rstrip("\n")
+                    # Parse once; the parsed event is reused by every consumer
+                    # below (on_jsonl, thread-id capture, on_output).
+                    evt = parse_event(line)
                     if opts.on_jsonl:
-                        await opts.on_jsonl(line)
-                    thread_id = extract_thread_id(line)
+                        await opts.on_jsonl(line, evt)
+                    thread_id = evt.thread_id if evt else ""
                     if thread_id:
                         process.set_thread_id(thread_id)
                         if opts.on_thread:
                             await opts.on_thread(thread_id)
-                    evt = parse_event(line)
-                    if evt:
+                    if opts.on_output and evt:
                         for text in display_texts(evt):
                             clean = strip_control_codes(text)
                             if needs_user_input(clean):
                                 clean = f"Codex asks: {clean}"
-                            if opts.on_output:
-                                await opts.on_output(clean)
+                            await opts.on_output(clean)
                 return None
             except Exception as exc:
                 return exc

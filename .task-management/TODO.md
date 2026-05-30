@@ -10,18 +10,6 @@ Rules:
 
 ## Active tasks
 
-- [TASK-0064] Single-parse the Codex JSONL stream path.
-  - Context: each output line is currently JSON-parsed up to 3x and ANSI-stripped 3-4x. In `codebridge/codex.py` `_read_stdout` (~line 290) calls `extract_thread_id()` (json.loads) + `parse_event()` (json.loads) and strips text to feed `on_output`/`_capture_output` (which strips again in `router.py` ~1892); the `on_jsonl` callback then re-runs `parse_event()` (`router.py` ~2221), `display_texts()`, and `strip_control_codes()` (~2248), and `_relay_output_text` strips once more (~2367).
-  - Goal: parse each line once and reuse the result; eliminate the duplicate work without changing observable behavior.
-  - Scope:
-    - Parse the line once in `codex.py` and pass the parsed `Event` (and/or raw payload) through the `on_jsonl` callback instead of re-parsing in the router.
-    - Fold `last_output`/`output_events` tracking (currently in `_capture_output`) into the `on_jsonl` path so the redundant `on_output` processing can be dropped.
-    - Collapse repeated `strip_control_codes()`/`display_texts()`/`needs_user_input()` passes to a single pass per line.
-  - Acceptance criteria:
-    - Behavior-preserving: relayed text, thread-id capture, awaiting-input detection, usage accounting, and audit/session-jsonl logging are unchanged.
-    - Each output line is JSON-parsed at most once and stripped at most once before relay.
-    - Existing `tests/test_codex.py`, `tests/test_router_*`, and integration-harness tests pass; add a test asserting single-parse (e.g. spy/counter on `json.loads` or `parse_event`).
-
 - [TASK-0065] Coalesce Codex output relay into batched Discord sends.
   - Context: `router._relay_output_text` (`router.py` ~2358) sends one Discord message per output event/chunk, and `DiscordResponseSink.send` (`adapters/discord.py:114`) is a direct per-call network round-trip. Chatty runs emit many small `agent_message` events -> a burst of tiny messages that hits Discord's ~5 msg/s channel rate limit and stalls/spams the channel.
   - Goal: buffer streamed output and flush in fewer, larger messages to cut latency and rate-limit stalls.

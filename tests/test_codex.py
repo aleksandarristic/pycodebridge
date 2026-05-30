@@ -207,6 +207,58 @@ async def _append_output(outputs: list[str], text: str) -> None:
     outputs.append(text)
 
 
+def test_runner_parses_each_stdout_line_once(tmp_path, monkeypatch):
+    import codebridge.codex as codexmod
+
+    fake_codex = tmp_path / "codex_fake.py"
+    fake_codex.write_text(
+        "import json\n"
+        "print(json.dumps({"
+        "'type': 'item.completed', "
+        "'thread_id': 't-1', "
+        "'item': {'type': 'agent_message', 'text': 'hi'}"
+        "}), flush=True)\n",
+        encoding="utf-8",
+    )
+
+    calls = {"n": 0}
+    real_parse = codexmod.parse_event
+
+    def counting_parse(line):
+        calls["n"] += 1
+        return real_parse(line)
+
+    monkeypatch.setattr(codexmod, "parse_event", counting_parse)
+
+    received: list[tuple[str, object]] = []
+
+    async def on_jsonl(line, evt):
+        received.append((line, evt))
+
+    runner = Runner(sys.executable, "danger-full-access", {}, "")
+
+    async def run() -> int:
+        proc = await runner.run(
+            Options(
+                repo_path=str(tmp_path),
+                args=[str(fake_codex)],
+                env={},
+                on_jsonl=on_jsonl,
+            )
+        )
+        rc = await proc.wait()
+        assert proc.thread_id == "t-1"
+        return rc
+
+    assert asyncio.run(run()) == 0
+    # A single JSON line must be parsed exactly once and the parsed event
+    # forwarded to on_jsonl so downstream consumers do not re-parse it.
+    assert calls["n"] == 1
+    assert len(received) == 1
+    line, evt = received[0]
+    assert evt is not None and evt.type == "item.completed"
+
+
 def test_toml_string_escapes_control_chars():
     rendered = _toml_string('a"b\nc\\d')
     assert rendered.startswith('"')

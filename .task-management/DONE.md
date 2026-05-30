@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0064] Single-parse the Codex JSONL stream path.
+  - Completed: 2026-05-30
+  - Notes: `codex.py` `_read_stdout` now parses each stdout line once (`parse_event`) and forwards the parsed `Event` to `on_jsonl(line, evt)`; thread id is read from `evt.thread_id` and the `on_output` block is guarded so it only runs when a consumer is registered. Removed the now-dead `extract_thread_id`. `router.on_jsonl` reuses the supplied `evt` (parses lazily only when omitted, preserving direct test calls). Output tracking moved off the redundant `_capture_output`/`on_output` path into a local `_OutputTracker` updated by `on_jsonl` (race-free vs `on_exit` clearing run state); `run_codex` now wires the caller's `on_output` directly (model-list path unchanged). Dropped the redundant re-strip in `_relay_output_text` (callers pre-strip). Net: JSON lines parsed once and stripped once before relay. Added `test_runner_parses_each_stdout_line_once`. Note: 3 pre-existing integration failures (`await proc.kill()` on sync `Process.kill`) are unrelated and fail identically on HEAD.
+
 - [TASK-0063] Expired-session recovery policy: auto-compact instead of blank restart.
   - Completed: 2026-05-29
   - Notes: On idle-expiry, `handle_resume` now builds a compacted prompt from the prior thread (via `build_compacted_session_prompt`) before clearing it, then auto-starts a fresh session seeded with that summary plus the user's prompt — instead of discarding context. User message reworded to "compacting prior context into a new session". Log events renamed to `session.expired.auto_compact` / `enqueue.resume_auto_compact`. Updated the two expired-session integration tests to assert the compacted prompt and compaction message.
