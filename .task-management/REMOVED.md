@@ -12,6 +12,10 @@ Format:
 
 ## Removed tasks
 
+- [TASK-0068] Decide budget pricing policy for cached input tokens.
+  - Removed: 2026-05-30
+  - Reason: Dropped at user request. Was a downstream product decision dependent on TASK-0066 (cached-token tracking), which is itself backlogged pending a real Codex usage sample. Can be re-raised if/when budgets need to weight cached tokens differently from fresh input.
+
 - [TASK-0056] `on_jsonl` lambda in `run_codex` closes over `sink` by reference.
   - Removed: 2026-05-14
   - Reason: Not actionable. `sink` is a local function parameter in `run_codex` that is never reassigned, so the lambda captures a stable value, not a mutable reference.
