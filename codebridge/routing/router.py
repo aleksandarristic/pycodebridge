@@ -20,7 +20,7 @@ from .. import config as cfgmod
 from ..observability.audit import Entry, Logger as AuditLogger
 from ..observability.audit_helpers import AuditHelper
 from ..observability.session_jsonl import SessionJsonlHelper, SessionJsonlLogger
-from ..codex import Event, Options, Runner, display_texts, parse_event
+from ..agents.base import AgentBackend, NormalizedEvent, Options
 from ..sessions.coordinator import SessionCoordinator
 from ..sessions.state import Store, utc_now_iso
 from ..platform.transport import MessageEvent, ResponseSink, null_typing
@@ -220,7 +220,7 @@ def _git_commit_hash() -> str:
 
 class Router:
     """Main command router for Discord messages."""
-    def __init__(self, cfg: cfgmod.Config, state: Store, audit: AuditLogger, runner: Runner, coordinator: SessionCoordinator, logger):
+    def __init__(self, cfg: cfgmod.Config, state: Store, audit: AuditLogger, runner: AgentBackend, coordinator: SessionCoordinator, logger):
         self.cfg = cfg
         self.state = state
         self.audit = audit
@@ -2293,7 +2293,7 @@ class Router:
         event: Optional[MessageEvent] = None,
         budget_monitor: Optional[_RunBudgetMonitor] = None,
         run_state: Optional[_RunRelayState] = None,
-        evt: Optional[Event] = None,
+        evt: Optional[NormalizedEvent] = None,
         tracker: Optional[_OutputTracker] = None,
         coalescer: Optional[_OutputCoalescer] = None,
     ) -> None:
@@ -2312,7 +2312,7 @@ class Router:
         )
         self._audit_helper.append_codex(entry, line)
         if evt is None:
-            evt = parse_event(line)
+            evt = self.runner.parse(line)
         if not evt:
             text = strip_control_codes(line).strip()
             if text and relay_output and not (run_state and run_state.is_terminal):
@@ -2323,7 +2323,7 @@ class Router:
         self.update_usage(channel_id, session, evt)
         self.update_activity(channel_id, session)
         if run_state is not None and run_state.is_terminal:
-            if display_texts(evt):
+            if evt.texts:
                 run_state.suppressed_progress_events += 1
             return
         if event is not None and budget_monitor is not None:
@@ -2338,7 +2338,7 @@ class Router:
                 current_total,
                 budget_monitor,
             )
-        for msg in display_texts(evt):
+        for msg in evt.texts:
             text = strip_control_codes(msg)
             awaiting = needs_user_input(text)
             if awaiting:
@@ -3391,7 +3391,7 @@ class Router:
         """Set model and reasoning overrides for a session."""
         self.coordinator.set_session_model(channel_id, session, repo_name, repo_path, model, reasoning_effort)
 
-    def update_usage(self, channel_id: str, session: str, evt: Event) -> None:
+    def update_usage(self, channel_id: str, session: str, evt: NormalizedEvent) -> None:
         """Update usage counters from a Codex event."""
         usage = usage_from_event(evt)
         if not usage:

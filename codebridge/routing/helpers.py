@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional, Tuple
 
-from ..codex import Event
+from ..agents.base import NormalizedEvent
 from ..util import path as pathutil
 
 FORBIDDEN_PREFIX = "I'm sorry, Dave. I'm afraid I can't do that."
@@ -110,8 +110,8 @@ def find_unsafe_git_flag(args: list[str]) -> Optional[str]:
     return None
 
 
-def usage_from_event(evt: Event) -> Optional[UsageStats]:
-    """Convert Codex usage event into UsageStats."""
+def usage_from_event(evt: NormalizedEvent) -> Optional[UsageStats]:
+    """Convert an agent usage event into UsageStats."""
     if not evt.usage:
         return None
     usage = evt.usage or {}

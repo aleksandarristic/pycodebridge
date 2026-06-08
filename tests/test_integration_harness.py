@@ -27,7 +27,7 @@ from types import MethodType
 from types import SimpleNamespace
 
 from codebridge import config as cfgmod
-from codebridge.codex import Options, Runner
+from codebridge.codex import CodexBackend, Options, Runner
 from codebridge.routing.event_context import build_contextual_sink
 from codebridge.routing.router import Router
 from codebridge.sessions.coordinator import SessionCoordinator
@@ -122,6 +122,9 @@ class _ProcDone:
 
 
 class _FakeRunner:
+    # Emulate the Codex backend's JSONL parsing for router fallback parsing.
+    parse = CodexBackend.parse
+
     def __init__(self) -> None:
         self.calls = []
         self.last_proc = None
@@ -149,6 +152,9 @@ class _FakeRunner:
 
 
 class _LateOutputRunner:
+    # Emulate the Codex backend's JSONL parsing for router fallback parsing.
+    parse = CodexBackend.parse
+
     def __init__(self, *, initial_line: str = "", late_line: str = "", rc: int = 0, delay: float = 0.02) -> None:
         self.calls = []
         self.last_proc = None

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from codebridge import config as cfgmod
 from codebridge.commands import registry as command_registry
-from codebridge.codex import Options
+from codebridge.codex import CodexBackend, Options
 from codebridge.routing.router import Router
 from codebridge.sessions.coordinator import SessionCoordinator
 from codebridge.sessions.state import Store
@@ -63,6 +63,9 @@ class _FakeProc:
 
 
 class _FakeRunner:
+    # Emulate the Codex backend's JSONL parsing for router fallback parsing.
+    parse = CodexBackend.parse
+
     def __init__(self) -> None:
         self.calls: list[list[str]] = []
         self.last_proc: _FakeProc | None = None
