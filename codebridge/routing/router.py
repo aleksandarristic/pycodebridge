@@ -9,12 +9,13 @@ import subprocess
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Optional, Set
 import json
 import tempfile
 import zipfile
+from zoneinfo import ZoneInfo
 
 from .. import config as cfgmod
 from ..observability.audit import Entry, Logger as AuditLogger, Redactor
@@ -91,6 +92,23 @@ _CODEX_UNSUPPORTED_CHATGPT_MODEL_RE = re.compile(
     r"The ['\"]([^'\"]+)['\"] model is not supported when using Codex with a ChatGPT account",
     re.IGNORECASE,
 )
+_CLAUDE_USAGE_LIMIT_RE = re.compile(
+    r"\b("
+    r"usage limit|rate limit|limit reached|"
+    r"session limit|hit (?:your|the) .{0,40}limit|rate[_-]limit|"
+    r"out of (?:tokens|usage|credits)|"
+    r"tokens? .{0,60}\bwindow\b|"
+    r"try again (?:after|at|in)|"
+    r"resets? (?:at|in|[0-9])|"
+    r"too many requests|quota exceeded"
+    r")\b",
+    re.IGNORECASE,
+)
+_CLAUDE_UTC_RESET_RE = re.compile(
+    r"\bresets?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*\(UTC\)",
+    re.IGNORECASE,
+)
+_CENTRAL_EUROPE_TZ = ZoneInfo("Europe/Berlin")
 
 
 class _RunBudgetMonitor:
@@ -120,6 +138,7 @@ class _RunRelayState:
     terminal_code: int | None = None
     suppressed_progress_events: int = 0
     friendly_error: str = ""
+    friendly_error_relayed: bool = False
 
     @property
     def is_terminal(self) -> bool:
@@ -2031,7 +2050,7 @@ class Router:
             stderr_tail.append(text)
             if len(stderr_tail) > 5:
                 del stderr_tail[: len(stderr_tail) - 5]
-            friendly_error = self._friendly_unsupported_model_error_from_line(channel_id, session, text)
+            friendly_error = self._friendly_agent_error_from_line(channel_id, session, text, _backend)
             if friendly_error and not run_state.friendly_error:
                 run_state.friendly_error = friendly_error
 
@@ -2096,7 +2115,41 @@ class Router:
                 # completion summary / error reply so streamed output stays ordered.
                 await coalescer.flush()
 
-            if rc == 0:
+            if rc == 0 and run_state.friendly_error:
+                self.logger.warning(
+                    "codex.friendly_error",
+                    extra={"channel_id": channel_id, "repo": repo_name, "session": session, "code": rc},
+                )
+                self._append_codex_error_log(
+                    channel_id=channel_id,
+                    session=session,
+                    repo_name=repo_name,
+                    repo_path=repo_path,
+                    args=args_to_run,
+                    return_code=rc,
+                    stderr_lines=stderr_tail,
+                    note="friendly error on zero exit",
+                )
+                await self._budget_soft_notify_if_needed(event, sink)
+                self._mark_run_terminal(channel_id, session, "failed", rc)
+                if not run_state.friendly_error_relayed:
+                    detail = f"{run_state.friendly_error}\nUse `!c logs` for raw details."
+                    await self.reply_forbidden(sink, detail)
+                    run_state.friendly_error_relayed = True
+                self._session_log.append(
+                    channel_id,
+                    session or DEFAULT_SESSION,
+                    "run.failed",
+                    {
+                        "code": rc,
+                        "stderr_tail": list(stderr_tail[-5:]),
+                        "terminal": True,
+                        "status": "failed",
+                        "friendly_error": True,
+                    },
+                    repo_name=repo_name,
+                )
+            elif rc == 0:
                 usage_after = self.get_usage(channel_id, session)
                 after_total = usage_after.total_tokens if usage_after else 0
                 delta_total = max(0, after_total - before_total)
@@ -2142,7 +2195,9 @@ class Router:
                     if stderr_tail:
                         detail += f" Last stderr: {stderr_tail[-1]}"
                     detail += " Use `!c logs` for details."
-                await self.reply_forbidden(sink, detail)
+                if not run_state.friendly_error_relayed:
+                    await self.reply_forbidden(sink, detail)
+                    run_state.friendly_error_relayed = True
                 self._session_log.append(
                     channel_id,
                     session or DEFAULT_SESSION,
@@ -2318,6 +2373,28 @@ class Router:
         candidates.append(evt.raw)
         return self._friendly_unsupported_model_error_from_candidates(channel_id, session, candidates)
 
+    def _friendly_agent_error_from_event(
+        self,
+        channel_id: str,
+        session: str,
+        evt: NormalizedEvent,
+        backend: Optional[AgentBackend],
+    ) -> str:
+        candidates: list[str] = []
+        if isinstance(evt.error, dict):
+            for key in ("message", "detail", "error"):
+                value = evt.error.get(key)
+                if isinstance(value, str):
+                    candidates.append(value)
+        elif isinstance(evt.error, str):
+            candidates.append(evt.error)
+        candidates.extend(evt.texts)
+        candidates.append(evt.raw)
+        unsupported = self._friendly_unsupported_model_error_from_candidates(channel_id, session, candidates)
+        if unsupported:
+            return unsupported
+        return self._friendly_claude_usage_limit_error_from_candidates(candidates, backend)
+
     def _friendly_unsupported_model_error_from_line(self, channel_id: str, session: str, line: str) -> str:
         text = strip_control_codes((line or "").strip())
         if not text:
@@ -2344,6 +2421,41 @@ class Router:
                         candidates.append(value)
         return self._friendly_unsupported_model_error_from_candidates(channel_id, session, candidates)
 
+    def _friendly_agent_error_from_line(
+        self,
+        channel_id: str,
+        session: str,
+        line: str,
+        backend: Optional[AgentBackend],
+    ) -> str:
+        text = strip_control_codes((line or "").strip())
+        if not text:
+            return ""
+        candidates = [text]
+        if text.startswith("{"):
+            try:
+                payload = json.loads(text)
+            except json.JSONDecodeError:
+                payload = None
+            if isinstance(payload, dict):
+                candidates = []
+                error = payload.get("error")
+                if isinstance(error, dict):
+                    for key in ("message", "detail", "error"):
+                        value = error.get(key)
+                        if isinstance(value, str):
+                            candidates.append(value)
+                elif isinstance(error, str):
+                    candidates.append(error)
+                for key in ("message", "detail", "result"):
+                    value = payload.get(key)
+                    if isinstance(value, str):
+                        candidates.append(value)
+        unsupported = self._friendly_unsupported_model_error_from_candidates(channel_id, session, candidates)
+        if unsupported:
+            return unsupported
+        return self._friendly_claude_usage_limit_error_from_candidates(candidates, backend)
+
     def _friendly_unsupported_model_error_from_candidates(
         self,
         channel_id: str,
@@ -2355,6 +2467,49 @@ class Router:
             if match:
                 return self._format_unsupported_model_error(channel_id, session, match.group(1))
         return ""
+
+    def _friendly_claude_usage_limit_error_from_candidates(
+        self,
+        candidates: list[str],
+        backend: Optional[AgentBackend],
+    ) -> str:
+        backend_name = type(backend or self.runner).__name__.lower()
+        if "claude" not in backend_name:
+            return ""
+        for candidate in candidates:
+            text = strip_control_codes((candidate or "").strip())
+            if text and _CLAUDE_USAGE_LIMIT_RE.search(text):
+                return f"Claude reported a usage limit:\n{self._format_claude_usage_limit_message(text)}"
+        return ""
+
+    def _format_claude_usage_limit_message(
+        self,
+        text: str,
+        now_utc: datetime | None = None,
+    ) -> str:
+        message = (text or "").strip()
+        if not message or "Central European time" in message:
+            return message
+        match = _CLAUDE_UTC_RESET_RE.search(message)
+        if not match:
+            return message
+        hour = int(match.group(1))
+        minute = int(match.group(2) or "0")
+        ampm = match.group(3).lower()
+        if ampm == "pm" and hour != 12:
+            hour += 12
+        elif ampm == "am" and hour == 12:
+            hour = 0
+        now = now_utc or datetime.now(timezone.utc)
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        else:
+            now = now.astimezone(timezone.utc)
+        reset_utc = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if reset_utc < now - timedelta(minutes=1):
+            reset_utc += timedelta(days=1)
+        reset_local = reset_utc.astimezone(_CENTRAL_EUROPE_TZ)
+        return f"{message} (local reset: {reset_local.hour:02d}:{reset_local.minute:02d} Central European time)"
 
     def _format_unsupported_model_error(self, channel_id: str, session: str, unsupported_model: str) -> str:
         session_name = session or DEFAULT_SESSION
@@ -2424,7 +2579,7 @@ class Router:
             if evt.texts:
                 run_state.suppressed_progress_events += 1
             return
-        friendly_error = self._friendly_unsupported_model_error_from_event(channel_id, session, evt)
+        friendly_error = self._friendly_agent_error_from_event(channel_id, session, evt, backend or self.runner)
         if friendly_error:
             if run_state is not None:
                 if not run_state.friendly_error:

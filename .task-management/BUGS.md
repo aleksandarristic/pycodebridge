@@ -10,18 +10,6 @@ Rules:
 
 ## Bug backlog
 
-- [TASK-0081] Surface Claude usage-limit exhaustion immediately.
-  - Context: When Claude is over the usage/token limit for the current window, the bridge appears to stop typing without relaying Claude's limit message. The next prompt then surfaces that the user is out of tokens for the window.
-  - Goal: detect Claude's usage-limit/usage-window exhaustion response in the current run and relay the actionable Claude message immediately.
-  - Scope:
-    - Capture a real Claude CLI stream-json/stderr sample for the over-limit condition.
-    - Update `ClaudeBackend.parse()` and/or shared run failure handling so the limit message is emitted to Discord before the run ends.
-    - Ensure typing/status state is cleared consistently and the user gets a clear retry-window message when Claude provides one.
-  - Acceptance criteria:
-    - A Claude run that hits the usage limit returns Claude's limit message in the same Discord interaction.
-    - The bridge does not silently stop after clearing typing/status indicators.
-    - Tests cover the captured Claude over-limit event/stderr shape and the router relay behavior.
-
 - [TASK-0082] Revisit Gemini backend because Gemini is not working.
   - Context: The Gemini backend was added, but Gemini is currently not working end to end.
   - Goal: revalidate the Gemini CLI invocation, stream-json schema, auth/env assumptions, resume behavior, and parser against the current Gemini CLI.

@@ -27,6 +27,7 @@ from types import MethodType
 from types import SimpleNamespace
 
 from codebridge import config as cfgmod
+from codebridge.agents.claude import ClaudeBackend
 from codebridge.codex import CodexBackend, Options, Runner
 from codebridge.observability.audit import Logger as AuditLogger, Redactor
 from codebridge.routing.event_context import build_contextual_sink
@@ -206,6 +207,17 @@ class _ImmediateExitRunner:
             for line in self.stderr_lines:
                 await opts.on_stderr(line)
         return _ProcDone(self.rc)
+
+
+class _ClaudeImmediateExitRunner(_ImmediateExitRunner):
+    ask_prefix = "Claude asks:"
+
+    def __init__(self, *, jsonl_lines=(), stderr_lines=(), rc: int = 1) -> None:
+        super().__init__(jsonl_lines=jsonl_lines, stderr_lines=stderr_lines, rc=rc)
+        self._backend = ClaudeBackend(binary="claude")
+
+    def parse(self, line: str):
+        return self._backend.parse(line)
 
 
 class _CapturingRealRunner(Runner):
@@ -3086,6 +3098,19 @@ def _unsupported_model_error_line(model: str = "gpt-5.3-codex") -> str:
     )
 
 
+def _claude_usage_limit_result_line(message: str = "You've hit your session limit · resets 6:30pm (UTC)") -> str:
+    return json.dumps(
+        {
+            "type": "result",
+            "subtype": "error",
+            "is_error": True,
+            "api_error_status": 429,
+            "result": message,
+            "session_id": "thread-1",
+        }
+    )
+
+
 def test_run_codex_wraps_duplicate_unsupported_model_jsonl_error(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -3116,6 +3141,80 @@ def test_run_codex_wraps_duplicate_unsupported_model_jsonl_error(tmp_path):
     assert "`!reset default`" in output
     assert '"type": "error"' not in output
     assert '{"type":"error"' not in output
+
+
+def test_run_codex_surfaces_claude_usage_limit_result_even_on_zero_exit(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    message = "You've hit your session limit · resets 6:30pm (UTC)"
+    runner = _ClaudeImmediateExitRunner(jsonl_lines=[_claude_usage_limit_result_line(message)], rc=0)
+    router, _ = _build_router(tmp_path, runner=runner)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    event = _discord_event("!c resume fix", "codex-repo")
+
+    async def run():
+        await router.run_codex(
+            event,
+            sink,
+            "repo",
+            str(repo),
+            "default",
+            "",
+            "",
+            ["-p", "fix"],
+        )
+
+    asyncio.run(run())
+    output = "\n".join(msg for msg, _, _ in sink.sent)
+    assert "Claude reported a usage limit:" in output
+    assert message in output
+    assert "local reset: 20:30 Central European time" in output
+    assert "Run complete" not in output
+
+
+def test_claude_usage_limit_formatter_adds_central_european_reset_time(tmp_path):
+    router, _ = _build_router(tmp_path)
+    message = "You've hit your session limit · resets 6:30pm (UTC)"
+
+    formatted = router._format_claude_usage_limit_message(
+        message,
+        now_utc=datetime(2026, 6, 9, 18, 3, tzinfo=timezone.utc),
+    )
+
+    assert formatted == (
+        "You've hit your session limit · resets 6:30pm (UTC) "
+        "(local reset: 20:30 Central European time)"
+    )
+
+
+def test_run_codex_surfaces_claude_usage_limit_stderr(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    message = "Error: Claude usage limit reached. Try again in 2 hours."
+    runner = _ClaudeImmediateExitRunner(stderr_lines=[message], rc=1)
+    router, _ = _build_router(tmp_path, runner=runner)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    event = _discord_event("!c resume fix", "codex-repo")
+
+    async def run():
+        await router.run_codex(
+            event,
+            sink,
+            "repo",
+            str(repo),
+            "default",
+            "",
+            "",
+            ["-p", "fix"],
+        )
+
+    asyncio.run(run())
+    output = "\n".join(msg for msg, _, _ in sink.sent)
+    assert "Claude reported a usage limit:" in output
+    assert message in output
+    assert "Last stderr:" not in output
 
 
 def test_run_codex_wraps_unsupported_model_stderr_error(tmp_path):

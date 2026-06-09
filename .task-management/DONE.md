@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0081] Surface Claude usage-limit exhaustion immediately.
+  - Completed: 2026-06-09
+  - Notes: Added backend-aware friendly error detection for Claude usage-limit messages from stream-json result errors and stderr. Captured friendly errors now produce a user-facing reply even when the CLI exits with code 0, avoiding silent completion after typing clears. Verified against local Claude Code 2.1.169 stream-json output: a `rate_limit_event`, assistant text `You've hit your session limit · resets ...`, and an `is_error` result with `api_error_status: 429`; the UTC reset time is parsed and shown as Central European local time. Focused router coverage uses that wording plus a stderr limit case.
+
 - [TASK-0075] Require TOTP for DM reset-all.
   - Completed: 2026-06-09
   - Notes: DM admin `reset all` now requires TOTP before the yes/no confirmation when TOTP is enabled, while preserving non-admin rejection and cancellation behavior; added focused DM/integration coverage.
