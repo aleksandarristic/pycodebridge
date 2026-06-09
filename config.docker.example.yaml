@@ -34,6 +34,22 @@ codex:
     Discord bridge session for {{REPO_NAME}}. Work only in this repo and keep replies concise.
   env: {}
 
+claude:
+  binary: "claude"
+  permission_mode: "bypassPermissions"  # default|acceptEdits|auto|bypassPermissions
+  model: ""   # e.g. claude-sonnet-4-6, claude-opus-4-8, claude-haiku-4-5-20251001 (or aliases: sonnet, opus, haiku)
+  effort: ""  # e.g. low|medium|high|xhigh|max
+  env: {}
+
+gemini:
+  binary: "gemini"
+  approval_mode: "yolo"  # default|auto_edit|yolo|plan
+  model: ""  # e.g. gemini-2.5-pro, gemini-2.5-flash, gemini-3-flash-preview
+  env: {}
+
+agent:
+  default_backend: "codex"  # codex|claude|gemini
+
 state:
   data_dir: "/workspace/state"
   lock_timeout_seconds: 600

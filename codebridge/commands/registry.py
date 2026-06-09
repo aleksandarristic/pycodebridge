@@ -765,13 +765,36 @@ async def _cmd_models(router: Any, message: MessageEvent, sink: ResponseSink, re
     if not session_name:
         return
 
+    channel_id = message.channel_id
+    backend = router.backend_for(channel_id, session_name)
+
+    from ..agents.claude import ClaudeBackend
+    from ..agents.gemini import GeminiBackend
+
+    if isinstance(backend, ClaudeBackend):
+        models = [
+            "claude-opus-4-8      (alias: opus)",
+            "claude-sonnet-4-6    (alias: sonnet)",
+            "claude-haiku-4-5-20251001 (alias: haiku)",
+        ]
+        await router.reply(sink, "Available Claude models:\n" + "\n".join(f"- {m}" for m in models))
+        return
+
+    if isinstance(backend, GeminiBackend):
+        models = [
+            "gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "gemini-3-flash-preview",
+        ]
+        await router.reply(sink, "Available Gemini models:\n" + "\n".join(f"- {m}" for m in models))
+        return
+
     cached = _read_models_cache()
     if cached and not refresh:
         lines = [f"Available models ({len(cached)}) [cache]:"] + [f"- {m}" for m in cached]
         await router.reply(sink, "\n".join(lines))
         return
 
-    channel_id = message.channel_id
     state = router.state.load()
     if not session_exists(state, channel_id, session_name) and count_active_sessions(state, channel_id) >= MAX_SESSIONS_PER_CHANNEL:
         await router.reply_forbidden(
@@ -785,7 +808,6 @@ async def _cmd_models(router: Any, message: MessageEvent, sink: ResponseSink, re
     reasoning = ""
     prompt = "/model"
     thread_id = existing_thread(state, channel_id, session_name)
-    backend = router.backend_for(channel_id, session_name)
     if thread_id:
         args = backend.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
     else:
