@@ -150,6 +150,15 @@ class ClaudeConfig:
 
 
 @dataclass
+class GeminiConfig:
+    """Gemini CLI backend configuration."""
+    binary: str = "gemini"
+    approval_mode: str = "yolo"  # default|auto_edit|yolo|plan
+    model: str = ""
+    env: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
 class AgentConfig:
     """Agent backend configuration."""
     default_backend: str = "codex"
@@ -161,6 +170,7 @@ class Config:
     discord: DiscordConfig = field(default_factory=DiscordConfig)
     codex: CodexConfig = field(default_factory=CodexConfig)
     claude: ClaudeConfig = field(default_factory=ClaudeConfig)
+    gemini: GeminiConfig = field(default_factory=GeminiConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
     state: StateConfig = field(default_factory=StateConfig)
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
@@ -290,6 +300,12 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.claude.effort = claude.get("effort", cfg.claude.effort)
     cfg.claude.env = dict(claude.get("env", cfg.claude.env) or {})
 
+    gemini = raw.get("gemini", {}) or {}
+    cfg.gemini.binary = gemini.get("binary", cfg.gemini.binary)
+    cfg.gemini.approval_mode = gemini.get("approval_mode", cfg.gemini.approval_mode)
+    cfg.gemini.model = gemini.get("model", cfg.gemini.model)
+    cfg.gemini.env = dict(gemini.get("env", cfg.gemini.env) or {})
+
     agent = raw.get("agent", {}) or {}
     cfg.agent.default_backend = agent.get("default_backend", cfg.agent.default_backend)
 
@@ -412,6 +428,12 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.claude.permission_mode = "default"
     if cfg.claude.env is None:
         cfg.claude.env = {}
+    if not cfg.gemini.binary:
+        cfg.gemini.binary = "gemini"
+    if not cfg.gemini.approval_mode:
+        cfg.gemini.approval_mode = "yolo"
+    if cfg.gemini.env is None:
+        cfg.gemini.env = {}
     if not cfg.agent.default_backend:
         cfg.agent.default_backend = "codex"
 

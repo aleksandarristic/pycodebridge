@@ -284,6 +284,10 @@ def _merge_env(base: Dict[str, str], extra: Dict[str, str]) -> Dict[str, str]:
         "ANTHROPIC_API_KEY",
         "CLAUDE_CODE_OAUTH_TOKEN",
         "CLAUDE_CONFIG_DIR",
+        "GEMINI_API_KEY",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "GOOGLE_CLOUD_PROJECT",
+        "GEMINI_CLI_TRUST_WORKSPACE",
     }
     for name in allow:
         if name in os.environ:

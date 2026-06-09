@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0020] Add Gemini CLI backend.
+  - Completed: 2026-06-09
+  - Notes: `GeminiBackend` in `agents/gemini.py` — builds `gemini -o stream-json --skip-trust` invocations; `-p <prompt>`, `--resume <session_id>`, `--resume latest`, `-m <model>`, `--approval-mode <mode>`. `parse()` maps `init`→`init`, `message(role=assistant)`→`message` (content field), `error` event stashed in `_last_error_msg`, `result`→`result` (stats as usage + error from stash); everything else `None`. `GeminiConfig` dataclass in `config.py` (binary, approval_mode, model, env). `"gemini"` in `KNOWN_BACKENDS` and `build_backend()`. Gemini auth vars (`GEMINI_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_PROJECT`, `GEMINI_CLI_TRUST_WORKSPACE`) added to `_merge_env` allowlist. Schema documented in `.task-management/TASK-0020-gemini-stream-json-schema.md`. 25 focused tests in `tests/test_gemini_backend.py`.
+
 - [TASK-0071] Add Claude Code CLI backend.
   - Completed: 2026-06-09
   - Notes: `ClaudeBackend` in `agents/claude.py` — builds `claude -p --output-format stream-json --verbose` invocations; `build_start_args`, `build_resume_args` (`--resume`), `build_resume_last_args` (`--continue`); `--model`, `--effort`, `--add-dir`, `--permission-mode`/`--dangerously-skip-permissions` flags. `parse()` maps `system/init`→`init`, `assistant`→`message` (text blocks only), `result`→`result` (usage + error); everything else returns `None`. `ClaudeConfig` dataclass in `config.py` (binary, permission_mode, model, effort, env). `"claude"` registered in `KNOWN_BACKENDS` and `build_backend()` in `factory.py`. Claude auth vars (`ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CONFIG_DIR`) added to `_merge_env` allowlist in `base.py`. Stream-json schema documented in `.task-management/TASK-0071-claude-stream-json-schema.md`. 24 focused tests in `tests/test_claude_backend.py`.
