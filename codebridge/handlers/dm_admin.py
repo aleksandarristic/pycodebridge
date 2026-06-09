@@ -648,8 +648,21 @@ async def _dispatch_prefixed_dm_command(
             await send(router.config_text())
             return
         if cmd == "reset":
-            token = rest.strip().lower()
-            if token == "all":
+            args = rest.split()
+            if args and args[0].lower() == "all":
+                if router._totp_enabled(event):
+                    ok, cmdline = await router.require_totp(event, sink, cmd, cmdline)
+                    if not ok:
+                        return
+                    fields = cmdline.split()
+                    if not fields:
+                        return
+                    cmd = _DM_COMMAND_ALIASES.get(fields[0].lower(), fields[0].lower())
+                    rest = cmdline[len(fields[0]) :].strip()
+                    args = rest.split()
+                if cmd != "reset" or len(args) != 1 or args[0].lower() != "all":
+                    await send_forbidden("Usage: !c reset all")
+                    return
                 ttl = router.begin_reset_all_confirmation(event)
                 await send(
                     f"Are you sure you want to reset all sessions across all channels? "

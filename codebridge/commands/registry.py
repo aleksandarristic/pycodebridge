@@ -203,6 +203,10 @@ def _normalize_effort_for_backend(value: str, backend_name: str) -> str | None:
     return _CODEX_EFFORT_ALIASES.get(token)
 
 
+def _is_default_override_token(value: str) -> bool:
+    return (value or "").strip().lower() in {"default", "auto"}
+
+
 def _normalize_reasoning_level(value: str) -> str | None:
     """Legacy wrapper; uses Codex aliases."""
     return _normalize_effort_for_backend(value, "codex")
@@ -427,7 +431,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec("use", "use <session>", "set your sticky session", "Sessions", _cmd_use, AUTH_UNLOCK, aliases=("select",)),
         CommandSpec("agent", "agent [session] <backend> [model] [effort]", "set session agent backend (optionally with model and effort)", "Sessions", _cmd_agent, AUTH_UNLOCK),
         CommandSpec("agents", "agents", "list available agent backends with usage", "Sessions", _cmd_agents, AUTH_OPEN),
-        CommandSpec("model", "model [session] <id> [reasoning]", "set session model", "Sessions", _cmd_model, AUTH_UNLOCK, aliases=("mdl",)),
+        CommandSpec("model", "model [session] <id|default> [reasoning|default]", "set or clear session model", "Sessions", _cmd_model, AUTH_UNLOCK, aliases=("mdl",)),
         CommandSpec(
             "models",
             "models [session] [refresh|--refresh]",
@@ -437,7 +441,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             AUTH_OPEN,
             aliases=("mdls",),
         ),
-        CommandSpec("effort", "effort [session] <level>", "set reasoning effort for current session", "Sessions", _cmd_effort, AUTH_UNLOCK, aliases=("eff",)),
+        CommandSpec("effort", "effort [session] <level|default>", "set or clear reasoning effort for current session", "Sessions", _cmd_effort, AUTH_UNLOCK, aliases=("eff",)),
         CommandSpec("efforts", "efforts [session]", "list valid effort levels for current backend", "Sessions", _cmd_efforts, AUTH_OPEN),
         CommandSpec("thread", "thread [session] <id>", "set thread id", "Sessions", _cmd_thread, AUTH_UNLOCK, aliases=("tid",)),
         CommandSpec("reset", "reset [session]", "reset session context", "Sessions", _cmd_reset, AUTH_UNLOCK),
@@ -701,7 +705,7 @@ async def _cmd_use(router: Any, message: MessageEvent, sink: ResponseSink, repo_
 
 async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     if not rest:
-        await router.reply_forbidden(sink, "Usage: !c model [session] <model-id> [reasoning]")
+        await router.reply_forbidden(sink, "Usage: !c model [session] <model-id|default> [reasoning|default]")
         return
     parts = rest.split()
     session_name = _current_session(router, message)
@@ -734,7 +738,8 @@ async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, rep
     if not model:
         await router.reply_forbidden(sink, "Model id required.")
         return
-    if model.strip().lower() == "list":
+    clear_model = _is_default_override_token(model)
+    if not clear_model and model.strip().lower() == "list":
         await router.reply_forbidden(
             sink,
             "Model id 'list' is not supported. Pick a real model id (try `!c models`), or set the session model back to your configured default.",
@@ -742,6 +747,7 @@ async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, rep
         return
     backend_name = _backend_name_for_session(router, message.channel_id, session_name)
     reasoning = ""
+    clear_reasoning = False
     if reasoning_raw:
         normalized = _normalize_effort_for_backend(reasoning_raw, backend_name)
         if normalized is None:
@@ -751,7 +757,10 @@ async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, rep
                 f"Unknown reasoning level. Valid values for {backend_name}: {', '.join(valid) if valid else '(none supported)'}.",
             )
             return
-        reasoning = normalized
+        if normalized == "":
+            clear_reasoning = True
+        else:
+            reasoning = normalized
     state = router.state.load()
     if not session_exists(state, message.channel_id, session_name) and count_active_sessions(
         state, message.channel_id
@@ -763,9 +772,30 @@ async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, rep
         return
 
     async def apply_model() -> None:
-        router.set_session_model(message.channel_id, session_name, repo_name, repo_path, model, reasoning)
-        reasoning_info = f" reasoning {reasoning}" if reasoning else ""
-        await router.reply(sink, f"Model for session '{session_name}' set to {model}{reasoning_info}")
+        router.set_session_model(
+            message.channel_id,
+            session_name,
+            repo_name,
+            repo_path,
+            "" if clear_model else model,
+            reasoning,
+            clear_model=clear_model,
+            clear_reasoning=clear_reasoning,
+        )
+        if clear_model:
+            if clear_reasoning:
+                msg = f"Model and reasoning effort for session '{session_name}' reset to configured defaults."
+            elif reasoning:
+                msg = f"Model for session '{session_name}' reset to configured default with reasoning {reasoning}."
+            else:
+                msg = f"Model for session '{session_name}' reset to configured default."
+        else:
+            if clear_reasoning:
+                msg = f"Model for session '{session_name}' set to {model} with default reasoning."
+            else:
+                reasoning_info = f" reasoning {reasoning}" if reasoning else ""
+                msg = f"Model for session '{session_name}' set to {model}{reasoning_info}"
+        await router.reply(sink, msg)
         await router.update_pinned_status(sink, message.author_id, session_name)
 
     if await router.has_active(message.channel_id):
@@ -774,10 +804,17 @@ async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, rep
             await apply_model()
 
         pos, job_id, _ = await router.coordinator.enqueue(message.channel_id, session_name, job)
-        reasoning_info = f" reasoning {reasoning}" if reasoning else ""
+        if clear_model:
+            target_info = "configured default"
+        else:
+            target_info = model
+        if clear_reasoning:
+            reasoning_info = " with default reasoning"
+        else:
+            reasoning_info = f" reasoning {reasoning}" if reasoning else ""
         await router.reply(
             sink,
-            f"Queued model change for session '{session_name}' to {model}{reasoning_info} as {job_id} (pos {pos}).",
+            f"Queued model change for session '{session_name}' to {target_info}{reasoning_info} as {job_id} (pos {pos}).",
         )
         return
 
@@ -862,7 +899,7 @@ async def _cmd_effort(router: Any, message: MessageEvent, sink: ResponseSink, re
     session_name = _current_session(router, message)
     effort_raw = ""
     if not parts:
-        await router.reply_forbidden(sink, "Usage: !c effort [session] <level>")
+        await router.reply_forbidden(sink, "Usage: !c effort [session] <level|default>")
         return
     # peek to see if first token is a known session vs an effort value
     first_lower = parts[0].strip().lower()
@@ -892,6 +929,7 @@ async def _cmd_effort(router: Any, message: MessageEvent, sink: ResponseSink, re
             f"Unknown effort level {effort_raw!r}. Valid values for {backend_name}: {', '.join(valid)}.",
         )
         return
+    clear_reasoning = normalized == ""
     state = router.state.load()
     if not session_exists(state, message.channel_id, session_name) and count_active_sessions(
         state, message.channel_id
@@ -909,7 +947,15 @@ async def _cmd_effort(router: Any, message: MessageEvent, sink: ResponseSink, re
             s = sess_state.sessions.get(session_name)
             if s:
                 current_model = s.model or ""
-        router.set_session_model(message.channel_id, session_name, repo_name, repo_path, current_model, normalized)
+        router.set_session_model(
+            message.channel_id,
+            session_name,
+            repo_name,
+            repo_path,
+            current_model,
+            normalized,
+            clear_reasoning=clear_reasoning,
+        )
         effort_label = normalized or "(default)"
         await router.reply(sink, f"Effort for session '{session_name}' set to {effort_label}.")
         await router.update_pinned_status(sink, message.author_id, session_name)

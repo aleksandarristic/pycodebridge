@@ -102,8 +102,20 @@ class SessionCoordinator:
         repo_path: str,
         model: str,
         reasoning_effort: str,
+        *,
+        clear_model: bool = False,
+        clear_reasoning: bool = False,
     ) -> None:
-        self._sessions.set_session_model(channel_id, session, repo_name, repo_path, model, reasoning_effort)
+        self._sessions.set_session_model(
+            channel_id,
+            session,
+            repo_name,
+            repo_path,
+            model,
+            reasoning_effort,
+            clear_model=clear_model,
+            clear_reasoning=clear_reasoning,
+        )
 
     def session_backend(self, channel_id: str, session: str) -> str:
         return self._sessions.session_backend(channel_id, session)

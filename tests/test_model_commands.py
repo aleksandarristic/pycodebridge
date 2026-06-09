@@ -300,6 +300,48 @@ def test_effort_command_maps_codex_extra_high_to_xhigh(tmp_path):
     asyncio.run(run())
 
 
+def test_effort_default_clears_stored_reasoning_override(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!effort xhigh", "codex-repo"), sink)
+        assert router.session_reasoning_effort("chan", "default") == "xhigh"
+
+        await router.handle_message(_discord_event("!effort default", "codex-repo"), sink)
+        state = router.state.load()
+        assert state.channels["chan"].sessions["default"].reasoning_effort == ""
+        assert router.session_reasoning_effort("chan", "default") == ""
+        assert any("set to (default)" in s for s in sink.sent)
+
+    asyncio.run(run())
+
+
+def test_effort_default_clears_claude_reasoning_override(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    router.set_session_backend("chan", "default", "claude")
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!effort xhigh", "codex-repo"), sink)
+        assert router.session_reasoning_effort("chan", "default") == "xhigh"
+
+        await router.handle_message(_discord_event("!effort default", "codex-repo"), sink)
+        state = router.state.load()
+        assert state.channels["chan"].sessions["default"].backend == "claude"
+        assert state.channels["chan"].sessions["default"].reasoning_effort == ""
+
+    asyncio.run(run())
+
+
 def test_model_command_maps_codex_extra_high_to_xhigh(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -313,5 +355,49 @@ def test_model_command_maps_codex_extra_high_to_xhigh(tmp_path):
         assert router.session_model("chan", "default") == "gpt-5.3-codex"
         assert router.session_reasoning_effort("chan", "default") == "xhigh"
         assert any("set to gpt-5.3-codex reasoning xhigh" in s for s in sink.sent)
+
+    asyncio.run(run())
+
+
+def test_model_default_clears_stored_model_override(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!model gpt-new", "codex-repo"), sink)
+        assert router.session_model("chan", "default") == "gpt-new"
+
+        await router.handle_message(_discord_event("!model default", "codex-repo"), sink)
+        state = router.state.load()
+        assert state.channels["chan"].sessions["default"].model == ""
+        assert router.session_model("chan", "default") == "gpt-default"
+        assert any("reset to configured default" in s for s in sink.sent)
+
+    asyncio.run(run())
+
+
+def test_model_optional_default_clears_reasoning_override(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!model gpt-5.3-codex xhigh", "codex-repo"), sink)
+        assert router.session_reasoning_effort("chan", "default") == "xhigh"
+
+        await router.handle_message(_discord_event("!model gpt-5.4-codex default", "codex-repo"), sink)
+        state = router.state.load()
+        sess = state.channels["chan"].sessions["default"]
+        assert sess.model == "gpt-5.4-codex"
+        assert sess.reasoning_effort == ""
+        assert router.session_reasoning_effort("chan", "default") == ""
+        assert any("with default reasoning" in s for s in sink.sent)
 
     asyncio.run(run())

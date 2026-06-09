@@ -12,6 +12,22 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0075] Require TOTP for DM reset-all.
+  - Completed: 2026-06-09
+  - Notes: DM admin `reset all` now requires TOTP before the yes/no confirmation when TOTP is enabled, while preserving non-admin rejection and cancellation behavior; added focused DM/integration coverage.
+
+- [TASK-0077] Make model and effort default clearing explicit.
+  - Completed: 2026-06-09
+  - Notes: Added explicit session override clearing for model and reasoning effort. `!effort default` clears effort, `!model default` clears the current session model override, and `!model <id> default` applies a model while clearing reasoning; updated help/docs and Codex/Claude tests.
+
+- [TASK-0078] Rework limited helper subprocess output draining.
+  - Completed: 2026-06-09
+  - Notes: `run_limited_command()` now keeps draining stdout/stderr after the retained-output cap, waits for process and reader completion under one timeout, and appends a truncation marker; added large stdout/stderr, timeout, and non-zero exit tests.
+
+- [TASK-0079] Guard public health endpoint binds.
+  - Completed: 2026-06-09
+  - Notes: Health server binds now reject non-loopback hosts by default, with explicit `runtime.health_allow_public` opt-in; updated config loading/rendering, example config, README, and health/config tests.
+
 - [TASK-0076] Harden upload persistence against aggregate-size abuse and symlink races.
   - Completed: 2026-06-09
   - Notes: Added `files.max_upload_total_mb` and `files.max_upload_count` batch limits while preserving per-file `files.max_upload_mb`. Upload saves now write to a repo-local temporary file, verify the temp file remains regular, recheck parent containment/no-symlink state, and finalize with an exclusive hard link so existing files are not overwritten. Existing final-path symlinks are rejected, symlink parent directories are rejected, and a file created during save causes unique-name finalization rather than overwrite. Updated config example and README. Targeted tests: `tests/test_dm_upload_download_gating.py`, `tests/test_config.py::test_load_config_upload_batch_limits`, `tests/test_dm_binding.py::test_dm_pending_upload_response_short_circuits`, `tests/test_integration_harness.py::test_totp_required_for_config_tests_download_logs_and_upload`.

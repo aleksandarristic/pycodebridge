@@ -3501,9 +3501,21 @@ class Router:
         repo_path: str,
         model: str,
         reasoning_effort: str,
+        *,
+        clear_model: bool = False,
+        clear_reasoning: bool = False,
     ) -> None:
         """Set model and reasoning overrides for a session."""
-        self.coordinator.set_session_model(channel_id, session, repo_name, repo_path, model, reasoning_effort)
+        self.coordinator.set_session_model(
+            channel_id,
+            session,
+            repo_name,
+            repo_path,
+            model,
+            reasoning_effort,
+            clear_model=clear_model,
+            clear_reasoning=clear_reasoning,
+        )
 
     def backend_for(self, channel_id: str, session: str) -> AgentBackend:
         """Return the resolved AgentBackend for a channel/session.

@@ -327,31 +327,52 @@ async def run_limited_command(
         return "", exc
     stdout_chunks: list[bytes] = []
     stderr_chunks: list[bytes] = []
+    retained_bytes = 0
+    truncated = False
 
-    async def _read_stream(stream: asyncio.StreamReader, chunks: list[bytes]) -> None:
-        size = 0
+    def _retain(data: bytes, chunks: list[bytes]) -> None:
+        nonlocal retained_bytes, truncated
+        remaining = HELPER_OUTPUT_LIMIT - retained_bytes
+        if remaining > 0:
+            keep = data[:remaining]
+            chunks.append(keep)
+            retained_bytes += len(keep)
+        if len(data) > max(remaining, 0):
+            truncated = True
+
+    async def _read_stream(stream: asyncio.StreamReader | None, chunks: list[bytes]) -> None:
+        if stream is None:
+            return
         while True:
             data = await stream.read(4096)
             if not data:
                 break
-            chunks.append(data)
-            size += len(data)
-            if size > HELPER_OUTPUT_LIMIT:
-                break
+            _retain(data, chunks)
 
+    def _output() -> str:
+        data = b"".join(stdout_chunks + stderr_chunks)
+        if truncated:
+            data += b"\n...(truncated)"
+        return data.decode("utf-8", errors="replace")
+
+    wait_task = asyncio.create_task(proc.wait())
+    read_tasks = [
+        asyncio.create_task(_read_stream(proc.stdout, stdout_chunks)),
+        asyncio.create_task(_read_stream(proc.stderr, stderr_chunks)),
+    ]
+    tasks = [wait_task, *read_tasks]
     try:
-        await asyncio.wait_for(
-            asyncio.gather(_read_stream(proc.stdout, stdout_chunks), _read_stream(proc.stderr, stderr_chunks)),
-            timeout=timeout,
-        )
-        await asyncio.wait_for(proc.wait(), timeout=timeout)
+        done, pending = await asyncio.wait(tasks, timeout=timeout, return_when=asyncio.ALL_COMPLETED)
+        if pending:
+            raise asyncio.TimeoutError()
+        for task in done:
+            task.result()
     except Exception as exc:
         if proc.returncode is None:
             proc.kill()
-            await proc.wait()
-        return b"".join(stdout_chunks + stderr_chunks).decode("utf-8", errors="replace"), exc
+        await asyncio.gather(*tasks, return_exceptions=True)
+        return _output(), exc
 
-    out = b"".join(stdout_chunks + stderr_chunks).decode("utf-8", errors="replace")
     if proc.returncode != 0:
-        return out, RuntimeError(f"exit {proc.returncode}")
-    return out, None
+        return _output(), RuntimeError(f"exit {proc.returncode}")
+    return _output(), None

@@ -297,17 +297,48 @@ class SessionService:
         repo_path: str,
         model: str,
         reasoning_effort: str,
+        *,
+        clear_model: bool = False,
+        clear_reasoning: bool = False,
     ) -> None:
         """Set model and reasoning overrides for a session."""
         session = _normalize_session_default(session)
-        state = self._state.load()
-        thread_id = ""
-        ch = state.channels.get(channel_id)
-        if ch:
+        try:
+            repo_name = pathutil.normalize_repo_name(repo_name)
+        except ValueError:
+            repo_name = (repo_name or "").strip().lower()
+
+        def mutator(fs):
+            ch = fs.channels.get(channel_id)
+            if ch is None:
+                from .state import ChannelState
+
+                ch = ChannelState()
+                fs.channels[channel_id] = ch
             sess = ch.sessions.get(session)
-            if sess:
-                thread_id = sess.thread_id
-        self.update_state(channel_id, session, repo_name, repo_path, thread_id, model, reasoning_effort)
+            if sess is None:
+                from .state import SessionState
+
+                sess = SessionState(repo_name=repo_name, repo_path=repo_path, thread_id="")
+            if not sess.created_at:
+                sess.created_at = utc_now_iso()
+            if repo_name:
+                sess.repo_name = repo_name
+            if repo_path:
+                sess.repo_path = repo_path
+            if clear_model:
+                sess.model = ""
+            elif model:
+                sess.model = model
+            if clear_reasoning:
+                sess.reasoning_effort = ""
+            elif reasoning_effort:
+                sess.reasoning_effort = reasoning_effort
+            sess.last_used_at = utc_now_iso()
+            ch.sessions[session] = sess
+            fs.channels[channel_id] = ch
+
+        self._state.update(mutator)
 
     def session_backend(self, channel_id: str, session: str) -> str:
         """Return the backend name for a session, falling back to the configured default."""

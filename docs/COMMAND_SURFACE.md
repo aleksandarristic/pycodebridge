@@ -42,7 +42,8 @@ Source of truth: `codebridge/commands/registry.py`.
 | `resume [session] <prompt>` | `rs` | Channel | repo channel/thread | unlock/default | codex | essential |
 | `choose [session] continue\|new\|compact` | `pick` | Channel | repo channel/thread | unlock/default | state/codex | essential |
 | `use <session>` | `select` | Channel | repo channel/thread | unlock/default | state | essential |
-| `model [session] <id> [reasoning]` | `mdl` | Channel | repo channel/thread | unlock/default | state/codex config | convenience |
+| `model [session] <id\|default> [reasoning\|default]` | `mdl` | Channel | repo channel/thread | unlock/default | state/codex config | convenience |
+| `effort [session] <level\|default>` | `eff` | Channel | repo channel/thread | unlock/default | state/codex config | convenience |
 | `models [session]` | `mdls` | Channel | repo channel/thread | open | codex/cache | convenience |
 | `thread [session] <id>` | `tid` | Channel | repo channel/thread | unlock/default | state | admin-only |
 | `reset [session]` | none | Channel | repo channel/thread | unlock/default | state | essential |

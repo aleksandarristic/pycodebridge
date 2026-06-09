@@ -74,6 +74,7 @@ async def main() -> None:
             logger,
             cfg.runtime.health_bind,
             cfg.runtime.health_path,
+            allow_public=cfg.runtime.health_allow_public,
         )
 
     adapter = (cfg.transport.adapter or "discord").lower()

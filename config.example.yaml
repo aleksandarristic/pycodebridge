@@ -47,6 +47,7 @@ state:
 runtime:
   log_level: "info"
   health_bind: ""
+  health_allow_public: false
   health_path: "/healthz"
   run_heartbeat_seconds: 120
   run_completion_min_seconds: 300

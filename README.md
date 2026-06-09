@@ -53,7 +53,7 @@ Quick start:
    - Update current branch and redeploy: `./update.sh`
    - Update a specific branch and redeploy: `./update.sh main`
 9) Optional health endpoint:
-   - Set `runtime.health_bind` (example: `127.0.0.1:8080`)
+   - Set `runtime.health_bind` (example: `127.0.0.1:8080`; non-loopback binds require `runtime.health_allow_public: true`)
    - Optional path: `runtime.health_path` (default `/healthz`)
    - Probe: `curl -fsS http://127.0.0.1:8080/healthz`
 10) Reset persisted bridge state quickly:
@@ -94,7 +94,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `json` (default `true`) — JSONL streaming output (required).
 - `start_prompt` (default template) — prompt used for new sessions.
 - `model` (default empty) — default model; override per session with `!c model`.
-- `model_reasoning_effort` (default `minimal`) — default reasoning effort to keep token spend low; valid Codex values are `minimal`/`low`/`medium`/`high`/`xhigh`, or override per session with `!c model [session] <id> [reasoning]`. Empty = Codex's built-in default.
+- `model_reasoning_effort` (default `minimal`) — default reasoning effort to keep token spend low; valid Codex values are `minimal`/`low`/`medium`/`high`/`xhigh`, or override per session with `!c model [session] <id|default> [reasoning|default]` / `!c effort [session] <level|default>`. Use `default` to clear a session override. Empty = Codex's built-in default.
 - `env` (default `{}`) — extra environment variables for Codex.
 
 Important: if Codex cannot run `git push`, make sure network is enabled for the sandbox level you selected in the host Codex config (`~/.codex/config.toml`). For `workspace-write`, include:
@@ -113,7 +113,8 @@ network_access = true
 
 ### `runtime`
 - `log_level` (default `info`) — `debug|info|warn|error`.
-- `health_bind` (default empty) — optional health HTTP bind (`<host>:<port>` or `<port>`).
+- `health_bind` (default empty) — optional health HTTP bind (`<host>:<port>` or `<port>`). Non-loopback hosts require `health_allow_public: true`.
+- `health_allow_public` (default `false`) — allow the health endpoint to bind to non-loopback interfaces such as `0.0.0.0`.
 - `health_path` (default `/healthz`) — health endpoint path.
 - `run_heartbeat_seconds` (default `120`) — interval for "still running" status messages.
 - `run_completion_min_seconds` (default `300`) — minimum run duration before posting completion summary.
@@ -201,6 +202,8 @@ TOTP always required (high-risk in channel; controlled by `discord.totp.command_
 - High-risk git remote mutations: `!c git remote set-url ...`, `!c git remote add ...`, `!c git remote remove ...`, `!c git remote rename ...`, `!c git remote set-head ...`
 - Upload flows (attachment submit and upload-path response)
 
+DM admin `!c reset all` also requires TOTP before the yes/no confirmation when TOTP is enabled.
+
 TOTP required for GitHub CLI unless gh scope is unlocked (controlled by `discord.totp.command_groups.gh`):
 - `!c gh <args>`
 - `!gh <args>` (shortcut for `!c gh <args>`)
@@ -213,7 +216,8 @@ TOTP required unless the chat is unlocked:
 - `!new` (shortcut for `!c choose new` when a conflict prompt is pending)
 - `!compact` / `!cpt` (shortcut for `!c choose compact` when a conflict prompt is pending)
 - `!c use <session>` (alias `select`)
-- `!c model [session] <id> [reasoning]`
+- `!c model [session] <id|default> [reasoning|default]`
+- `!c effort [session] <level|default>`
 - `!c thread [session] <id>`
 - `!c reset [session]`
 - `!c purge [session]`

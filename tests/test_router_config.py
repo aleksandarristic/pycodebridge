@@ -30,6 +30,7 @@ def test_render_config_text_includes_core_fields():
     cfg.discord.totp_enforce_gh = True
     cfg.discord.totp_enforce_high_risk = False
     cfg.runtime.health_bind = "127.0.0.1:8080"
+    cfg.runtime.health_allow_public = True
     cfg.runtime.health_path = "/healthz"
 
     text = render_config_text(cfg)
@@ -59,4 +60,5 @@ def test_render_config_text_includes_core_fields():
     assert "totp_enforce_gh: True" in text
     assert "totp_enforce_high_risk: False" in text
     assert "health_bind: 127.0.0.1:8080" in text
+    assert "health_allow_public: True" in text
     assert "health_path: /healthz" in text

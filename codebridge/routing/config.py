@@ -34,5 +34,6 @@ def render_config_text(cfg: Config) -> str:
         f"totp_enforce_gh: {cfg.discord.totp_enforce_gh}\n"
         f"totp_enforce_high_risk: {cfg.discord.totp_enforce_high_risk}\n"
         f"health_bind: {cfg.runtime.health_bind or '<disabled>'}\n"
+        f"health_allow_public: {cfg.runtime.health_allow_public}\n"
         f"health_path: {cfg.runtime.health_path}"
     )

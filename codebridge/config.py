@@ -91,6 +91,7 @@ class RuntimeConfig:
     """Runtime logging configuration."""
     log_level: str = DEFAULT_LOG_LEVEL
     health_bind: str = ""
+    health_allow_public: bool = False
     health_path: str = "/healthz"
     run_heartbeat_seconds: int = 120
     run_completion_min_seconds: int = 300
@@ -325,6 +326,10 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     runtime = raw.get("runtime", {}) or {}
     cfg.runtime.log_level = runtime.get("log_level", cfg.runtime.log_level)
     cfg.runtime.health_bind = str(runtime.get("health_bind", cfg.runtime.health_bind) or "")
+    cfg.runtime.health_allow_public = _coerce_bool(
+        runtime.get("health_allow_public", cfg.runtime.health_allow_public),
+        "runtime.health_allow_public",
+    )
     cfg.runtime.health_path = str(runtime.get("health_path", cfg.runtime.health_path) or "")
     cfg.runtime.run_heartbeat_seconds = int(
         runtime.get("run_heartbeat_seconds", cfg.runtime.run_heartbeat_seconds)

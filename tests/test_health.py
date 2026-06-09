@@ -3,7 +3,15 @@ import json
 import time
 from dataclasses import dataclass
 
-from codebridge.services.health import collect_health_payload, parse_health_bind, start_health_server
+import pytest
+
+from codebridge.services.health import (
+    collect_health_payload,
+    is_loopback_health_host,
+    parse_health_bind,
+    start_health_server,
+    validate_health_bind,
+)
 
 
 @dataclass
@@ -53,6 +61,23 @@ class _Logger:
 def test_parse_health_bind():
     assert parse_health_bind("8080") == ("127.0.0.1", 8080)
     assert parse_health_bind("0.0.0.0:9000") == ("0.0.0.0", 9000)
+
+
+def test_health_bind_loopback_detection():
+    assert is_loopback_health_host("127.0.0.1") is True
+    assert is_loopback_health_host("::1") is True
+    assert is_loopback_health_host("localhost") is True
+    assert is_loopback_health_host("0.0.0.0") is False
+    assert is_loopback_health_host("192.0.2.10") is False
+
+
+def test_health_bind_rejects_public_by_default():
+    with pytest.raises(ValueError, match="health_allow_public"):
+        validate_health_bind("0.0.0.0", allow_public=False)
+
+
+def test_health_bind_allows_public_when_enabled():
+    validate_health_bind("0.0.0.0", allow_public=True)
 
 
 def test_collect_health_payload(tmp_path):

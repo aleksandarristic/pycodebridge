@@ -2495,6 +2495,31 @@ def test_totp_required_for_state_changing_and_gh(tmp_path, monkeypatch):
     assert any(args and args[0] == "start" for args in runner.calls)
 
 
+def test_dm_admin_reset_all_requires_totp_before_confirmation(tmp_path, monkeypatch):
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    router.cfg.discord.dm_admin_enabled = True
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    probe = _discord_dm_event("")
+
+    async def run():
+        await router.handle_dm_message(_discord_dm_event("!c reset all"), sink)
+        assert router.has_reset_all_confirmation_pending(probe) is False
+
+        await router.handle_dm_message(_discord_dm_event(f"!c reset all --totp {_totp_code(secret)}"), sink)
+        assert router.has_reset_all_confirmation_pending(probe) is True
+
+        await router.handle_dm_message(_discord_dm_event("yes"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("TOTP required for 'reset'" in t for t in texts)
+    assert any("Are you sure you want to reset all sessions" in t for t in texts)
+    assert any("Reset all sessions:" in t for t in texts)
+
+
 def test_totp_unlock_allows_plain_resume_for_ttl(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()

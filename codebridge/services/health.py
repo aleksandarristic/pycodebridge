@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import os
 import time
@@ -29,6 +30,24 @@ def parse_health_bind(bind: str) -> tuple[str, int]:
     if port < 0 or port > 65535:
         raise ValueError("runtime.health_bind port must be in 0..65535")
     return host, port
+
+
+def is_loopback_health_host(host: str) -> bool:
+    """Return True when the health bind host is restricted to loopback."""
+    raw = (host or "").strip().strip("[]").lower()
+    if raw == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(raw).is_loopback
+    except ValueError:
+        return False
+
+
+def validate_health_bind(host: str, *, allow_public: bool = False) -> None:
+    """Reject non-loopback health binds unless explicitly allowed."""
+    if allow_public or is_loopback_health_host(host):
+        return
+    raise ValueError("runtime.health_bind non-loopback hosts require runtime.health_allow_public: true")
 
 
 async def collect_health_payload(router: Any, started_monotonic: float) -> dict[str, Any]:
@@ -63,9 +82,12 @@ async def start_health_server(
     bind: str,
     path: str = "/healthz",
     started_monotonic: float | None = None,
+    *,
+    allow_public: bool = False,
 ) -> asyncio.AbstractServer:
     """Start a tiny HTTP server that serves health payloads."""
     host, port = parse_health_bind(bind)
+    validate_health_bind(host, allow_public=allow_public)
     endpoint_path = (path or "/healthz").strip() or "/healthz"
     if not endpoint_path.startswith("/"):
         endpoint_path = "/" + endpoint_path
