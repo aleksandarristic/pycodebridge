@@ -281,6 +281,9 @@ def _merge_env(base: Dict[str, str], extra: Dict[str, str]) -> Dict[str, str]:
         "ALL_PROXY",
         "GH_TOKEN",
         "GITHUB_TOKEN",
+        "ANTHROPIC_API_KEY",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "CLAUDE_CONFIG_DIR",
     }
     for name in allow:
         if name in os.environ:

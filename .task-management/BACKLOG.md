@@ -26,19 +26,6 @@ Rules:
     - Targeted tests cover routing/runner selection and regression on default Codex behavior.
   - Depends on: TASK-0069 (agent abstraction), TASK-0070 (per-session selection).
 
-- [TASK-0071] Add Claude Code CLI backend.
-  - Goal: implement `ClaudeBackend` on the agent abstraction so sessions can run via Claude Code's headless CLI.
-  - Scope:
-    - `agents/claude.py`: build `claude -p --output-format stream-json --verbose` invocations; map start/resume (`--resume <session-id>` / `--continue`), `--model`, `--effort`, working dir (`cwd` + `--add-dir`), and permission mode (`--permission-mode` / `--dangerously-skip-permissions`).
-    - `parse()` against the real `stream-json` schema (capture a live sample first): `assistant`/content blocks -> `texts`; capture `session_id` from the init/system event; `result` usage -> `evt.usage`; errors -> `evt.error`.
-    - Auth for Docker/headless: `claude setup-token` -> `CLAUDE_CODE_OAUTH_TOKEN`, or `ANTHROPIC_API_KEY`, or a mounted `CLAUDE_CONFIG_DIR`. Add `@anthropic-ai/claude-code` to the Dockerfile next to `@openai/codex` (line 23); extend the env allowlist (`codex.py:_merge_env`/`agents/base.py`) with Claude auth vars.
-    - `claude:` config block (binary, permission_mode, model, effort, env).
-    - Docs: DOCKER.md/README auth + usage examples.
-  - Acceptance criteria:
-    - A session with `backend=claude` runs end-to-end, streams output to Discord, and resumes by session id.
-    - Tests cover the stream-json parser (fixture from a real sample) and Claude arg building.
-  - Depends on: TASK-0069.
-  - Blocked-on: a live `claude -p --output-format stream-json` sample to fix the event schema before implementing the parser.
 
 - [TASK-0006] Web-based/dashboard features (status/admin web surface, browser ops views).
 

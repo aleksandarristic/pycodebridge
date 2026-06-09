@@ -15,7 +15,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from .. import config as cfgmod
 
 DEFAULT_BACKEND = "codex"
-KNOWN_BACKENDS: frozenset[str] = frozenset({"codex"})
+KNOWN_BACKENDS: frozenset[str] = frozenset({"codex", "claude"})
 
 
 def build_backend(cfg: "cfgmod.Config", name: str = DEFAULT_BACKEND) -> AgentBackend:
@@ -30,5 +30,15 @@ def build_backend(cfg: "cfgmod.Config", name: str = DEFAULT_BACKEND) -> AgentBac
             cfg.codex.env,
             cfg.codex.ask_for_approval,
             cfg.codex.network_access,
+        )
+    if backend == "claude":
+        from .claude import ClaudeBackend
+
+        return ClaudeBackend(
+            cfg.claude.binary,
+            cfg.claude.permission_mode,
+            cfg.claude.env,
+            cfg.claude.model,
+            cfg.claude.effort,
         )
     raise ValueError(f"unknown agent backend: {name!r}")

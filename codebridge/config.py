@@ -140,6 +140,16 @@ class RepoBootstrapConfig:
 
 
 @dataclass
+class ClaudeConfig:
+    """Claude Code CLI backend configuration."""
+    binary: str = "claude"
+    permission_mode: str = "default"
+    model: str = ""
+    effort: str = ""
+    env: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
 class AgentConfig:
     """Agent backend configuration."""
     default_backend: str = "codex"
@@ -150,6 +160,7 @@ class Config:
     """Top-level configuration container."""
     discord: DiscordConfig = field(default_factory=DiscordConfig)
     codex: CodexConfig = field(default_factory=CodexConfig)
+    claude: ClaudeConfig = field(default_factory=ClaudeConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
     state: StateConfig = field(default_factory=StateConfig)
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
@@ -272,6 +283,13 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.codex.model_reasoning_effort = codex.get("model_reasoning_effort", cfg.codex.model_reasoning_effort)
     cfg.codex.env = dict(codex.get("env", cfg.codex.env) or {})
 
+    claude = raw.get("claude", {}) or {}
+    cfg.claude.binary = claude.get("binary", cfg.claude.binary)
+    cfg.claude.permission_mode = claude.get("permission_mode", cfg.claude.permission_mode)
+    cfg.claude.model = claude.get("model", cfg.claude.model)
+    cfg.claude.effort = claude.get("effort", cfg.claude.effort)
+    cfg.claude.env = dict(claude.get("env", cfg.claude.env) or {})
+
     agent = raw.get("agent", {}) or {}
     cfg.agent.default_backend = agent.get("default_backend", cfg.agent.default_backend)
 
@@ -388,6 +406,12 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.codex.env = {}
     if not cfg.codex.json:
         cfg.codex.json = True
+    if not cfg.claude.binary:
+        cfg.claude.binary = "claude"
+    if not cfg.claude.permission_mode:
+        cfg.claude.permission_mode = "default"
+    if cfg.claude.env is None:
+        cfg.claude.env = {}
     if not cfg.agent.default_backend:
         cfg.agent.default_backend = "codex"
 

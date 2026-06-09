@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0071] Add Claude Code CLI backend.
+  - Completed: 2026-06-09
+  - Notes: `ClaudeBackend` in `agents/claude.py` — builds `claude -p --output-format stream-json --verbose` invocations; `build_start_args`, `build_resume_args` (`--resume`), `build_resume_last_args` (`--continue`); `--model`, `--effort`, `--add-dir`, `--permission-mode`/`--dangerously-skip-permissions` flags. `parse()` maps `system/init`→`init`, `assistant`→`message` (text blocks only), `result`→`result` (usage + error); everything else returns `None`. `ClaudeConfig` dataclass in `config.py` (binary, permission_mode, model, effort, env). `"claude"` registered in `KNOWN_BACKENDS` and `build_backend()` in `factory.py`. Claude auth vars (`ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CONFIG_DIR`) added to `_merge_env` allowlist in `base.py`. Stream-json schema documented in `.task-management/TASK-0071-claude-stream-json-schema.md`. 24 focused tests in `tests/test_claude_backend.py`.
+
 - [TASK-0070] Per-session agent backend selection with `!agent` command.
   - Completed: 2026-06-09
   - Notes: `AgentConfig.default_backend` added to config; `SessionState.backend` field (backward-compat with existing state files); `SessionService.session_backend`/`set_session_backend` (switch clears thread_id, resets model/effort); `Router.backend_for` returns `self.runner` for default (test-injectable), builds fresh instance only on explicit override; `_session_backend_from_state` helper in `handlers/core.py`; all `handle_start`/`resume`/`spec`/`choose` call sites route through resolved backend; new `!c agent [session] <backend>` command mirroring `!c model` flow with queuing/validation/reset notification; `run_codex` accepts optional `backend` param; `on_jsonl` uses backend for parse(); `run.start` session log entry includes backend class name. 17 focused tests in `tests/test_agent_backend_selection.py`. Full suite green.
