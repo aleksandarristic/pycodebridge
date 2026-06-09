@@ -21,6 +21,8 @@ DEFAULT_SESSION_IDLE_TTL_SECONDS = 14400
 DEFAULT_TRANSPORT_ADAPTER = "discord"
 DEFAULT_AUDIT_REDACT = False
 DEFAULT_MAX_UPLOAD_MB = 200
+DEFAULT_MAX_UPLOAD_TOTAL_MB = DEFAULT_MAX_UPLOAD_MB
+DEFAULT_MAX_UPLOAD_COUNT = 20
 DEFAULT_GIT_CREDENTIAL_HELPER = "!gh auth git-credential"
 
 DEFAULT_START_PROMPT = (
@@ -130,6 +132,8 @@ class GitConfig:
 class FilesConfig:
     """File transfer configuration."""
     max_upload_mb: int = DEFAULT_MAX_UPLOAD_MB
+    max_upload_total_mb: int = DEFAULT_MAX_UPLOAD_TOTAL_MB
+    max_upload_count: int = DEFAULT_MAX_UPLOAD_COUNT
 
 
 @dataclass
@@ -345,6 +349,8 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
 
     files = raw.get("files", {}) or {}
     cfg.files.max_upload_mb = int(files.get("max_upload_mb", cfg.files.max_upload_mb))
+    cfg.files.max_upload_total_mb = int(files.get("max_upload_total_mb", cfg.files.max_upload_total_mb))
+    cfg.files.max_upload_count = int(files.get("max_upload_count", cfg.files.max_upload_count))
 
     transport = raw.get("transport", {}) or {}
     cfg.transport.adapter = transport.get("adapter", cfg.transport.adapter)
@@ -457,6 +463,10 @@ def _apply_defaults(cfg: Config) -> None:
     cfg.audit.redact = _coerce_bool(cfg.audit.redact, "audit.redact")
     if cfg.files.max_upload_mb <= 0:
         cfg.files.max_upload_mb = DEFAULT_MAX_UPLOAD_MB
+    if cfg.files.max_upload_total_mb <= 0:
+        cfg.files.max_upload_total_mb = DEFAULT_MAX_UPLOAD_TOTAL_MB
+    if cfg.files.max_upload_count <= 0:
+        cfg.files.max_upload_count = DEFAULT_MAX_UPLOAD_COUNT
     if not cfg.transport.adapter:
         cfg.transport.adapter = DEFAULT_TRANSPORT_ADAPTER
     if cfg.git.credential_helper is None:

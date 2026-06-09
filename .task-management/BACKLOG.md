@@ -40,17 +40,6 @@ Rules:
     - With TOTP enabled, DM reset-all requires a valid TOTP before the confirmation prompt.
     - Tests cover missing TOTP, valid TOTP plus yes, confirmation cancel, and non-admin rejection.
 
-- [TASK-0076] Harden upload persistence against aggregate-size abuse and symlink races.
-  - Context: upload checks are per attachment only, and validated destination paths are later passed to `Attachment.save()` without final no-symlink/exclusive write checks.
-  - Goal: make uploads bounded and safe even when repo contents change concurrently.
-  - Scope:
-    - Add aggregate upload size and attachment-count limits.
-    - Save to a safe temporary file under the repo, then finalize with containment and symlink checks.
-    - Avoid following final-path symlinks and avoid overwriting outside-repo targets.
-  - Acceptance criteria:
-    - Tests cover aggregate-size rejection, too-many-attachments rejection, path traversal, existing symlinks, and race-resistant finalization.
-    - Existing upload/download tests pass.
-
 - [TASK-0077] Make model and effort default clearing explicit.
   - Context: `!effort default` and optional `!model ... default` normalize to an empty string, but session state only updates model/reasoning when a non-empty value is supplied, so existing overrides are not cleared.
   - Goal: make user-visible "default" behavior actually remove session overrides.

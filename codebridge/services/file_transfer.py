@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
+import tempfile
 import time
 from typing import Awaitable, Callable, Dict
 
@@ -61,9 +63,18 @@ class FileTransferService:
             await reply_forbidden(sink, "Uploads are not supported for this transport.")
             return
         max_bytes = self.cfg.files.max_upload_mb * 1024 * 1024
+        max_total_bytes = self.cfg.files.max_upload_total_mb * 1024 * 1024
+        max_count = self.cfg.files.max_upload_count
+        if len(event.attachments) > max_count:
+            await reply_forbidden(sink, f"Too many files (max {max_count}).")
+            return
         too_large = [att.filename for att in event.attachments if att.size > max_bytes]
         if too_large:
             await reply_forbidden(sink, f"Files too large (max {self.cfg.files.max_upload_mb}MB): {', '.join(too_large)}")
+            return
+        total_size = sum(max(0, int(att.size or 0)) for att in event.attachments)
+        if total_size > max_total_bytes:
+            await reply_forbidden(sink, f"Total upload size too large (max {self.cfg.files.max_upload_total_mb}MB).")
             return
         upload = PendingUpload(
             repo_name=repo_name,
@@ -107,7 +118,6 @@ class FileTransferService:
             await reply_forbidden(sink, "Provide a directory path when uploading multiple files.")
             return True
         planned: list[tuple[object, str]] = []
-        repo_root = os.path.realpath(upload.repo_path)
         for att in upload.attachments:
             dest = target_path
             if is_dir:
@@ -119,13 +129,19 @@ class FileTransferService:
                 except Exception:
                     await reply_forbidden(sink, f"Invalid attachment filename: {att.filename}")
                     return True
+            if os.path.islink(dest):
+                await reply_forbidden(sink, "Upload destination is a symlink.")
+                return True
             dest = self._unique_path(dest)
             planned.append((att, dest))
         saved = []
         for att, dest in planned:
-            os.makedirs(os.path.dirname(dest), exist_ok=True)
-            await att.save(dest)
-            saved.append(os.path.relpath(dest, upload.repo_path))
+            try:
+                final_path = await self._save_attachment_safely(upload.repo_path, att, dest)
+            except Exception as exc:
+                await reply_forbidden(sink, f"Upload failed: {exc}")
+                return True
+            saved.append(os.path.relpath(final_path, upload.repo_path))
         self._pop_pending_upload(event)
         await reply(sink, f"Saved {len(saved)} file(s):\n" + "\n".join(saved))
         self.logger.info(
@@ -163,15 +179,65 @@ class FileTransferService:
         return upload
 
     def _unique_path(self, path: str) -> str:
-        if not os.path.exists(path):
+        if not os.path.lexists(path):
             return path
         base, ext = os.path.splitext(path)
         idx = 1
         while True:
             candidate = f"{base}_{idx}{ext}"
-            if not os.path.exists(candidate):
+            if not os.path.lexists(candidate):
                 return candidate
             idx += 1
+
+    async def _save_attachment_safely(self, repo_path: str, attachment: object, dest: str) -> str:
+        parent = os.path.dirname(dest)
+        os.makedirs(parent, exist_ok=True)
+        self._ensure_upload_path_safe(repo_path, parent)
+        fd, tmp_path = tempfile.mkstemp(prefix=".upload-", suffix=".tmp", dir=parent)
+        os.close(fd)
+        try:
+            await attachment.save(tmp_path)
+            if os.path.islink(tmp_path) or not os.path.isfile(tmp_path):
+                raise ValueError("temporary upload file is not a regular file")
+            final_path = self._link_temp_to_unique_final(repo_path, tmp_path, dest)
+            os.unlink(tmp_path)
+            return final_path
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(tmp_path)
+
+    def _link_temp_to_unique_final(self, repo_path: str, tmp_path: str, dest: str) -> str:
+        candidate = dest
+        for _ in range(1000):
+            self._ensure_upload_path_safe(repo_path, os.path.dirname(candidate))
+            if os.path.islink(candidate):
+                raise ValueError("Upload destination is a symlink.")
+            try:
+                os.link(tmp_path, candidate, follow_symlinks=False)
+                return candidate
+            except FileExistsError:
+                candidate = self._unique_path(candidate)
+        raise RuntimeError("unable to allocate a unique upload path")
+
+    def _ensure_upload_path_safe(self, repo_path: str, path: str) -> None:
+        repo_root = os.path.realpath(repo_path)
+        real_path = os.path.realpath(path)
+        try:
+            common = os.path.commonpath([repo_root, real_path])
+        except ValueError as exc:
+            raise ValueError("upload path escapes repo") from exc
+        if common != repo_root:
+            raise ValueError("upload path escapes repo")
+        rel = os.path.relpath(os.path.abspath(path), os.path.abspath(repo_path))
+        if rel == ".":
+            return
+        current = os.path.abspath(repo_path)
+        for part in rel.split(os.sep):
+            if not part or part == ".":
+                continue
+            current = os.path.join(current, part)
+            if os.path.islink(current):
+                raise ValueError("upload path contains a symlink")
 
     def _safe_attachment_filename(self, filename: str) -> str:
         """Collapse path-like attachment names to a basename under repo."""

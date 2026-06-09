@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0076] Harden upload persistence against aggregate-size abuse and symlink races.
+  - Completed: 2026-06-09
+  - Notes: Added `files.max_upload_total_mb` and `files.max_upload_count` batch limits while preserving per-file `files.max_upload_mb`. Upload saves now write to a repo-local temporary file, verify the temp file remains regular, recheck parent containment/no-symlink state, and finalize with an exclusive hard link so existing files are not overwritten. Existing final-path symlinks are rejected, symlink parent directories are rejected, and a file created during save causes unique-name finalization rather than overwrite. Updated config example and README. Targeted tests: `tests/test_dm_upload_download_gating.py`, `tests/test_config.py::test_load_config_upload_batch_limits`, `tests/test_dm_binding.py::test_dm_pending_upload_response_short_circuits`, `tests/test_integration_harness.py::test_totp_required_for_config_tests_download_logs_and_upload`.
+
 - [TASK-0074] Apply redaction consistently to session JSONL and Codex error logs.
   - Completed: 2026-06-09
   - Notes: `AuditLogger` exposes its configured `Redactor`; `Router` passes that same redactor into `SessionJsonlLogger` and applies it before writing `codex_errors.log`. Session JSONL redacts all event payloads before buffering/writing, and Codex error-log payloads are redacted before both the raw error log and mirrored `codex.error` session event. Custom redaction patterns are additive with built-in secret/TOTP patterns. `audit.redact` remains opt-in. Targeted tests: `tests/test_audit_redaction.py`, `tests/test_session_jsonl.py`, `tests/test_integration_harness.py::test_router_redacts_codex_error_and_session_jsonl_logs`, `tests/test_integration_harness.py::test_router_writes_codex_error_log`.

@@ -79,6 +79,8 @@ git:
 
 files:
   max_upload_mb: 200
+  max_upload_total_mb: 200
+  max_upload_count: 20
 
 repo_bootstrap:
   agents_template: ""

@@ -445,6 +445,37 @@ def test_load_config_runtime_health_fields(tmp_path, monkeypatch):
     assert cfg.runtime.show_reasoning_details is False
 
 
+def test_load_config_upload_batch_limits(tmp_path, monkeypatch):
+    code_root = tmp_path / "code"
+    data_dir = tmp_path / "data"
+    code_root.mkdir()
+    data_dir.mkdir()
+    monkeypatch.setenv("CODE_ROOT", str(code_root))
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        """
+        discord:
+          guild_id: "123"
+          allowed_user_ids: ["1"]
+        codex:
+          code_root: "$CODE_ROOT"
+        state:
+          data_dir: "%DATA_DIR%"
+        files:
+          max_upload_mb: 5
+          max_upload_total_mb: 8
+          max_upload_count: 3
+        """,
+        encoding="utf-8",
+    )
+    cfg = cfgmod.load(str(cfg_path))
+    assert cfg.files.max_upload_mb == 5
+    assert cfg.files.max_upload_total_mb == 8
+    assert cfg.files.max_upload_count == 3
+
+
 def test_load_config_boolean_string_values(tmp_path, monkeypatch):
     code_root = tmp_path / "code"
     data_dir = tmp_path / "data"
