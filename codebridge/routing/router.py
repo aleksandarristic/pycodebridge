@@ -1653,7 +1653,7 @@ class Router:
         killed = False
         blocked_running = False
         if proc is not None:
-            await proc.kill()
+            proc.kill()
             killed = True
         elif running_job:
             blocked_running = True
