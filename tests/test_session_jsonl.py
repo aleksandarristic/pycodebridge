@@ -2,6 +2,7 @@ import json
 import tarfile
 import time
 
+from codebridge.observability.audit import Redactor
 from codebridge.observability.session_jsonl import SessionJsonlLogger
 
 
@@ -18,6 +19,35 @@ def test_session_jsonl_append_writes_single_stream_per_session(tmp_path):
     assert first["event"] == "run.start"
     assert first["repo_name"] == "repo"
     assert second["event"] == "codex.exit"
+
+
+def test_session_jsonl_redacts_payloads_before_writing(tmp_path):
+    logger = SessionJsonlLogger(str(tmp_path), redactor=Redactor())
+    logger.append(
+        "chan",
+        "default",
+        "run.start",
+        {
+            "args": [
+                "exec",
+                "--totp",
+                "123456",
+                "token=abc123",
+                "sk-abcdefghijklmnopqrstuv",
+            ],
+            "stderr": "totp=654321 password = p@ss",
+        },
+        repo_name="repo",
+    )
+
+    path = tmp_path / "session_jsonl" / "active" / "chan" / "repo-repo__session-default.jsonl"
+    raw = path.read_text(encoding="utf-8")
+    assert "123456" not in raw
+    assert "654321" not in raw
+    assert "token=abc123" not in raw
+    assert "sk-abcdefghijklmnopqrstuv" not in raw
+    assert "password = p@ss" not in raw
+    assert "<redacted>" in raw
 
 
 def test_session_jsonl_cleanup_archives_old_active_files(tmp_path):

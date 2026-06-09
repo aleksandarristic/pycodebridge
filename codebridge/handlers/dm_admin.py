@@ -273,9 +273,11 @@ async def dm_reply(router: "Router", sink: ResponseSink, entry: Optional[Entry],
 
 def dm_audit_start(router: "Router", event: MessageEvent, cmd: str, rest: str) -> Optional[Entry]:
     """Start a DM audit entry for admin commands."""
+    sanitizer = getattr(router, "sanitize_totp_for_logs", None)
+    audit_args = sanitizer(rest) if callable(sanitizer) else rest
     meta = {
         "command": cmd,
-        "args": rest,
+        "args": audit_args,
         "timestamp": utc_now_iso(),
         "channel": f"dm-{event.author_id}",
     }

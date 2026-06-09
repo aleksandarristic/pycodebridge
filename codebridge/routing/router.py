@@ -17,7 +17,7 @@ import tempfile
 import zipfile
 
 from .. import config as cfgmod
-from ..observability.audit import Entry, Logger as AuditLogger
+from ..observability.audit import Entry, Logger as AuditLogger, Redactor
 from ..observability.audit_helpers import AuditHelper
 from ..observability.session_jsonl import SessionJsonlHelper, SessionJsonlLogger
 from ..agents.base import AgentBackend, NormalizedEvent, Options
@@ -59,6 +59,7 @@ from .status import format_current_selection_line, format_session_line
 from .event_context import build_contextual_sink, normalize_event_context
 
 _TOTP_ARG_RE = re.compile(r"(?:^|\s)--totp\s+(\d{6})(?=\s|$)")
+_TOTP_LOG_RE = re.compile(r"(?i)(--totp(?:\s+|=))\d{6}(?=\s|$)")
 _AWAITING_INPUT_TTL_SECONDS = 900
 _DEFAULT_UNLOCK_SECONDS = 3600
 _UNLOCK_TTL_RE = re.compile(r"^(\d+)\s*([mhd])$", re.IGNORECASE)
@@ -237,11 +238,14 @@ class Router:
         self._command_registry, self._command_specs = command_registry.build_registry()
         self.file_transfers = FileTransferService(cfg, logger)
         self._commit = _git_commit_hash()
+        self._redactor = getattr(audit, "redactor", None)
+        if self._redactor is None and self.cfg.audit.redact:
+            self._redactor = Redactor(self.cfg.audit.redact_patterns)
         self._audit_helper = AuditHelper(audit, logger)
         session_logger = None
         if self.cfg.state.log_dir:
             try:
-                session_logger = SessionJsonlLogger(self.cfg.state.log_dir)
+                session_logger = SessionJsonlLogger(self.cfg.state.log_dir, redactor=self._redactor)
             except Exception as exc:
                 self.logger.warning("session_jsonl.init_failed", extra={"error": str(exc)})
         self._session_log = SessionJsonlHelper(session_logger, logger)
@@ -3009,6 +3013,11 @@ class Router:
             return " ".join(parts)
         return cmdline
 
+    def sanitize_totp_for_logs(self, text: str) -> str:
+        """Mask TOTP command arguments before writing request metadata."""
+        normalized = self._normalize_unlock_totp_syntax(text or "")
+        return _TOTP_LOG_RE.sub(lambda match: f"{match.group(1)}<redacted>", normalized)
+
     def _totp_unlock_scope_key(self, event: MessageEvent, scope: str = _UNLOCK_SCOPE_DEFAULT) -> str:
         return f"{event.platform}:{event.author_id}:{scope}"
 
@@ -3429,6 +3438,8 @@ class Router:
                 "args": args,
                 "stderr_tail": list(stderr_lines[-20:]),
             }
+            if self._redactor:
+                payload = self._redactor.apply_obj(payload)
             with open(self._codex_error_log_path, "a", encoding="utf-8") as fh:
                 fh.write(json.dumps(payload, ensure_ascii=True) + "\n")
             self._session_log.append(

@@ -17,6 +17,15 @@ from ..util.session_artifacts import (
 )
 
 _LOG = logging.getLogger(__name__)
+_SENSITIVE_ARG_FLAGS = {
+    "--api-key",
+    "--apikey",
+    "--auth-token",
+    "--password",
+    "--secret",
+    "--token",
+    "--totp",
+}
 
 
 @dataclass
@@ -92,6 +101,11 @@ class Logger:
         os.makedirs(base_dir, exist_ok=True)
         self.base_dir = base_dir
         self._redactor = redactor
+
+    @property
+    def redactor(self) -> Optional["Redactor"]:
+        """Return the redactor used for this audit logger, if enabled."""
+        return self._redactor
 
     def start(self, channel_id: str, session: str, thread_id: str, request: Any) -> Entry:
         """Start a new audit entry and return its writer."""
@@ -196,8 +210,10 @@ class Redactor:
     """Redact secrets from text and JSON-like payloads."""
 
     def __init__(self, patterns: Optional[list[str]] = None) -> None:
-        if patterns is None or len(patterns) == 0:
-            patterns = _default_redaction_patterns()
+        base_patterns = _default_redaction_patterns()
+        if patterns:
+            base_patterns.extend(patterns)
+        patterns = base_patterns
         self._regexes = [re.compile(p) for p in patterns]
 
     def apply_text(self, text: str) -> str:
@@ -213,7 +229,16 @@ class Redactor:
         if isinstance(obj, dict):
             return {k: self.apply_obj(v) for k, v in obj.items()}
         if isinstance(obj, list):
-            return [self.apply_obj(v) for v in obj]
+            out = []
+            redact_next = False
+            for value in obj:
+                if redact_next and isinstance(value, str):
+                    out.append("<redacted>")
+                    redact_next = False
+                    continue
+                out.append(self.apply_obj(value))
+                redact_next = isinstance(value, str) and _is_sensitive_arg_flag(value)
+            return out
         if isinstance(obj, str):
             return self.apply_text(obj)
         return obj
@@ -250,12 +275,24 @@ def _write_json(path: str, payload: Any) -> None:
         json.dump(payload, f, indent=2)
 
 
+def _is_sensitive_arg_flag(value: str) -> bool:
+    raw = (value or "").strip().lower()
+    if not raw:
+        return False
+    if "=" in raw:
+        return False
+    flag = raw.split("=", 1)[0]
+    return flag in _SENSITIVE_ARG_FLAGS
+
+
 def _default_redaction_patterns() -> list[str]:
     return [
         r"sk-[A-Za-z0-9]{20,}",
         r"ghp_[A-Za-z0-9]{20,}",
         r"xox[bap]-[A-Za-z0-9-]{10,}",
         r"xapp-[A-Za-z0-9-]{10,}",
+        r"(?i)--totp(?:\s+|=)\d{6}(?=\s|$)",
+        r"(?i)\btotp\s*[:=]\s*\d{6}\b",
         r"(?i)(token|secret|password)\s*[:=]\s*[^\s]+",
     ]
 

@@ -53,6 +53,7 @@ class SessionJsonlLogger:
         flush_interval_seconds: float = _DEFAULT_FLUSH_INTERVAL_SECONDS,
         max_buffered_events: int = _DEFAULT_MAX_BUFFERED_EVENTS,
         max_buffered_bytes: int = _DEFAULT_MAX_BUFFERED_BYTES,
+        redactor: Optional[Any] = None,
     ) -> None:
         if not log_dir:
             raise ValueError("log dir is required")
@@ -63,6 +64,7 @@ class SessionJsonlLogger:
         self._flush_interval_seconds = max(0.0, float(flush_interval_seconds))
         self._max_buffered_events = max(1, int(max_buffered_events))
         self._max_buffered_bytes = max(1, int(max_buffered_bytes))
+        self._redactor = redactor
         self._next_maintenance_at = 0.0
         self._next_flush_at = 0.0
         self._pending_lines: dict[Path, list[str]] = {}
@@ -91,6 +93,8 @@ class SessionJsonlLogger:
                 "event": event,
                 "data": data or {},
             }
+            if self._redactor:
+                payload = self._redactor.apply_obj(payload)
             line = json.dumps(payload, ensure_ascii=True) + "\n"
             self._pending_lines.setdefault(path, []).append(line)
             self._pending_bytes[path] = self._pending_bytes.get(path, 0) + len(line.encode("utf-8"))

@@ -12,6 +12,14 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0074] Apply redaction consistently to session JSONL and Codex error logs.
+  - Completed: 2026-06-09
+  - Notes: `AuditLogger` exposes its configured `Redactor`; `Router` passes that same redactor into `SessionJsonlLogger` and applies it before writing `codex_errors.log`. Session JSONL redacts all event payloads before buffering/writing, and Codex error-log payloads are redacted before both the raw error log and mirrored `codex.error` session event. Custom redaction patterns are additive with built-in secret/TOTP patterns. `audit.redact` remains opt-in. Targeted tests: `tests/test_audit_redaction.py`, `tests/test_session_jsonl.py`, `tests/test_integration_harness.py::test_router_redacts_codex_error_and_session_jsonl_logs`, `tests/test_integration_harness.py::test_router_writes_codex_error_log`.
+
+- [TASK-0073] Sanitize TOTP before any DM audit write.
+  - Completed: 2026-06-09
+  - Notes: Added `Router.sanitize_totp_for_logs()` and applied it in `dm_audit_start()` so DM request metadata masks `--totp` values before opening the audit entry, including normalized bare `unlock <code>` syntax. Default redaction patterns now cover `--totp <code>`, `--totp=<code>`, and `totp=<code>` forms, including list-shaped CLI args where the code is a separate argument. Targeted tests cover DM unlock valid/replay paths and invalid high-risk DM admin create/delete paths.
+
 - [TASK-0080] Wrap stale unsupported-model Codex errors with actionable user guidance.
   - Completed: 2026-06-09
   - Notes: Router failure handling now detects Codex unsupported-model errors from parsed JSONL error events and stderr JSON lines, suppresses duplicate raw JSON relay, and returns a single actionable message naming the affected session/model with `!model` and `!reset` recovery commands. Existing non-model non-zero exits still include the exit code and last stderr. Targeted tests: `tests/test_integration_harness.py::test_run_codex_wraps_duplicate_unsupported_model_jsonl_error`, `tests/test_integration_harness.py::test_run_codex_wraps_unsupported_model_stderr_error`, `tests/test_integration_harness.py::test_run_codex_fails_fast_on_usage_error_without_compat_retry`, `tests/test_integration_harness.py::test_integration_auto_relays_plain_reply_when_codex_waits_for_input`, `tests/test_integration_harness.py::test_integration_wait_command_reports_pending_input`.

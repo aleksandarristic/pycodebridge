@@ -28,6 +28,7 @@ from types import SimpleNamespace
 
 from codebridge import config as cfgmod
 from codebridge.codex import CodexBackend, Options, Runner
+from codebridge.observability.audit import Logger as AuditLogger, Redactor
 from codebridge.routing.event_context import build_contextual_sink
 from codebridge.routing.router import Router
 from codebridge.sessions.coordinator import SessionCoordinator
@@ -315,7 +316,7 @@ def _totp_code(secret_b32: str, step_offset: int = 0) -> str:
     return _hotp(secret_b32, step)
 
 
-def _build_router(tmp_path, *, totp_enabled: bool = False, runner=None):
+def _build_router(tmp_path, *, totp_enabled: bool = False, runner=None, audit=None):
     """Construct a Router wired to test doubles and temp-backed state."""
     cfg = cfgmod.Config()
     cfg.discord.allowed_user_ids = ["user"]
@@ -330,7 +331,7 @@ def _build_router(tmp_path, *, totp_enabled: bool = False, runner=None):
     coordinator = SessionCoordinator(store, cfg)
     runner = runner or _FakeRunner()
     logger = _FakeLogger()
-    router = Router(cfg, store, _FakeAudit(), runner, coordinator, logger)
+    router = Router(cfg, store, audit if audit is not None else _FakeAudit(), runner, coordinator, logger)
     return router, runner
 
 
@@ -2985,6 +2986,48 @@ def test_totp_rate_limit_lock_and_cooldown(tmp_path, monkeypatch):
     assert "security.totp_success" in event_names
 
 
+def test_dm_audit_sanitizes_unlock_totp_before_valid_and_replay_paths(tmp_path, monkeypatch):
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+    audit = AuditLogger(str(tmp_path / "logs"))
+    router, _ = _build_router(tmp_path, totp_enabled=True, audit=audit)
+    router.cfg.discord.dm_admin_enabled = True
+    router.cfg.discord.allowed_user_ids = ["user"]
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    code = _totp_code(secret)
+
+    async def run():
+        await router.handle_dm_message(_discord_dm_event(f"!c unlock {code}"), sink)
+        await router.handle_dm_message(_discord_dm_event(f"!c unlock {code}"), sink)
+
+    asyncio.run(run())
+    request_text = "\n".join(path.read_text(encoding="utf-8") for path in (tmp_path / "logs").rglob("*.request.json"))
+    output_text = "\n".join(path.read_text(encoding="utf-8") for path in (tmp_path / "logs").rglob("*.discord_out.txt"))
+    assert code not in request_text
+    assert code not in output_text
+    assert "--totp <redacted>" in request_text
+    assert any("TOTP code already used" in msg for msg, _, _ in sink.sent)
+
+
+def test_dm_admin_audit_sanitizes_invalid_high_risk_totp_args(tmp_path, monkeypatch):
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", "JBSWY3DPEHPK3PXP")
+    audit = AuditLogger(str(tmp_path / "logs"))
+    router, _ = _build_router(tmp_path, totp_enabled=True, audit=audit)
+    router.cfg.discord.dm_admin_enabled = True
+    router.cfg.discord.allowed_user_ids = ["user"]
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_dm_message(_discord_dm_event("!c create demo --totp 000000"), sink)
+        await router.handle_dm_message(_discord_dm_event("!c deleterepo demo --totp 000000 --confirm-dangerous"), sink)
+
+    asyncio.run(run())
+    raw_logs = "\n".join(path.read_text(encoding="utf-8") for path in (tmp_path / "logs").rglob("*") if path.is_file())
+    assert "000000" not in raw_logs
+    assert raw_logs.count("--totp <redacted>") >= 2
+    assert any("Invalid TOTP code." in msg for msg, _, _ in sink.sent)
+
+
 # ---------------------------------------------------------------------------
 # Regression tests for local router helper behavior
 # ---------------------------------------------------------------------------
@@ -3141,3 +3184,38 @@ def test_router_writes_codex_error_log(tmp_path):
     event_payload = json.loads(session_lines[-1])
     assert event_payload["event"] == "codex.error"
     assert event_payload["data"]["return_code"] == 2
+
+
+def test_router_redacts_codex_error_and_session_jsonl_logs(tmp_path):
+    audit = AuditLogger(str(tmp_path / "logs"), redactor=Redactor())
+    router, _ = _build_router(tmp_path, audit=audit)
+    router._append_codex_error_log(
+        channel_id="chan",
+        session="default",
+        repo_name="repo",
+        repo_path="/tmp/repo",
+        args=[
+            "exec",
+            "--totp",
+            "123456",
+            "token=abc123",
+            "sk-abcdefghijklmnopqrstuv",
+        ],
+        return_code=2,
+        stderr_lines=["totp=654321 password = p@ss"],
+        note="secret: hello",
+    )
+    error_log = (tmp_path / "logs" / "codex_errors.log").read_text(encoding="utf-8")
+    session_path = tmp_path / "logs" / "session_jsonl" / "active" / "chan" / "repo-repo__session-default.jsonl"
+    session_log = session_path.read_text(encoding="utf-8")
+    combined = error_log + "\n" + session_log
+    for raw in (
+        "123456",
+        "654321",
+        "token=abc123",
+        "sk-abcdefghijklmnopqrstuv",
+        "password = p@ss",
+        "secret: hello",
+    ):
+        assert raw not in combined
+    assert "<redacted>" in combined

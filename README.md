@@ -120,8 +120,8 @@ network_access = true
 - `show_reasoning_details` (default `true`) — include reasoning level text in status/pinned output.
 
 ### `audit`
-- `redact` (default `false`) — redact secrets from audit logs before writing.
-- `redact_patterns` (default `[]`) — optional regex patterns to redact.
+- `redact` (default `false`) — redact secrets from audit logs, session JSONL logs, and Codex error logs before writing.
+- `redact_patterns` (default `[]`) — optional extra regex patterns to redact in addition to the built-in secret patterns.
 
 ### `transport`
 - `adapter` (default `discord`) — transport adapter to use (`discord` only).
