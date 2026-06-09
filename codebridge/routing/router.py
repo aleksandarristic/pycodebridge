@@ -86,6 +86,10 @@ _RUN_COMPLETION_MIN_SECONDS = 300
 _RUN_KEY_RESULT_MAX = 180
 _RUNTIME_OPTION_KEYS = ("run_heartbeat_seconds", "run_completion_min_seconds", "show_reasoning_details")
 _TOP_LEVEL_SHORTCUT_ALIASES = (("!reset", "reset"),)
+_CODEX_UNSUPPORTED_CHATGPT_MODEL_RE = re.compile(
+    r"The ['\"]([^'\"]+)['\"] model is not supported when using Codex with a ChatGPT account",
+    re.IGNORECASE,
+)
 
 
 class _RunBudgetMonitor:
@@ -114,6 +118,7 @@ class _RunRelayState:
     terminal_status: str = ""
     terminal_code: int | None = None
     suppressed_progress_events: int = 0
+    friendly_error: str = ""
 
     @property
     def is_terminal(self) -> bool:
@@ -2022,6 +2027,9 @@ class Router:
             stderr_tail.append(text)
             if len(stderr_tail) > 5:
                 del stderr_tail[: len(stderr_tail) - 5]
+            friendly_error = self._friendly_unsupported_model_error_from_line(channel_id, session, text)
+            if friendly_error and not run_state.friendly_error:
+                run_state.friendly_error = friendly_error
 
         async with self.typing_context(sink):
             args_to_run = list(original_args)
@@ -2123,10 +2131,13 @@ class Router:
                 )
                 await self._budget_soft_notify_if_needed(event, sink)
                 self._mark_run_terminal(channel_id, session, "failed", rc)
-                detail = f"Codex exited with code {rc}."
-                if stderr_tail:
-                    detail += f" Last stderr: {stderr_tail[-1]}"
-                detail += " Use `!c logs` for details."
+                if run_state.friendly_error:
+                    detail = f"{run_state.friendly_error}\nUse `!c logs` for raw details."
+                else:
+                    detail = f"Codex exited with code {rc}."
+                    if stderr_tail:
+                        detail += f" Last stderr: {stderr_tail[-1]}"
+                    detail += " Use `!c logs` for details."
                 await self.reply_forbidden(sink, detail)
                 self._session_log.append(
                     channel_id,
@@ -2285,6 +2296,79 @@ class Router:
             parts.append(f"Key result: {clipped}")
         await self.reply(sink, " ".join(parts))
 
+    def _friendly_unsupported_model_error_from_event(
+        self,
+        channel_id: str,
+        session: str,
+        evt: NormalizedEvent,
+    ) -> str:
+        candidates: list[str] = []
+        if isinstance(evt.error, dict):
+            for key in ("message", "detail", "error"):
+                value = evt.error.get(key)
+                if isinstance(value, str):
+                    candidates.append(value)
+        elif isinstance(evt.error, str):
+            candidates.append(evt.error)
+        candidates.extend(evt.texts)
+        candidates.append(evt.raw)
+        return self._friendly_unsupported_model_error_from_candidates(channel_id, session, candidates)
+
+    def _friendly_unsupported_model_error_from_line(self, channel_id: str, session: str, line: str) -> str:
+        text = strip_control_codes((line or "").strip())
+        if not text:
+            return ""
+        candidates = [text]
+        if text.startswith("{"):
+            try:
+                payload = json.loads(text)
+            except json.JSONDecodeError:
+                payload = None
+            if isinstance(payload, dict):
+                candidates = []
+                error = payload.get("error")
+                if isinstance(error, dict):
+                    for key in ("message", "detail", "error"):
+                        value = error.get(key)
+                        if isinstance(value, str):
+                            candidates.append(value)
+                elif isinstance(error, str):
+                    candidates.append(error)
+                for key in ("message", "detail"):
+                    value = payload.get(key)
+                    if isinstance(value, str):
+                        candidates.append(value)
+        return self._friendly_unsupported_model_error_from_candidates(channel_id, session, candidates)
+
+    def _friendly_unsupported_model_error_from_candidates(
+        self,
+        channel_id: str,
+        session: str,
+        candidates: list[str],
+    ) -> str:
+        for candidate in candidates:
+            match = _CODEX_UNSUPPORTED_CHATGPT_MODEL_RE.search(candidate or "")
+            if match:
+                return self._format_unsupported_model_error(channel_id, session, match.group(1))
+        return ""
+
+    def _format_unsupported_model_error(self, channel_id: str, session: str, unsupported_model: str) -> str:
+        session_name = session or DEFAULT_SESSION
+        current_model = self.session_model(channel_id, session_name)
+        if current_model and current_model != unsupported_model:
+            model_line = (
+                f"Session '{session_name}' is configured for model '{current_model}', "
+                f"but Codex rejected '{unsupported_model}'."
+            )
+        else:
+            model_line = f"Session '{session_name}' is configured for unsupported model '{unsupported_model}'."
+        return (
+            f"Codex cannot use model '{unsupported_model}' with this ChatGPT account.\n"
+            f"{model_line}\n"
+            f"Run `!c models` to list available models, then `!model {session_name} <model-id>` "
+            f"to replace the stale override. To discard stale session state, run `!reset {session_name}`."
+        )
+
     async def on_jsonl(
         self,
         sink: ResponseSink,
@@ -2335,6 +2419,14 @@ class Router:
         if run_state is not None and run_state.is_terminal:
             if evt.texts:
                 run_state.suppressed_progress_events += 1
+            return
+        friendly_error = self._friendly_unsupported_model_error_from_event(channel_id, session, evt)
+        if friendly_error:
+            if run_state is not None:
+                if not run_state.friendly_error:
+                    run_state.friendly_error = friendly_error
+            elif relay_output:
+                await self._emit_output(sink, channel_id, session, repo_name, entry, friendly_error, coalescer, flush=True)
             return
         if event is not None and budget_monitor is not None:
             current = self.get_usage(channel_id, session or DEFAULT_SESSION)

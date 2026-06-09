@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0080] Wrap stale unsupported-model Codex errors with actionable user guidance.
+  - Completed: 2026-06-09
+  - Notes: Router failure handling now detects Codex unsupported-model errors from parsed JSONL error events and stderr JSON lines, suppresses duplicate raw JSON relay, and returns a single actionable message naming the affected session/model with `!model` and `!reset` recovery commands. Existing non-model non-zero exits still include the exit code and last stderr. Targeted tests: `tests/test_integration_harness.py::test_run_codex_wraps_duplicate_unsupported_model_jsonl_error`, `tests/test_integration_harness.py::test_run_codex_wraps_unsupported_model_stderr_error`, `tests/test_integration_harness.py::test_run_codex_fails_fast_on_usage_error_without_compat_retry`, `tests/test_integration_harness.py::test_integration_auto_relays_plain_reply_when_codex_waits_for_input`, `tests/test_integration_harness.py::test_integration_wait_command_reports_pending_input`.
+
 - [TASK-0020] Add Gemini CLI backend.
   - Completed: 2026-06-09
   - Notes: `GeminiBackend` in `agents/gemini.py` — builds `gemini -o stream-json --skip-trust` invocations; `-p <prompt>`, `--resume <session_id>`, `--resume latest`, `-m <model>`, `--approval-mode <mode>`. `parse()` maps `init`→`init`, `message(role=assistant)`→`message` (content field), `error` event stashed in `_last_error_msg`, `result`→`result` (stats as usage + error from stash); everything else `None`. `GeminiConfig` dataclass in `config.py` (binary, approval_mode, model, env). `"gemini"` in `KNOWN_BACKENDS` and `build_backend()`. Gemini auth vars (`GEMINI_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_PROJECT`, `GEMINI_CLI_TRUST_WORKSPACE`) added to `_merge_env` allowlist. Schema documented in `.task-management/TASK-0020-gemini-stream-json-schema.md`. 25 focused tests in `tests/test_gemini_backend.py`.

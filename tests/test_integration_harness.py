@@ -183,6 +183,30 @@ class _LateOutputRunner:
         return self.last_proc
 
 
+class _ImmediateExitRunner:
+    # Emulate the Codex backend's JSONL parsing for router fallback parsing.
+    parse = CodexBackend.parse
+    ask_prefix = "Codex asks:"
+
+    def __init__(self, *, jsonl_lines=(), stderr_lines=(), rc: int = 1) -> None:
+        self.calls = []
+        self.jsonl_lines = list(jsonl_lines)
+        self.stderr_lines = list(stderr_lines)
+        self.rc = rc
+
+    async def run(self, opts: Options):
+        self.calls.append(list(opts.args))
+        if opts.on_thread:
+            await opts.on_thread("thread-1")
+        if opts.on_jsonl:
+            for line in self.jsonl_lines:
+                await opts.on_jsonl(line)
+        if opts.on_stderr:
+            for line in self.stderr_lines:
+                await opts.on_stderr(line)
+        return _ProcDone(self.rc)
+
+
 class _CapturingRealRunner(Runner):
     def __init__(self, sandbox: str, ask_for_approval: str, network_access: bool) -> None:
         super().__init__("codex", sandbox, {}, ask_for_approval, network_access)
@@ -2981,6 +3005,81 @@ def test_router_dm_binding_is_normalized(tmp_path):
     assert router.get_dm_binding(event) == "probablyfine"
 
 
+def _unsupported_model_error_line(model: str = "gpt-5.3-codex") -> str:
+    return json.dumps(
+        {
+            "type": "error",
+            "status": 400,
+            "error": {
+                "type": "invalid_request_error",
+                "message": f"The '{model}' model is not supported when using Codex with a ChatGPT account.",
+            },
+        }
+    )
+
+
+def test_run_codex_wraps_duplicate_unsupported_model_jsonl_error(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    line = _unsupported_model_error_line()
+    runner = _ImmediateExitRunner(jsonl_lines=[line, line], rc=1)
+    router, _ = _build_router(tmp_path, runner=runner)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    event = _discord_event("!c resume fix", "codex-repo")
+
+    async def run():
+        await router.run_codex(
+            event,
+            sink,
+            "repo",
+            str(repo),
+            "default",
+            "gpt-5.3-codex",
+            "",
+            ["exec", "resume"],
+        )
+
+    asyncio.run(run())
+    output = "\n".join(msg for msg, _, _ in sink.sent)
+    assert output.count("Codex cannot use model 'gpt-5.3-codex' with this ChatGPT account.") == 1
+    assert "Session 'default' is configured for unsupported model 'gpt-5.3-codex'." in output
+    assert "`!model default <model-id>`" in output
+    assert "`!reset default`" in output
+    assert '"type": "error"' not in output
+    assert '{"type":"error"' not in output
+
+
+def test_run_codex_wraps_unsupported_model_stderr_error(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    line = _unsupported_model_error_line()
+    runner = _ImmediateExitRunner(stderr_lines=[line, line], rc=1)
+    router, _ = _build_router(tmp_path, runner=runner)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    event = _discord_event("!c resume fix", "codex-repo")
+
+    async def run():
+        await router.run_codex(
+            event,
+            sink,
+            "repo",
+            str(repo),
+            "default",
+            "gpt-5.3-codex",
+            "",
+            ["exec", "resume"],
+        )
+
+    asyncio.run(run())
+    output = "\n".join(msg for msg, _, _ in sink.sent)
+    assert output.count("Codex cannot use model 'gpt-5.3-codex' with this ChatGPT account.") == 1
+    assert "Last stderr:" not in output
+    assert '"type": "error"' not in output
+    assert '{"type":"error"' not in output
+
+
 def test_run_codex_fails_fast_on_usage_error_without_compat_retry(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -3011,6 +3110,7 @@ def test_run_codex_fails_fast_on_usage_error_without_compat_retry(tmp_path):
     assert len(runner.calls) == 1
     assert runner.calls[0] == args
     assert any("Codex exited with code 2." in msg for msg, _, _ in sink.sent)
+    assert any("Last stderr: error: unexpected argument '--bad-flag'" in msg for msg, _, _ in sink.sent)
     assert not any("retrying with compatibility args" in msg for msg, _, _ in sink.sent)
     event_names = [name for _, name, _ in router.logger.entries]
     assert "codex.retry.stale_thread" not in event_names
