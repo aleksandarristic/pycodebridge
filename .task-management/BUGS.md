@@ -10,3 +10,5 @@ Rules:
 
 ## Bug backlog
 
+None right now.
+

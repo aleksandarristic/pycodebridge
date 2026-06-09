@@ -87,6 +87,8 @@ Source of truth: `codebridge/commands/shortcuts.py` and router shortcut normaliz
 - `!a:<session> <text>` -> `answer <session> -- <text>`
 - Conflict resolution shorthand:
 - `!cont` or `!continue` -> `choose continue`
+- `!new` -> `choose new`
+- `!compact` or `!cpt` -> `choose compact`
 
 ## DM command surface
 

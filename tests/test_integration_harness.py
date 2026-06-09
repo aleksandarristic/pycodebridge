@@ -27,7 +27,7 @@ from types import MethodType
 from types import SimpleNamespace
 
 from codebridge import config as cfgmod
-from codebridge.codex import Options, Runner
+from codebridge.codex import CodexBackend, Options, Runner
 from codebridge.routing.event_context import build_contextual_sink
 from codebridge.routing.router import Router
 from codebridge.sessions.coordinator import SessionCoordinator
@@ -122,6 +122,10 @@ class _ProcDone:
 
 
 class _FakeRunner:
+    # Emulate the Codex backend's JSONL parsing for router fallback parsing.
+    parse = CodexBackend.parse
+    ask_prefix = "Codex asks:"
+
     def __init__(self) -> None:
         self.calls = []
         self.last_proc = None
@@ -149,6 +153,9 @@ class _FakeRunner:
 
 
 class _LateOutputRunner:
+    # Emulate the Codex backend's JSONL parsing for router fallback parsing.
+    parse = CodexBackend.parse
+
     def __init__(self, *, initial_line: str = "", late_line: str = "", rc: int = 0, delay: float = 0.02) -> None:
         self.calls = []
         self.last_proc = None
@@ -1886,7 +1893,7 @@ def test_integration_session_archive_and_restore(tmp_path):
     assert any(args and args[0] == "resume" for args in runner.calls)
 
 
-def test_integration_resume_expired_session_requires_continue_or_new_or_compact(tmp_path):
+def test_integration_resume_expired_session_asks_user(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
@@ -1912,17 +1919,18 @@ def test_integration_resume_expired_session_requires_continue_or_new_or_compact(
 
     async def run():
         await router.handle_message(_discord_event("!c resume default continue work", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c choose continue", "codex-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
-    assert any("is inactive" in t for t in texts)
-    assert any("!c choose continue" in t for t in texts)
-    assert any("!c choose compact" in t for t in texts)
-    assert any(args == ["resume", "thread-old"] for args in runner.calls)
+    assert any("expired" in t.lower() for t in texts)
+    assert any("!cont" in t for t in texts)
+    assert any("!compact" in t for t in texts)
+    assert any("!new" in t for t in texts)
+    # No job started yet — waiting for user choice
+    assert not runner.calls
 
 
-def test_integration_resume_expired_session_choose_new_starts_fresh_with_original_prompt(tmp_path):
+def test_integration_resume_expired_session_compact_choice_uses_original_prompt(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
@@ -1956,67 +1964,22 @@ def test_integration_resume_expired_session_choose_new_starts_fresh_with_origina
 
     async def run():
         await router.handle_message(_discord_event("!c resume default focus only tests", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c choose new", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!compact", "codex-repo"), sink)
 
     asyncio.run(run())
-    assert captured_prompt["value"] == "focus only tests"
-    assert any(args == ["start"] for args in runner.calls)
-    assert not any(args == ["resume", "thread-old"] for args in runner.calls)
-
-
-def test_integration_resume_expired_session_choose_compact_starts_fresh_from_summary(tmp_path):
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    (repo / ".git").mkdir()
-
-    router, runner = _build_router(tmp_path)
-    router.cfg.state.session_idle_ttl_seconds = 3600
-    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    old_ts = (datetime.now(timezone.utc) - timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    captured_prompt = {"value": ""}
-
-    def _build_start_args(repo_path: str, prompt: str, model: str, reasoning: str) -> list[str]:
-        _ = (repo_path, model, reasoning)
-        captured_prompt["value"] = prompt
-        return ["start"]
-
-    runner.build_start_args = _build_start_args
-
-    def _seed(fs):
-        from codebridge.sessions.state import ChannelState, SessionState
-
-        ch = fs.channels.get("chan") or ChannelState()
-        ch.sessions["default"] = SessionState(
-            repo_name="repo",
-            repo_path=str(repo),
-            thread_id="thread-old",
-            last_used_at=old_ts,
-        )
-        fs.channels["chan"] = ch
-
-    router.state.update(_seed)
-
-    async def run():
-        await router.handle_message(_discord_event("!c resume default focus only tests", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c choose compact", "codex-repo"), sink)
-
-    asyncio.run(run())
-    assert "Session summary from previous expired thread." in captured_prompt["value"]
-    assert "Thread id: thread-old" in captured_prompt["value"]
+    assert "Session summary from the previous thread" in captured_prompt["value"]
     assert "New request:\nfocus only tests" in captured_prompt["value"]
     assert any(args == ["start"] for args in runner.calls)
     assert not any(args == ["resume", "thread-old"] for args in runner.calls)
 
 
-def test_integration_resume_expired_session_bang_continue_shortcut_continues(tmp_path):
+def test_integration_start_conflict_bang_new_shortcut_starts_fresh(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
 
     router, runner = _build_router(tmp_path)
-    router.cfg.state.session_idle_ttl_seconds = 3600
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    old_ts = (datetime.now(timezone.utc) - timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     def _seed(fs):
         from codebridge.sessions.state import ChannelState, SessionState
@@ -2026,30 +1989,60 @@ def test_integration_resume_expired_session_bang_continue_shortcut_continues(tmp
             repo_name="repo",
             repo_path=str(repo),
             thread_id="thread-old",
-            last_used_at=old_ts,
         )
         fs.channels["chan"] = ch
 
     router.state.update(_seed)
 
     async def run():
-        await router.handle_message(_discord_event("!c resume default continue work", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!continue", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!new", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("already exists" in t for t in texts)
+    assert any("!new" in t for t in texts)
+    assert any(args == ["start"] for args in runner.calls)
+    assert not any(args == ["resume", "thread-old"] for args in runner.calls)
+
+
+def test_integration_start_conflict_bang_cont_shortcut_continues(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    def _seed(fs):
+        from codebridge.sessions.state import ChannelState, SessionState
+
+        ch = fs.channels.get("chan") or ChannelState()
+        ch.sessions["default"] = SessionState(
+            repo_name="repo",
+            repo_path=str(repo),
+            thread_id="thread-old",
+        )
+        fs.channels["chan"] = ch
+
+    router.state.update(_seed)
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!cont", "codex-repo"), sink)
 
     asyncio.run(run())
     assert any(args == ["resume", "thread-old"] for args in runner.calls)
     assert not any(args == ["start"] for args in runner.calls)
 
 
-def test_integration_resume_expired_session_plain_reply_defaults_to_new_with_reply_prompt(tmp_path):
+def test_integration_start_conflict_bang_compact_summarizes_and_starts_fresh(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
 
     router, runner = _build_router(tmp_path)
-    router.cfg.state.session_idle_ttl_seconds = 3600
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    old_ts = (datetime.now(timezone.utc) - timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
     captured_prompt = {"value": ""}
 
     def _build_start_args(repo_path: str, prompt: str, model: str, reasoning: str) -> list[str]:
@@ -2067,18 +2060,20 @@ def test_integration_resume_expired_session_plain_reply_defaults_to_new_with_rep
             repo_name="repo",
             repo_path=str(repo),
             thread_id="thread-old",
-            last_used_at=old_ts,
         )
         fs.channels["chan"] = ch
 
     router.state.update(_seed)
 
     async def run():
-        await router.handle_message(_discord_event("!c resume default previous prompt", "codex-repo"), sink)
-        await router.handle_message(_discord_event("use this instead", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!compact", "codex-repo"), sink)
 
     asyncio.run(run())
-    assert captured_prompt["value"] == "use this instead"
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("already exists" in t for t in texts)
+    assert any("!compact" in t for t in texts)
+    assert "Session summary from the previous thread" in captured_prompt["value"]
     assert any(args == ["start"] for args in runner.calls)
     assert not any(args == ["resume", "thread-old"] for args in runner.calls)
 

@@ -20,7 +20,7 @@ RUN apt-get update \
         npm \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g @openai/codex
+RUN npm install -g @openai/codex @anthropic-ai/claude-code @google/gemini-cli
 
 WORKDIR /app
 

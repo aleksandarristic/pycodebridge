@@ -60,17 +60,19 @@ async def handle_start(
         await router.reply(
             sink,
             f"Session '{session}' already exists for this channel.\n"
-            "Choose one:\n!c choose continue\n!c choose new",
+            "Choose one:\n!cont – keep existing session\n!new  – start fresh\n"
+            "!compact – summarize prior context, then start fresh",
         )
         return
 
     model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)
-    args = router.runner.build_start_args(
+    backend = _session_backend_from_state(router, state, channel_id, session)
+    args = backend.build_start_args(
         repo_path, router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name), model, reasoning
     )
 
     async def job() -> None:
-        await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args)
+        await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args, backend=backend)
 
     pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, job)
     router.logger.info("enqueue.start", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
@@ -95,7 +97,11 @@ async def handle_resume(
     if sess and idle_ttl_seconds > 0 and not skip_idle_ttl_check:
         idle_seconds = _session_idle_seconds(sess.last_used_at or sess.created_at)
         if idle_seconds >= idle_ttl_seconds:
-            thread_id = sess.thread_id
+            router.logger.info(
+                "session.expired",
+                extra={"channel_id": channel_id, "session": session, "idle_seconds": idle_seconds},
+            )
+            thread_id = existing_thread(state, channel_id, session) or ""
             await router.coordinator.set_pending_conflict(
                 channel_id,
                 session,
@@ -106,30 +112,30 @@ async def handle_resume(
                     user_id=event.author_id,
                     expires_at=time.time() + router.cfg.state.conflict_ttl_seconds,
                     reason="session_expired",
-                    prompt=(prompt or "").strip(),
+                    prompt=prompt or "",
                 ),
             )
             await router.reply(
                 sink,
-                (
-                    f"Session '{session}' is inactive (idle {router._format_duration(idle_seconds)}, "
-                    f"TTL {router._format_duration(idle_ttl_seconds)}).\n"
-                    "Choose one:\n!c choose continue\n!c choose compact\n!c choose new"
-                ),
+                f"Session '{session}' expired (idle {router._format_duration(idle_seconds)}). What would you like to do?\n"
+                "!cont    – resume where you left off\n"
+                "!compact – summarize context, then start fresh\n"
+                "!new     – start completely fresh",
             )
             return
     thread_id = existing_thread(state, channel_id, session)
     model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)
+    backend = _session_backend_from_state(router, state, channel_id, session)
     if thread_id:
-        args = router.runner.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
+        args = backend.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
     elif session_exists(state, channel_id, session):
-        args = router.runner.build_resume_last_args(repo_path, prompt, model, reasoning)
+        args = backend.build_resume_last_args(repo_path, prompt, model, reasoning)
     else:
         # No existing session in this channel: start a fresh run with the prompt.
-        args = router.runner.build_start_args(repo_path, prompt, model, reasoning)
+        args = backend.build_start_args(repo_path, prompt, model, reasoning)
 
     async def job() -> None:
-        await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args)
+        await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args, backend=backend)
 
     pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, job)
     router.logger.info("enqueue.resume", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
@@ -262,14 +268,15 @@ async def handle_spec(
         return
     thread_id = existing_thread(state, channel_id, session)
     model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)
+    backend = _session_backend_from_state(router, state, channel_id, session)
     prompt = router.spec_prompt(repo_name)
     if thread_id:
-        args = router.runner.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
+        args = backend.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
     else:
-        args = router.runner.build_start_args(repo_path, prompt, model, reasoning)
+        args = backend.build_start_args(repo_path, prompt, model, reasoning)
 
     async def job() -> None:
-        await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args)
+        await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args, backend=backend)
 
     pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, job)
     router.logger.info("enqueue.spec", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
@@ -315,6 +322,7 @@ async def handle_choose(
     if choice == "compact":
         state = router.state.load()
         model, reasoning = _session_model_reasoning_from_state(router, state, event.channel_id, conflict.session)
+        backend = _session_backend_from_state(router, state, event.channel_id, conflict.session)
         start_prompt = router.build_compacted_session_prompt(
             event.channel_id,
             conflict.session,
@@ -323,10 +331,10 @@ async def handle_choose(
             (conflict.prompt or "").strip(),
         )
         router.clear_session_thread(event.channel_id, conflict.session)
-        args = router.runner.build_start_args(repo_path, start_prompt, model, reasoning)
+        args = backend.build_start_args(repo_path, start_prompt, model, reasoning)
 
         async def job() -> None:
-            await router.run_codex(event, sink, repo_name, repo_path, conflict.session, model, reasoning, args)
+            await router.run_codex(event, sink, repo_name, repo_path, conflict.session, model, reasoning, args, backend=backend)
 
         pos, job_id, _ = await router.coordinator.enqueue(event.channel_id, conflict.session, job)
         router.logger.info(
@@ -345,16 +353,13 @@ async def handle_choose(
     used_fallback_replace = choice != "replace"
     state = router.state.load()
     model, reasoning = _session_model_reasoning_from_state(router, state, event.channel_id, conflict.session)
-    start_prompt = (
-        (conflict.prompt or "").strip()
-        if conflict.reason == "session_expired"
-        else router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name)
-    ) or router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name)
+    backend = _session_backend_from_state(router, state, event.channel_id, conflict.session)
+    start_prompt = router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name)
     router.clear_session_thread(event.channel_id, conflict.session)
-    args = router.runner.build_start_args(repo_path, start_prompt, model, reasoning)
+    args = backend.build_start_args(repo_path, start_prompt, model, reasoning)
 
     async def job() -> None:
-        await router.run_codex(event, sink, repo_name, repo_path, conflict.session, model, reasoning, args)
+        await router.run_codex(event, sink, repo_name, repo_path, conflict.session, model, reasoning, args, backend=backend)
 
     pos, job_id, _ = await router.coordinator.enqueue(event.channel_id, conflict.session, job)
     router.logger.info(
@@ -522,17 +527,38 @@ async def handle_steer(router: "Router", event: MessageEvent, sink: ResponseSink
 
 def _session_model_reasoning_from_state(router: "Router", state, channel_id: str, session: str) -> tuple[str, str]:
     """Resolve model/reasoning for a session using one already-loaded state snapshot."""
-    default_model = router.cfg.codex.model
-    default_reasoning = router.cfg.codex.model_reasoning_effort
     ch = state.channels.get(channel_id)
-    if not ch:
-        return default_model, default_reasoning
-    sess = ch.sessions.get(session or DEFAULT_SESSION)
+    sess = ch.sessions.get(session or DEFAULT_SESSION) if ch else None
+    backend_name = (sess.backend if sess else "") or router.cfg.agent.default_backend
+    if backend_name == "claude":
+        default_model = router.cfg.claude.model
+        default_reasoning = router.cfg.claude.effort
+    elif backend_name == "gemini":
+        default_model = router.cfg.gemini.model
+        default_reasoning = ""
+    else:
+        default_model = router.cfg.codex.model
+        default_reasoning = router.cfg.codex.model_reasoning_effort
     if not sess:
         return default_model, default_reasoning
     model = sess.model or default_model
     reasoning = sess.reasoning_effort or default_reasoning
     return model, reasoning
+
+
+def _session_backend_from_state(router: "Router", state, channel_id: str, session: str):
+    """Resolve the AgentBackend for a session using one already-loaded state snapshot.
+
+    Returns router.runner when no explicit backend override is set so tests can
+    inject a fake runner without needing to monkeypatch the factory.
+    """
+    ch = state.channels.get(channel_id)
+    if ch:
+        sess = ch.sessions.get(session or DEFAULT_SESSION)
+        if sess and sess.backend:
+            from ..agents.factory import build_backend
+            return build_backend(router.cfg, sess.backend)
+    return router.runner
 
 
 def _usage_suffix(router: "Router", channel_id: str, session: str) -> str:

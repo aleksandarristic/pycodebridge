@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any, Awaitable, Callable, Dict, Optional, Set
 import json
 import tempfile
 import zipfile
@@ -20,7 +20,8 @@ from .. import config as cfgmod
 from ..observability.audit import Entry, Logger as AuditLogger
 from ..observability.audit_helpers import AuditHelper
 from ..observability.session_jsonl import SessionJsonlHelper, SessionJsonlLogger
-from ..codex import Event, Options, Runner, display_texts, parse_event
+from ..agents.base import AgentBackend, NormalizedEvent, Options
+from ..agents.factory import build_backend
 from ..sessions.coordinator import SessionCoordinator
 from ..sessions.state import Store, utc_now_iso
 from ..platform.transport import MessageEvent, ResponseSink, null_typing
@@ -119,6 +120,91 @@ class _RunRelayState:
         return bool(self.terminal_status)
 
 
+@dataclass
+class _OutputTracker:
+    """Track relayed output for the run-completion summary.
+
+    Lives in ``run_codex``'s scope so it is unaffected by ``on_exit`` clearing
+    the relay state; ``on_jsonl`` updates it in place as lines stream in.
+    """
+
+    events: int = 0
+    last: str = ""
+
+
+class _OutputCoalescer:
+    """Buffer streamed Codex output and flush it in fewer, larger sends.
+
+    A chatty run emits many small ``agent_message`` events; sending one Discord
+    message each hits the per-channel rate limit and spams the channel. Output
+    is buffered and flushed when it nears the message-size cap, after a short
+    idle window, or on an explicit ``flush`` (awaiting-input, run end). Ordering
+    is preserved and nothing is delayed past the run.
+    """
+
+    def __init__(
+        self,
+        relay: Callable[[str], Awaitable[None]],
+        max_chars: int,
+        flush_seconds: float,
+    ) -> None:
+        self._relay = relay
+        self._max_chars = max_chars if max_chars and max_chars > 0 else 0
+        self._flush_seconds = max(0.0, float(flush_seconds))
+        self._buf: list[str] = []
+        self._size = 0
+        self._lock = asyncio.Lock()
+        self._timer: Optional[asyncio.Task] = None
+
+    async def add(self, text: str) -> None:
+        async with self._lock:
+            extra = 1 if self._buf else 0
+            if self._max_chars and self._buf and self._size + extra + len(text) > self._max_chars:
+                await self._flush_locked()
+                extra = 0
+            self._buf.append(text)
+            self._size += len(text) + extra
+            if self._max_chars and self._size >= self._max_chars:
+                await self._flush_locked()
+            elif self._flush_seconds > 0:
+                self._arm_timer()
+            else:
+                await self._flush_locked()
+
+    async def flush(self) -> None:
+        async with self._lock:
+            await self._flush_locked()
+
+    async def _flush_locked(self) -> None:
+        self._cancel_timer()
+        if not self._buf:
+            return
+        text = "\n".join(self._buf)
+        self._buf.clear()
+        self._size = 0
+        await self._relay(text)
+
+    def _arm_timer(self) -> None:
+        if self._timer is not None and not self._timer.done():
+            return
+        self._timer = asyncio.create_task(self._flush_after_delay())
+
+    def _cancel_timer(self) -> None:
+        if self._timer is not None and not self._timer.done():
+            self._timer.cancel()
+        self._timer = None
+
+    async def _flush_after_delay(self) -> None:
+        try:
+            await asyncio.sleep(self._flush_seconds)
+        except asyncio.CancelledError:
+            return
+        # Drop our own handle before flushing so _flush_locked does not try to
+        # cancel the task that is currently running it.
+        self._timer = None
+        await self.flush()
+
+
 def _git_commit_hash() -> str:
     try:
         root = Path(__file__).resolve().parents[2]
@@ -135,7 +221,7 @@ def _git_commit_hash() -> str:
 
 class Router:
     """Main command router for Discord messages."""
-    def __init__(self, cfg: cfgmod.Config, state: Store, audit: AuditLogger, runner: Runner, coordinator: SessionCoordinator, logger):
+    def __init__(self, cfg: cfgmod.Config, state: Store, audit: AuditLogger, runner: AgentBackend, coordinator: SessionCoordinator, logger):
         self.cfg = cfg
         self.state = state
         self.audit = audit
@@ -1469,7 +1555,7 @@ class Router:
             return user_prompt or self.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name)
         summary = self._build_session_archive_text(channel_id, session, sess, repo_name or sess.repo_name, repo_path or sess.repo_path)
         lines = [
-            "Session summary from previous expired thread. Treat this summary as prior context instead of loading the old thread.",
+            "Session summary from the previous thread. Treat this summary as prior context instead of loading the old thread.",
             "",
             summary,
         ]
@@ -1568,7 +1654,7 @@ class Router:
         killed = False
         blocked_running = False
         if proc is not None:
-            await proc.kill()
+            proc.kill()
             killed = True
         elif running_job:
             blocked_running = True
@@ -1869,14 +1955,15 @@ class Router:
         args: list[str],
         on_output=None,
         relay_output: bool = True,
+        backend: Optional[AgentBackend] = None,
     ) -> None:
         """Run Codex with streaming callbacks and audit logging."""
         channel_id = event.channel_id
+        _backend = backend or self.runner
         if await self._budget_hard_blocked(event, sink, session):
             return
         started_at = time.monotonic()
-        last_output = ""
-        output_events = 0
+        tracker = _OutputTracker()
         usage_before = self.get_usage(channel_id, session)
         before_total = usage_before.total_tokens if usage_before else 0
         budget_monitor = _RunBudgetMonitor(
@@ -1886,15 +1973,6 @@ class Router:
             session_thresholds=self._budget_session_threshold(channel_id, session),
         )
         run_state = self._begin_run_relay(channel_id, session)
-
-        async def _capture_output(text: str) -> None:
-            nonlocal last_output, output_events
-            clean = strip_control_codes((text or "").strip())
-            if clean:
-                output_events += 1
-                last_output = clean
-            if on_output:
-                await on_output(text)
 
         original_args = list(args)
         meta = {
@@ -1916,11 +1994,17 @@ class Router:
                 "repo_path": repo_path,
                 "model": model,
                 "reasoning_effort": reasoning_effort,
+                "backend": type(_backend).__name__,
                 "args": original_args,
             },
             repo_name=repo_name,
         )
         entry = self._audit_helper.start(channel_id, session or DEFAULT_SESSION, "pending", meta)
+        coalescer = _OutputCoalescer(
+            relay=lambda text: self._relay_output_text(sink, channel_id, session, repo_name, entry, text),
+            max_chars=self.cfg.discord.max_discord_message_chars,
+            flush_seconds=getattr(self.cfg.runtime, "output_flush_seconds", 0.4),
+        )
         stderr_tail: list[str] = []
 
         async def _on_stderr(line: str) -> None:
@@ -1943,18 +2027,20 @@ class Router:
             args_to_run = list(original_args)
             stderr_tail.clear()
             try:
-                proc = await self.runner.run(
+                proc = await _backend.run(
                     Options(
                         repo_path=repo_path,
                         args=args_to_run,
                         env=self.cfg.codex.env,
-                        on_jsonl=lambda line: self.on_jsonl(
-                            sink, channel_id, session, repo_name, entry, line, relay_output, event, budget_monitor, run_state
+                        on_jsonl=lambda line, evt=None, _b=_backend: self.on_jsonl(
+                            sink, channel_id, session, repo_name, entry, line, relay_output,
+                            event, budget_monitor, run_state, evt=evt, tracker=tracker,
+                            coalescer=coalescer, backend=_b,
                         ),
                         on_thread=lambda tid: self.on_thread(
                             channel_id, session, repo_name, repo_path, model, reasoning_effort, entry, tid
                         ),
-                        on_output=_capture_output,
+                        on_output=on_output,
                         on_stderr=_on_stderr,
                         on_exit=lambda err, rc: self.on_exit(channel_id, session, repo_name, err, rc),
                     )
@@ -1994,6 +2080,9 @@ class Router:
                     with contextlib.suppress(asyncio.CancelledError):
                         await heartbeat_task
                 await self.clear_active(channel_id, session)
+                # Flush any buffered output (and cancel the idle timer) before the
+                # completion summary / error reply so streamed output stays ordered.
+                await coalescer.flush()
 
             if rc == 0:
                 usage_after = self.get_usage(channel_id, session)
@@ -2010,14 +2099,14 @@ class Router:
                         channel_id,
                         session,
                         started_at,
-                        output_events,
-                        last_output,
+                        tracker.events,
+                        tracker.last,
                     )
                 self._session_log.append(
                     channel_id,
                     session or DEFAULT_SESSION,
                     "run.complete",
-                    {"code": 0, "output_events": output_events, "terminal": True, "status": "success"},
+                    {"code": 0, "output_events": tracker.events, "terminal": True, "status": "success"},
                     repo_name=repo_name,
                 )
             else:
@@ -2208,8 +2297,17 @@ class Router:
         event: Optional[MessageEvent] = None,
         budget_monitor: Optional[_RunBudgetMonitor] = None,
         run_state: Optional[_RunRelayState] = None,
+        evt: Optional[NormalizedEvent] = None,
+        tracker: Optional[_OutputTracker] = None,
+        coalescer: Optional[_OutputCoalescer] = None,
+        backend: Optional[AgentBackend] = None,
     ) -> None:
-        """Handle a JSONL line from Codex and relay output."""
+        """Handle a JSONL line from Codex and relay output.
+
+        ``evt`` may be a pre-parsed event supplied by the runner so the line is
+        not JSON-parsed twice; it is parsed lazily here only when omitted.
+        ``coalescer``, when supplied, batches relayed output into fewer sends.
+        """
         self._session_log.append(
             channel_id,
             session or DEFAULT_SESSION,
@@ -2218,18 +2316,24 @@ class Router:
             repo_name=repo_name,
         )
         self._audit_helper.append_codex(entry, line)
-        evt = parse_event(line)
+        if evt is None:
+            evt = (backend or self.runner).parse(line)
         if not evt:
             text = strip_control_codes(line).strip()
-            if text and relay_output and not (run_state and run_state.is_terminal):
-                await self._relay_output_text(sink, channel_id, session, repo_name, entry, text)
-            elif text and run_state and run_state.is_terminal:
-                run_state.suppressed_progress_events += 1
+            # Skip JSON lines — these are unrecognised stream-json events (e.g.
+            # Claude/Gemini tool_use, rate_limit_event, etc.) that the backend
+            # parser intentionally returns None for. Only relay plain-text lines
+            # (e.g. Codex progress output).
+            if text and not text.startswith("{"):
+                if relay_output and not (run_state and run_state.is_terminal):
+                    await self._emit_output(sink, channel_id, session, repo_name, entry, text, coalescer)
+                elif run_state and run_state.is_terminal:
+                    run_state.suppressed_progress_events += 1
             return
         self.update_usage(channel_id, session, evt)
         self.update_activity(channel_id, session)
         if run_state is not None and run_state.is_terminal:
-            if display_texts(evt):
+            if evt.texts:
                 run_state.suppressed_progress_events += 1
             return
         if event is not None and budget_monitor is not None:
@@ -2244,13 +2348,22 @@ class Router:
                 current_total,
                 budget_monitor,
             )
-        for msg in display_texts(evt):
+        for msg in evt.texts:
             text = strip_control_codes(msg)
-            if needs_user_input(text):
+            awaiting = needs_user_input(text)
+            if awaiting:
                 self._mark_awaiting_input(channel_id, session)
-                text = f"Codex asks: {text}"
+                ask_prefix = (backend or self.runner).ask_prefix
+                text = f"{ask_prefix} {text}"
+            if tracker is not None and text.strip():
+                tracker.events += 1
+                tracker.last = text.strip()
             if relay_output:
-                await self._relay_output_text(sink, channel_id, session, repo_name, entry, text)
+                # Flush prompts immediately so the user is not left waiting on
+                # the idle window while Codex blocks for input.
+                await self._emit_output(
+                    sink, channel_id, session, repo_name, entry, text, coalescer, flush=awaiting
+                )
 
     async def on_thread(
         self,
@@ -2355,6 +2468,26 @@ class Router:
     def _clear_run_relay(self, channel_id: str, session: str) -> Optional[_RunRelayState]:
         return self._run_relays.pop(self._run_relay_key(channel_id, session), None)
 
+    async def _emit_output(
+        self,
+        sink: ResponseSink,
+        channel_id: str,
+        session: str,
+        repo_name: str,
+        entry: Optional[Entry],
+        text: str,
+        coalescer: Optional[_OutputCoalescer],
+        *,
+        flush: bool = False,
+    ) -> None:
+        """Relay output, coalescing into batched sends when a coalescer is set."""
+        if coalescer is None:
+            await self._relay_output_text(sink, channel_id, session, repo_name, entry, text)
+            return
+        await coalescer.add(text)
+        if flush:
+            await coalescer.flush()
+
     async def _relay_output_text(
         self,
         sink: ResponseSink,
@@ -2364,8 +2497,8 @@ class Router:
         entry: Optional[Entry],
         text: str,
     ) -> None:
-        clean = strip_control_codes(text)
-        for chunk in chunk_text(clean, self.cfg.discord.max_discord_message_chars):
+        # Callers pass text that has already had control codes stripped.
+        for chunk in chunk_text(text, self.cfg.discord.max_discord_message_chars):
             self._audit_helper.append_output(entry, chunk)
             self._session_log.append(
                 channel_id,
@@ -3269,7 +3402,25 @@ class Router:
         """Set model and reasoning overrides for a session."""
         self.coordinator.set_session_model(channel_id, session, repo_name, repo_path, model, reasoning_effort)
 
-    def update_usage(self, channel_id: str, session: str, evt: Event) -> None:
+    def backend_for(self, channel_id: str, session: str) -> AgentBackend:
+        """Return the resolved AgentBackend for a channel/session.
+
+        Returns self.runner when no explicit backend override is set so injected
+        test runners are used as-is.
+        """
+        state = self.state.load()
+        ch = state.channels.get(channel_id)
+        if ch:
+            sess = ch.sessions.get(session or DEFAULT_SESSION)
+            if sess and sess.backend:
+                return build_backend(self.cfg, sess.backend)
+        return self.runner
+
+    def set_session_backend(self, channel_id: str, session: str, backend: str) -> dict:
+        """Switch backend for a session; clears thread and resets model/effort."""
+        return self.coordinator.set_session_backend(channel_id, session, backend)
+
+    def update_usage(self, channel_id: str, session: str, evt: NormalizedEvent) -> None:
         """Update usage counters from a Codex event."""
         usage = usage_from_event(evt)
         if not usage:

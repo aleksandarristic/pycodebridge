@@ -11,10 +11,13 @@ services:
       - HOME=/workspace/home
       - XDG_CONFIG_HOME=/workspace/home/.config
       - GH_CONFIG_DIR=/workspace/home/.config/gh
+      - CLAUDE_CONFIG_DIR=/workspace/home/.claude
     command: ["-config", "/app/config.docker.yaml"]
     volumes:
       - ./:/app
       - ${CODE_ROOT_HOST:?Set CODE_ROOT_HOST in .env or shell}:/workspace/code_root
       - ${STATE_DIR_HOST:-./.docker-state}:/workspace/state
       - ${CODEX_AUTH_HOST:-./.docker-codex-auth}:/workspace/home/.codex
+      - ${CLAUDE_AUTH_HOST:-./.docker-claude-auth}:/workspace/home/.claude
+      - ${GEMINI_AUTH_HOST:-./.docker-gemini-auth}:/workspace/home/.gemini
       - ${GH_CONFIG_HOST:-./.docker-gh-config}:/workspace/home/.config/gh

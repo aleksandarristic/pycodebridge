@@ -22,6 +22,7 @@ class SessionState:
     thread_id: str
     model: str = ""
     reasoning_effort: str = ""
+    backend: str = ""
     created_at: str = ""
     last_used_at: str = ""
 
@@ -168,6 +169,7 @@ def _from_dict(data: Dict[str, Any]) -> FileState:
                 thread_id=s.get("thread_id", ""),
                 model=s.get("model", ""),
                 reasoning_effort=s.get("reasoning_effort", ""),
+                backend=s.get("backend", ""),
                 created_at=s.get("created_at", ""),
                 last_used_at=s.get("last_used_at", ""),
             )
@@ -220,6 +222,7 @@ def _to_dict(state: FileState) -> Dict[str, Any]:
                 "thread_id": s.thread_id,
                 "model": s.model,
                 "reasoning_effort": s.reasoning_effort,
+                "backend": s.backend,
                 "created_at": s.created_at,
                 "last_used_at": s.last_used_at,
             }

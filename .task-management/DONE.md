@@ -12,6 +12,54 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0020] Add Gemini CLI backend.
+  - Completed: 2026-06-09
+  - Notes: `GeminiBackend` in `agents/gemini.py` — builds `gemini -o stream-json --skip-trust` invocations; `-p <prompt>`, `--resume <session_id>`, `--resume latest`, `-m <model>`, `--approval-mode <mode>`. `parse()` maps `init`→`init`, `message(role=assistant)`→`message` (content field), `error` event stashed in `_last_error_msg`, `result`→`result` (stats as usage + error from stash); everything else `None`. `GeminiConfig` dataclass in `config.py` (binary, approval_mode, model, env). `"gemini"` in `KNOWN_BACKENDS` and `build_backend()`. Gemini auth vars (`GEMINI_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_PROJECT`, `GEMINI_CLI_TRUST_WORKSPACE`) added to `_merge_env` allowlist. Schema documented in `.task-management/TASK-0020-gemini-stream-json-schema.md`. 25 focused tests in `tests/test_gemini_backend.py`.
+
+- [TASK-0071] Add Claude Code CLI backend.
+  - Completed: 2026-06-09
+  - Notes: `ClaudeBackend` in `agents/claude.py` — builds `claude -p --output-format stream-json --verbose` invocations; `build_start_args`, `build_resume_args` (`--resume`), `build_resume_last_args` (`--continue`); `--model`, `--effort`, `--add-dir`, `--permission-mode`/`--dangerously-skip-permissions` flags. `parse()` maps `system/init`→`init`, `assistant`→`message` (text blocks only), `result`→`result` (usage + error); everything else returns `None`. `ClaudeConfig` dataclass in `config.py` (binary, permission_mode, model, effort, env). `"claude"` registered in `KNOWN_BACKENDS` and `build_backend()` in `factory.py`. Claude auth vars (`ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CONFIG_DIR`) added to `_merge_env` allowlist in `base.py`. Stream-json schema documented in `.task-management/TASK-0071-claude-stream-json-schema.md`. 24 focused tests in `tests/test_claude_backend.py`.
+
+- [TASK-0070] Per-session agent backend selection with `!agent` command.
+  - Completed: 2026-06-09
+  - Notes: `AgentConfig.default_backend` added to config; `SessionState.backend` field (backward-compat with existing state files); `SessionService.session_backend`/`set_session_backend` (switch clears thread_id, resets model/effort); `Router.backend_for` returns `self.runner` for default (test-injectable), builds fresh instance only on explicit override; `_session_backend_from_state` helper in `handlers/core.py`; all `handle_start`/`resume`/`spec`/`choose` call sites route through resolved backend; new `!c agent [session] <backend>` command mirroring `!c model` flow with queuing/validation/reset notification; `run_codex` accepts optional `backend` param; `on_jsonl` uses backend for parse(); `run.start` session log entry includes backend class name. 17 focused tests in `tests/test_agent_backend_selection.py`. Full suite green.
+
+- [TASK-0072] `!reset`/`!c reset` raises `TypeError` when a session has an active process.
+  - Completed: 2026-06-09
+  - Notes: `control_reset_session` called `await proc.kill()` at `router.py:1656`, but `Process.kill` (`agents/base.py:94`) is synchronous and returns `None`, so awaiting it raised `TypeError`. Dropped the `await` to match the sibling stop path (`router.py:1610`). The 3 previously-failing `tests/test_integration_harness.py` reset tests now pass; full suite green.
+
+- [TASK-0069] Abstract the agent backend behind a common interface.
+  - Completed: 2026-06-08
+  - Notes: New `codebridge/agents/` package. `agents/base.py` owns the backend-agnostic plumbing moved verbatim from `codex.py` (`Process`, `Options`, `_merge_env`) plus the shared streaming `AgentBackend.run` loop, the `AgentBackend` ABC (`build_start_args`/`build_resume_args`/`build_resume_last_args`/`parse`), and the `NormalizedEvent` seam (`type`, `session_id`, `texts`, `usage`, `error`, `raw`). `run` now calls `self.parse(line)` and uses `evt.texts` + a per-backend `ask_prefix` (Codex = "Codex asks:") instead of module-level `parse_event`/`display_texts`. `codex.py` keeps only Codex specifics (`Event`/`parse_event`/`agent_texts`/`display_texts` + arg grammar) as `CodexBackend(AgentBackend)`, whose `parse` delegates to the module-level `parse_event` (so the monkeypatch in `test_runner_parses_each_stdout_line_once` still works); `Runner = CodexBackend` alias preserves existing construction. `agents/factory.py` `build_backend(cfg, name)` (codex only for now). Consumers updated: `router.py` (`evt.texts`, `self.runner.parse` fallback, `AgentBackend`/`NormalizedEvent` types), `routing/helpers.py` (`usage_from_event` typed on `NormalizedEvent`), `cmd/bridge.py` uses `build_backend(cfg)`. Test doubles `_FakeRunner`/`_LateOutputRunner` gained `parse = CodexBackend.parse` (they feed JSONL the router parses on the fallback path). Pure refactor, no behavior change. Full suite green except the 3 known pre-existing `await proc.kill()` failures (sync `Process.kill`), which fail identically on HEAD and are unrelated. Selection/`!agent` command is TASK-0070; Claude backend is TASK-0071.
+
+- [TASK-0067] Choose and set a default `codex.model_reasoning_effort`.
+  - Completed: 2026-05-30
+  - Notes: Product decision taken by user ("use decision 1" = first option = `minimal`; global scope, no per-repo config). Set `model_reasoning_effort: "minimal"` in `config.yaml` and `config.example.yaml` (with comments explaining the token/quality tradeoff and the per-session override). Documented the default + override in README codex-config section. The dataclass default stays `""` (= Codex built-in default when unconfigured); the runner mechanism (`_reasoning_args` -> `-c model_reasoning_effort=...`) and the `!c model [session] <id> [reasoning]` override were already in place and tested. Added `test_load_config_codex_model_reasoning_effort` covering yaml parsing. NOTE for user: `minimal` is the lowest-token setting and may reduce answer quality on harder tasks — bump to `low`/`medium`/`high` in config or per session if needed.
+
+- [TASK-0065] Coalesce Codex output relay into batched Discord sends.
+  - Completed: 2026-05-30
+  - Notes: Added `_OutputCoalescer` (in `router.py`): buffers streamed output and flushes when it nears `max_discord_message_chars`, after an idle window, or on explicit flush. `run_codex` creates one per run and flushes it in the post-`wait()` `finally` (before the completion summary / error reply, so output stays ordered ahead of "Run complete"). `on_jsonl` routes relay through a new `_emit_output` helper that coalesces when a coalescer is supplied and force-flushes on awaiting-input ("Codex asks:") so prompts are never delayed; direct/test `on_jsonl` calls (no coalescer) still relay immediately. Window is a static config knob `runtime.output_flush_seconds` (default 0.4; 0 disables), documented in `config.example.yaml`. Chunking at `max_discord_message_chars` preserved; audit/session-jsonl logging still reflects what is actually sent. Fixed a timer self-cancellation case (idle-timer-triggered flush clears its own handle before flushing). Added `tests/test_output_coalescer.py`. Integration/model/codex suites pass (minus the 3 pre-existing `await proc.kill()` failures).
+
+- [TASK-0064] Single-parse the Codex JSONL stream path.
+  - Completed: 2026-05-30
+  - Notes: `codex.py` `_read_stdout` now parses each stdout line once (`parse_event`) and forwards the parsed `Event` to `on_jsonl(line, evt)`; thread id is read from `evt.thread_id` and the `on_output` block is guarded so it only runs when a consumer is registered. Removed the now-dead `extract_thread_id`. `router.on_jsonl` reuses the supplied `evt` (parses lazily only when omitted, preserving direct test calls). Output tracking moved off the redundant `_capture_output`/`on_output` path into a local `_OutputTracker` updated by `on_jsonl` (race-free vs `on_exit` clearing run state); `run_codex` now wires the caller's `on_output` directly (model-list path unchanged). Dropped the redundant re-strip in `_relay_output_text` (callers pre-strip). Net: JSON lines parsed once and stripped once before relay. Added `test_runner_parses_each_stdout_line_once`. Note: 3 pre-existing integration failures (`await proc.kill()` on sync `Process.kill`) are unrelated and fail identically on HEAD.
+
+- [TASK-0063] Expired-session recovery policy: auto-compact instead of blank restart.
+  - Completed: 2026-05-29
+  - Notes: On idle-expiry, `handle_resume` now builds a compacted prompt from the prior thread (via `build_compacted_session_prompt`) before clearing it, then auto-starts a fresh session seeded with that summary plus the user's prompt — instead of discarding context. User message reworded to "compacting prior context into a new session". Log events renamed to `session.expired.auto_compact` / `enqueue.resume_auto_compact`. Updated the two expired-session integration tests to assert the compacted prompt and compaction message.
+
+- [TASK-0062] Reconcile the `compact` option with the start-conflict prompt.
+  - Completed: 2026-05-29
+  - Notes: Surfaced `!compact – summarize prior context, then start fresh` in the start-conflict prompt (`handle_start`), so the `!compact`/`!cpt` shortcuts are discoverable. Fixed `build_compacted_session_prompt` lead-in wording ("the previous thread" instead of "previous expired thread") so it reads correctly for start-conflicts too. Added integration test covering `!compact` after a start-conflict (summarizes + starts fresh, no resume).
+
+- [TASK-0061] Remove orphaned `session_expired` conflict handling in `handle_choose`.
+  - Completed: 2026-05-29
+  - Notes: Collapsed the dead `conflict.reason == "session_expired"` ternary in `codebridge/handlers/core.py` (replace path now always uses the configured start prompt). No flow produced that reason after 42e73ff; confirmed zero remaining references in `codebridge/` and `tests/`. Conflict/choose integration tests pass.
+
+- [TASK-0060] Document new bang shortcuts (`!new`, `!compact`, `!cpt`) in README and COMMAND_SURFACE.
+  - Completed: 2026-05-29
+  - Notes: Added `!new` -> `choose new` and `!compact`/`!cpt` -> `choose compact` to `docs/COMMAND_SURFACE.md` conflict-resolution shorthand and to both README shortcut sections, matching `codebridge/commands/shortcuts.py`. Docs-only change; no code/tests affected.
+
 - [TASK-0059] `_toml_string()` uses `json.dumps` for TOML string values.
   - Completed: 2026-05-14
   - Notes: Added ASCII guard — raises ValueError for non-ASCII input rather than silently producing a value that Codex CLI may mis-parse.

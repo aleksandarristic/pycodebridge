@@ -93,6 +93,7 @@ class RuntimeConfig:
     run_heartbeat_seconds: int = 120
     run_completion_min_seconds: int = 300
     show_reasoning_details: bool = True
+    output_flush_seconds: float = 0.4
 
 
 @dataclass
@@ -139,10 +140,38 @@ class RepoBootstrapConfig:
 
 
 @dataclass
+class ClaudeConfig:
+    """Claude Code CLI backend configuration."""
+    binary: str = "claude"
+    permission_mode: str = "default"
+    model: str = ""
+    effort: str = ""
+    env: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class GeminiConfig:
+    """Gemini CLI backend configuration."""
+    binary: str = "gemini"
+    approval_mode: str = "yolo"  # default|auto_edit|yolo|plan
+    model: str = ""
+    env: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class AgentConfig:
+    """Agent backend configuration."""
+    default_backend: str = "codex"
+
+
+@dataclass
 class Config:
     """Top-level configuration container."""
     discord: DiscordConfig = field(default_factory=DiscordConfig)
     codex: CodexConfig = field(default_factory=CodexConfig)
+    claude: ClaudeConfig = field(default_factory=ClaudeConfig)
+    gemini: GeminiConfig = field(default_factory=GeminiConfig)
+    agent: AgentConfig = field(default_factory=AgentConfig)
     state: StateConfig = field(default_factory=StateConfig)
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
     audit: AuditConfig = field(default_factory=AuditConfig)
@@ -264,6 +293,22 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.codex.model_reasoning_effort = codex.get("model_reasoning_effort", cfg.codex.model_reasoning_effort)
     cfg.codex.env = dict(codex.get("env", cfg.codex.env) or {})
 
+    claude = raw.get("claude", {}) or {}
+    cfg.claude.binary = claude.get("binary", cfg.claude.binary)
+    cfg.claude.permission_mode = claude.get("permission_mode", cfg.claude.permission_mode)
+    cfg.claude.model = claude.get("model", cfg.claude.model)
+    cfg.claude.effort = claude.get("effort", cfg.claude.effort)
+    cfg.claude.env = dict(claude.get("env", cfg.claude.env) or {})
+
+    gemini = raw.get("gemini", {}) or {}
+    cfg.gemini.binary = gemini.get("binary", cfg.gemini.binary)
+    cfg.gemini.approval_mode = gemini.get("approval_mode", cfg.gemini.approval_mode)
+    cfg.gemini.model = gemini.get("model", cfg.gemini.model)
+    cfg.gemini.env = dict(gemini.get("env", cfg.gemini.env) or {})
+
+    agent = raw.get("agent", {}) or {}
+    cfg.agent.default_backend = agent.get("default_backend", cfg.agent.default_backend)
+
     state = raw.get("state", {}) or {}
     cfg.state.data_dir = state.get("data_dir", cfg.state.data_dir)
     cfg.state.lock_timeout_seconds = int(state.get("lock_timeout_seconds", cfg.state.lock_timeout_seconds))
@@ -286,6 +331,9 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.runtime.show_reasoning_details = _coerce_bool(
         runtime.get("show_reasoning_details", cfg.runtime.show_reasoning_details),
         "runtime.show_reasoning_details",
+    )
+    cfg.runtime.output_flush_seconds = max(
+        0.0, float(runtime.get("output_flush_seconds", cfg.runtime.output_flush_seconds))
     )
 
     audit = raw.get("audit", {}) or {}
@@ -374,6 +422,20 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.codex.env = {}
     if not cfg.codex.json:
         cfg.codex.json = True
+    if not cfg.claude.binary:
+        cfg.claude.binary = "claude"
+    if not cfg.claude.permission_mode:
+        cfg.claude.permission_mode = "default"
+    if cfg.claude.env is None:
+        cfg.claude.env = {}
+    if not cfg.gemini.binary:
+        cfg.gemini.binary = "gemini"
+    if not cfg.gemini.approval_mode:
+        cfg.gemini.approval_mode = "yolo"
+    if cfg.gemini.env is None:
+        cfg.gemini.env = {}
+    if not cfg.agent.default_backend:
+        cfg.agent.default_backend = "codex"
 
     if cfg.state.lock_timeout_seconds <= 0:
         cfg.state.lock_timeout_seconds = DEFAULT_LOCK_TIMEOUT_SECONDS

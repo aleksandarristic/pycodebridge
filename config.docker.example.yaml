@@ -29,10 +29,26 @@ codex:
   network_access: false  # when true, adds -c sandbox_workspace_write.network_access=true
   json: true
   model: ""  # recommended default: gpt-5.4 (routine), gpt-5.5 (complex)
-  model_reasoning_effort: ""  # recommended: medium (routine), high (complex)
+  model_reasoning_effort: ""  # valid: minimal|low|medium|high|xhigh
   start_prompt: |
     Discord bridge session for {{REPO_NAME}}. Work only in this repo and keep replies concise.
   env: {}
+
+claude:
+  binary: "claude"
+  permission_mode: "bypassPermissions"  # default|acceptEdits|auto|bypassPermissions
+  model: ""   # e.g. claude-sonnet-4-6, claude-opus-4-8, claude-haiku-4-5-20251001 (or aliases: sonnet, opus, haiku)
+  effort: ""  # e.g. low|medium|high|xhigh|max
+  env: {}
+
+gemini:
+  binary: "gemini"
+  approval_mode: "yolo"  # default|auto_edit|yolo|plan
+  model: ""  # e.g. gemini-2.5-pro, gemini-2.5-flash, gemini-3-flash-preview
+  env: {}
+
+agent:
+  default_backend: "codex"  # codex|claude|gemini
 
 state:
   data_dir: "/workspace/state"
