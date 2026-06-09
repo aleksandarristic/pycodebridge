@@ -332,3 +332,20 @@ def test_cmd_agent_with_session_name(tmp_path):
         assert state.channels["chan"].sessions["work"].reasoning_effort == ""
 
     asyncio.run(run())
+
+
+def test_cmd_agent_maps_codex_extra_high_to_xhigh(tmp_path):
+    router, _, _ = _make_router(tmp_path)
+    sink = _FakeSink()
+
+    async def run():
+        await router.handle_message(_discord_event("!c agent codex gpt-5.3-codex extra-high"), sink)
+        await asyncio.sleep(0)
+        state = router.state.load()
+        sess = state.channels["chan"].sessions["default"]
+        assert sess.backend == "codex"
+        assert sess.model == "gpt-5.3-codex"
+        assert sess.reasoning_effort == "xhigh"
+        assert any("effort=xhigh" in s for s in sink.sent)
+
+    asyncio.run(run())

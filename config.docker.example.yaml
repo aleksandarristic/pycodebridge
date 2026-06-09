@@ -29,7 +29,7 @@ codex:
   network_access: false  # when true, adds -c sandbox_workspace_write.network_access=true
   json: true
   model: ""  # recommended default: gpt-5.4 (routine), gpt-5.5 (complex)
-  model_reasoning_effort: ""  # recommended: medium (routine), high (complex)
+  model_reasoning_effort: ""  # valid: minimal|low|medium|high|xhigh
   start_prompt: |
     Discord bridge session for {{REPO_NAME}}. Work only in this repo and keep replies concise.
   env: {}

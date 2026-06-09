@@ -91,18 +91,20 @@ COMMAND_MODEL_META: Dict[str, Dict[str, str]] = {
 
 _MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{1,63}$")
 
-# Codex: canonical values as of current codex CLI
-_CODEX_EFFORT_VALID = ("low", "medium", "high", "extra-high")
+# Codex: canonical values for model_reasoning_effort in current Codex CLI config.
+_CODEX_EFFORT_VALID = ("minimal", "low", "medium", "high", "xhigh")
 _CODEX_EFFORT_ALIASES: Dict[str, str] = {
+    "minimal": "minimal",
+    "min": "minimal",
     "low": "low",
     "med": "medium",
     "medium": "medium",
     "high": "high",
-    "extra": "extra-high",
-    "extra-high": "extra-high",
-    "extra-highest": "extra-high",
-    "extrahigh": "extra-high",
-    "xhigh": "extra-high",
+    "extra": "xhigh",
+    "extra-high": "xhigh",
+    "extra-highest": "xhigh",
+    "extrahigh": "xhigh",
+    "xhigh": "xhigh",
 }
 # Claude: canonical values per Claude CLI --help
 _CLAUDE_EFFORT_VALID = ("none", "minimal", "low", "medium", "high", "xhigh")
@@ -955,7 +957,7 @@ async def _cmd_agents(router: Any, message: MessageEvent, sink: ResponseSink, re
             efforts = ", ".join(_CODEX_EFFORT_VALID)
             lines.append(f"**codex** — OpenAI Codex CLI")
             lines.append(f"  Effort levels: {efforts}")
-            lines.append(f"  Example: `{prefix} agent codex` or `{prefix} agent codex gpt-5.3-codex high`")
+            lines.append(f"  Example: `{prefix} agent codex` or `{prefix} agent codex gpt-5.3-codex xhigh`")
         elif bn == "claude":
             efforts = ", ".join(_CLAUDE_EFFORT_VALID)
             lines.append(f"**claude** — Anthropic Claude Code CLI")

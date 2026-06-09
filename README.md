@@ -94,7 +94,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `json` (default `true`) — JSONL streaming output (required).
 - `start_prompt` (default template) — prompt used for new sessions.
 - `model` (default empty) — default model; override per session with `!c model`.
-- `model_reasoning_effort` (default `minimal`) — default reasoning effort to keep token spend low; raise to `low`/`medium`/`high` for harder work, or override per session with `!c model [session] <id> [reasoning]`. Empty = Codex's built-in default.
+- `model_reasoning_effort` (default `minimal`) — default reasoning effort to keep token spend low; valid Codex values are `minimal`/`low`/`medium`/`high`/`xhigh`, or override per session with `!c model [session] <id> [reasoning]`. Empty = Codex's built-in default.
 - `env` (default `{}`) — extra environment variables for Codex.
 
 Important: if Codex cannot run `git push`, make sure network is enabled for the sandbox level you selected in the host Codex config (`~/.codex/config.toml`). For `workspace-write`, include:

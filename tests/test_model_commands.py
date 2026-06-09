@@ -258,3 +258,60 @@ def test_models_refresh_forces_codex_query(tmp_path, monkeypatch):
         assert any("/model" in args for args in runner.calls)
 
     asyncio.run(run())
+
+
+def test_codex_effort_aliases_match_cli_config_values():
+    assert command_registry._effort_list_for_backend("codex") == ("minimal", "low", "medium", "high", "xhigh")
+    assert command_registry._normalize_effort_for_backend("minimal", "codex") == "minimal"
+    assert command_registry._normalize_effort_for_backend("xhigh", "codex") == "xhigh"
+    assert command_registry._normalize_effort_for_backend("extra-high", "codex") == "xhigh"
+    assert command_registry._normalize_effort_for_backend("extra high", "codex") == "xhigh"
+
+
+def test_effort_command_sets_codex_xhigh(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!effort xhigh", "codex-repo"), sink)
+        assert router.session_reasoning_effort("chan", "default") == "xhigh"
+        assert any("set to xhigh" in s for s in sink.sent)
+
+    asyncio.run(run())
+
+
+def test_effort_command_maps_codex_extra_high_to_xhigh(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!effort extra-high", "codex-repo"), sink)
+        assert router.session_reasoning_effort("chan", "default") == "xhigh"
+        assert any("set to xhigh" in s for s in sink.sent)
+
+    asyncio.run(run())
+
+
+def test_model_command_maps_codex_extra_high_to_xhigh(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!model gpt-5.3-codex extra-high", "codex-repo"), sink)
+        assert router.session_model("chan", "default") == "gpt-5.3-codex"
+        assert router.session_reasoning_effort("chan", "default") == "xhigh"
+        assert any("set to gpt-5.3-codex reasoning xhigh" in s for s in sink.sent)
+
+    asyncio.run(run())

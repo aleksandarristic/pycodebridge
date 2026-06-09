@@ -30,7 +30,7 @@ codex:
   json: true
   model: ""  # recommended default: gpt-5.4 (routine), gpt-5.5 (complex)
   # Default reasoning effort. minimal = lowest token spend (good default for a
-  # chat bridge); raise to low/medium/high for harder tasks. Override per
+  # chat bridge); raise to low/medium/high/xhigh for harder tasks. Override per
   # session with `!c model [session] <id> [reasoning]`. Empty = Codex default.
   model_reasoning_effort: "minimal"
   start_prompt: |
