@@ -21,6 +21,7 @@ from ..observability.audit import Entry, Logger as AuditLogger
 from ..observability.audit_helpers import AuditHelper
 from ..observability.session_jsonl import SessionJsonlHelper, SessionJsonlLogger
 from ..agents.base import AgentBackend, NormalizedEvent, Options
+from ..agents.factory import build_backend
 from ..sessions.coordinator import SessionCoordinator
 from ..sessions.state import Store, utc_now_iso
 from ..platform.transport import MessageEvent, ResponseSink, null_typing
@@ -1954,9 +1955,11 @@ class Router:
         args: list[str],
         on_output=None,
         relay_output: bool = True,
+        backend: Optional[AgentBackend] = None,
     ) -> None:
         """Run Codex with streaming callbacks and audit logging."""
         channel_id = event.channel_id
+        _backend = backend or self.runner
         if await self._budget_hard_blocked(event, sink, session):
             return
         started_at = time.monotonic()
@@ -1991,6 +1994,7 @@ class Router:
                 "repo_path": repo_path,
                 "model": model,
                 "reasoning_effort": reasoning_effort,
+                "backend": type(_backend).__name__,
                 "args": original_args,
             },
             repo_name=repo_name,
@@ -2023,15 +2027,15 @@ class Router:
             args_to_run = list(original_args)
             stderr_tail.clear()
             try:
-                proc = await self.runner.run(
+                proc = await _backend.run(
                     Options(
                         repo_path=repo_path,
                         args=args_to_run,
                         env=self.cfg.codex.env,
-                        on_jsonl=lambda line, evt=None: self.on_jsonl(
+                        on_jsonl=lambda line, evt=None, _b=_backend: self.on_jsonl(
                             sink, channel_id, session, repo_name, entry, line, relay_output,
                             event, budget_monitor, run_state, evt=evt, tracker=tracker,
-                            coalescer=coalescer,
+                            coalescer=coalescer, backend=_b,
                         ),
                         on_thread=lambda tid: self.on_thread(
                             channel_id, session, repo_name, repo_path, model, reasoning_effort, entry, tid
@@ -2296,6 +2300,7 @@ class Router:
         evt: Optional[NormalizedEvent] = None,
         tracker: Optional[_OutputTracker] = None,
         coalescer: Optional[_OutputCoalescer] = None,
+        backend: Optional[AgentBackend] = None,
     ) -> None:
         """Handle a JSONL line from Codex and relay output.
 
@@ -2312,7 +2317,7 @@ class Router:
         )
         self._audit_helper.append_codex(entry, line)
         if evt is None:
-            evt = self.runner.parse(line)
+            evt = (backend or self.runner).parse(line)
         if not evt:
             text = strip_control_codes(line).strip()
             if text and relay_output and not (run_state and run_state.is_terminal):
@@ -3390,6 +3395,24 @@ class Router:
     ) -> None:
         """Set model and reasoning overrides for a session."""
         self.coordinator.set_session_model(channel_id, session, repo_name, repo_path, model, reasoning_effort)
+
+    def backend_for(self, channel_id: str, session: str) -> AgentBackend:
+        """Return the resolved AgentBackend for a channel/session.
+
+        Returns self.runner when no explicit backend override is set so injected
+        test runners are used as-is.
+        """
+        state = self.state.load()
+        ch = state.channels.get(channel_id)
+        if ch:
+            sess = ch.sessions.get(session or DEFAULT_SESSION)
+            if sess and sess.backend:
+                return build_backend(self.cfg, sess.backend)
+        return self.runner
+
+    def set_session_backend(self, channel_id: str, session: str, backend: str) -> dict:
+        """Switch backend for a session; clears thread and resets model/effort."""
+        return self.coordinator.set_session_backend(channel_id, session, backend)
 
     def update_usage(self, channel_id: str, session: str, evt: NormalizedEvent) -> None:
         """Update usage counters from a Codex event."""

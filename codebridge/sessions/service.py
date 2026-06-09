@@ -309,6 +309,59 @@ class SessionService:
                 thread_id = sess.thread_id
         self.update_state(channel_id, session, repo_name, repo_path, thread_id, model, reasoning_effort)
 
+    def session_backend(self, channel_id: str, session: str) -> str:
+        """Return the backend name for a session, falling back to the configured default."""
+        session = _normalize_session_default(session)
+        state = self._state.load()
+        ch = state.channels.get(channel_id)
+        if ch:
+            sess = ch.sessions.get(session)
+            if sess and sess.backend:
+                return sess.backend
+        return self._cfg.agent.default_backend
+
+    def set_session_backend(
+        self,
+        channel_id: str,
+        session: str,
+        backend: str,
+    ) -> dict:
+        """Switch backend for a session; clears thread_id and resets model/effort."""
+        session = _normalize_session_default(session)
+        cleared_thread = False
+        cleared_model = ""
+        cleared_effort = ""
+
+        def mutator(fs):
+            nonlocal cleared_thread, cleared_model, cleared_effort
+            ch = fs.channels.get(channel_id)
+            if ch is None:
+                from .state import ChannelState
+                ch = ChannelState()
+                fs.channels[channel_id] = ch
+            sess = ch.sessions.get(session)
+            if sess is None:
+                from .state import SessionState
+                sess = SessionState(repo_name="", repo_path="", thread_id="")
+                ch.sessions[session] = sess
+            if sess.thread_id:
+                cleared_thread = True
+                sess.thread_id = ""
+            cleared_model = sess.model
+            cleared_effort = sess.reasoning_effort
+            sess.model = ""
+            sess.reasoning_effort = ""
+            sess.backend = backend
+            ch.sessions[session] = sess
+            fs.channels[channel_id] = ch
+
+        self._state.update(mutator)
+        return {
+            "cleared_thread": cleared_thread,
+            "cleared_model": cleared_model,
+            "cleared_effort": cleared_effort,
+        }
+
     def current_session_for_user(self, user_id: str, channel_id: str, default_session: str = DEFAULT_SESSION) -> str:
         """Return sticky session selection for a user or default."""
         state = self._state.load()

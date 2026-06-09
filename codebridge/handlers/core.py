@@ -66,12 +66,13 @@ async def handle_start(
         return
 
     model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)
-    args = router.runner.build_start_args(
+    backend = _session_backend_from_state(router, state, channel_id, session)
+    args = backend.build_start_args(
         repo_path, router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name), model, reasoning
     )
 
     async def job() -> None:
-        await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args)
+        await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args, backend=backend)
 
     pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, job)
     router.logger.info("enqueue.start", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
@@ -101,35 +102,37 @@ async def handle_resume(
                 extra={"channel_id": channel_id, "session": session, "idle_seconds": idle_seconds},
             )
             model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)
+            backend = _session_backend_from_state(router, state, channel_id, session)
             # Build the summary while the expired thread is still readable, then clear it.
             start_prompt = router.build_compacted_session_prompt(
                 channel_id, session, repo_name, repo_path, (prompt or "").strip()
             )
             router.clear_session_thread(channel_id, session)
-            args = router.runner.build_start_args(repo_path, start_prompt, model, reasoning)
+            args = backend.build_start_args(repo_path, start_prompt, model, reasoning)
             await router.reply(
                 sink,
                 f"Session expired (idle {router._format_duration(idle_seconds)}), compacting prior context into a new session in '{session}'...",
             )
 
             async def expired_job() -> None:
-                await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args)
+                await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args, backend=backend)
 
             pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, expired_job)
             router.logger.info("enqueue.resume_auto_compact", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
             return
     thread_id = existing_thread(state, channel_id, session)
     model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)
+    backend = _session_backend_from_state(router, state, channel_id, session)
     if thread_id:
-        args = router.runner.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
+        args = backend.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
     elif session_exists(state, channel_id, session):
-        args = router.runner.build_resume_last_args(repo_path, prompt, model, reasoning)
+        args = backend.build_resume_last_args(repo_path, prompt, model, reasoning)
     else:
         # No existing session in this channel: start a fresh run with the prompt.
-        args = router.runner.build_start_args(repo_path, prompt, model, reasoning)
+        args = backend.build_start_args(repo_path, prompt, model, reasoning)
 
     async def job() -> None:
-        await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args)
+        await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args, backend=backend)
 
     pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, job)
     router.logger.info("enqueue.resume", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
@@ -262,14 +265,15 @@ async def handle_spec(
         return
     thread_id = existing_thread(state, channel_id, session)
     model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)
+    backend = _session_backend_from_state(router, state, channel_id, session)
     prompt = router.spec_prompt(repo_name)
     if thread_id:
-        args = router.runner.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
+        args = backend.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
     else:
-        args = router.runner.build_start_args(repo_path, prompt, model, reasoning)
+        args = backend.build_start_args(repo_path, prompt, model, reasoning)
 
     async def job() -> None:
-        await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args)
+        await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args, backend=backend)
 
     pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, job)
     router.logger.info("enqueue.spec", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
@@ -315,6 +319,7 @@ async def handle_choose(
     if choice == "compact":
         state = router.state.load()
         model, reasoning = _session_model_reasoning_from_state(router, state, event.channel_id, conflict.session)
+        backend = _session_backend_from_state(router, state, event.channel_id, conflict.session)
         start_prompt = router.build_compacted_session_prompt(
             event.channel_id,
             conflict.session,
@@ -323,10 +328,10 @@ async def handle_choose(
             (conflict.prompt or "").strip(),
         )
         router.clear_session_thread(event.channel_id, conflict.session)
-        args = router.runner.build_start_args(repo_path, start_prompt, model, reasoning)
+        args = backend.build_start_args(repo_path, start_prompt, model, reasoning)
 
         async def job() -> None:
-            await router.run_codex(event, sink, repo_name, repo_path, conflict.session, model, reasoning, args)
+            await router.run_codex(event, sink, repo_name, repo_path, conflict.session, model, reasoning, args, backend=backend)
 
         pos, job_id, _ = await router.coordinator.enqueue(event.channel_id, conflict.session, job)
         router.logger.info(
@@ -345,12 +350,13 @@ async def handle_choose(
     used_fallback_replace = choice != "replace"
     state = router.state.load()
     model, reasoning = _session_model_reasoning_from_state(router, state, event.channel_id, conflict.session)
+    backend = _session_backend_from_state(router, state, event.channel_id, conflict.session)
     start_prompt = router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name)
     router.clear_session_thread(event.channel_id, conflict.session)
-    args = router.runner.build_start_args(repo_path, start_prompt, model, reasoning)
+    args = backend.build_start_args(repo_path, start_prompt, model, reasoning)
 
     async def job() -> None:
-        await router.run_codex(event, sink, repo_name, repo_path, conflict.session, model, reasoning, args)
+        await router.run_codex(event, sink, repo_name, repo_path, conflict.session, model, reasoning, args, backend=backend)
 
     pos, job_id, _ = await router.coordinator.enqueue(event.channel_id, conflict.session, job)
     router.logger.info(
@@ -529,6 +535,21 @@ def _session_model_reasoning_from_state(router: "Router", state, channel_id: str
     model = sess.model or default_model
     reasoning = sess.reasoning_effort or default_reasoning
     return model, reasoning
+
+
+def _session_backend_from_state(router: "Router", state, channel_id: str, session: str):
+    """Resolve the AgentBackend for a session using one already-loaded state snapshot.
+
+    Returns router.runner when no explicit backend override is set so tests can
+    inject a fake runner without needing to monkeypatch the factory.
+    """
+    ch = state.channels.get(channel_id)
+    if ch:
+        sess = ch.sessions.get(session or DEFAULT_SESSION)
+        if sess and sess.backend:
+            from ..agents.factory import build_backend
+            return build_backend(router.cfg, sess.backend)
+    return router.runner
 
 
 def _usage_suffix(router: "Router", channel_id: str, session: str) -> str:

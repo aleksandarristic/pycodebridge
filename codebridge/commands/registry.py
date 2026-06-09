@@ -51,6 +51,7 @@ COMMAND_MODEL_META: Dict[str, Dict[str, str]] = {
     "resume": {"surface": SURFACE_CORE, "namespace": "session"},
     "choose": {"surface": SURFACE_SUPPORT, "namespace": "session"},
     "use": {"surface": SURFACE_CORE, "namespace": "session"},
+    "agent": {"surface": SURFACE_ADVANCED, "namespace": "session"},
     "model": {"surface": SURFACE_ADVANCED, "namespace": "session"},
     "models": {"surface": SURFACE_ADVANCED, "namespace": "session"},
     "thread": {"surface": SURFACE_ADMIN, "namespace": "session"},
@@ -359,6 +360,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             aliases=("pick",),
         ),
         CommandSpec("use", "use <session>", "set your sticky session", "Sessions", _cmd_use, AUTH_UNLOCK, aliases=("select",)),
+        CommandSpec("agent", "agent [session] <backend>", "set session agent backend", "Sessions", _cmd_agent, AUTH_UNLOCK),
         CommandSpec("model", "model [session] <id> [reasoning]", "set session model", "Sessions", _cmd_model, AUTH_UNLOCK, aliases=("mdl",)),
         CommandSpec(
             "models",
@@ -709,6 +711,48 @@ async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, rep
     await apply_model()
 
 
+async def _cmd_agent(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    from ..agents.factory import KNOWN_BACKENDS
+    parts = rest.split()
+    if not parts:
+        await router.reply_forbidden(sink, "Usage: !c agent [session] <backend-name>")
+        return
+    session_name = _current_session(router, message)
+    backend_name = ""
+    if len(parts) == 1:
+        backend_name = parts[0]
+    else:
+        session_name = parts[0]
+        backend_name = parts[1]
+    session_name = await _resolve_session_name(router, message, sink, session_name)
+    if not session_name:
+        return
+    backend_name = backend_name.strip().lower()
+    if backend_name not in KNOWN_BACKENDS:
+        known = ", ".join(sorted(KNOWN_BACKENDS))
+        await router.reply_forbidden(sink, f"Unknown backend {backend_name!r}. Available: {known}.")
+        return
+
+    async def apply_backend() -> None:
+        result = router.set_session_backend(message.channel_id, session_name, backend_name)
+        parts_msg = [f"Backend for session '{session_name}' set to {backend_name!r}."]
+        if result.get("cleared_thread"):
+            parts_msg.append("Thread id cleared (cross-backend ids cannot resume).")
+        if result.get("cleared_model") or result.get("cleared_effort"):
+            parts_msg.append("Model and reasoning effort reset to backend defaults.")
+        await router.reply(sink, " ".join(parts_msg))
+        await router.update_pinned_status(sink, message.author_id, session_name)
+
+    if await router.has_active(message.channel_id):
+        async def job() -> None:
+            await apply_backend()
+        pos, job_id, _ = await router.coordinator.enqueue(message.channel_id, session_name, job)
+        await router.reply(sink, f"Queued backend change for session '{session_name}' to {backend_name!r} as {job_id} (pos {pos}).")
+        return
+
+    await apply_backend()
+
+
 async def _cmd_models(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     parts = rest.split()
     refresh_tokens = {"refresh", "--refresh", "-r"}
@@ -741,14 +785,15 @@ async def _cmd_models(router: Any, message: MessageEvent, sink: ResponseSink, re
     reasoning = ""
     prompt = "/model"
     thread_id = existing_thread(state, channel_id, session_name)
+    backend = router.backend_for(channel_id, session_name)
     if thread_id:
-        args = router.runner.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
+        args = backend.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
     else:
         # If the session exists but thread id is missing, prefer resume --last to avoid creating a new session.
         if session_exists(state, channel_id, session_name):
-            args = router.runner.build_resume_last_args(repo_path, prompt, model, reasoning)
+            args = backend.build_resume_last_args(repo_path, prompt, model, reasoning)
         else:
-            args = router.runner.build_start_args(repo_path, prompt, model, reasoning)
+            args = backend.build_start_args(repo_path, prompt, model, reasoning)
 
     collected: list[str] = []
 
@@ -767,6 +812,7 @@ async def _cmd_models(router: Any, message: MessageEvent, sink: ResponseSink, re
             args,
             on_output=on_output,
             relay_output=False,
+            backend=backend,
         )
         models = parse_models_from_lines(collected)
         if cached and not models:

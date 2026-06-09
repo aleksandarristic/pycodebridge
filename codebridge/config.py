@@ -140,10 +140,17 @@ class RepoBootstrapConfig:
 
 
 @dataclass
+class AgentConfig:
+    """Agent backend configuration."""
+    default_backend: str = "codex"
+
+
+@dataclass
 class Config:
     """Top-level configuration container."""
     discord: DiscordConfig = field(default_factory=DiscordConfig)
     codex: CodexConfig = field(default_factory=CodexConfig)
+    agent: AgentConfig = field(default_factory=AgentConfig)
     state: StateConfig = field(default_factory=StateConfig)
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
     audit: AuditConfig = field(default_factory=AuditConfig)
@@ -265,6 +272,9 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.codex.model_reasoning_effort = codex.get("model_reasoning_effort", cfg.codex.model_reasoning_effort)
     cfg.codex.env = dict(codex.get("env", cfg.codex.env) or {})
 
+    agent = raw.get("agent", {}) or {}
+    cfg.agent.default_backend = agent.get("default_backend", cfg.agent.default_backend)
+
     state = raw.get("state", {}) or {}
     cfg.state.data_dir = state.get("data_dir", cfg.state.data_dir)
     cfg.state.lock_timeout_seconds = int(state.get("lock_timeout_seconds", cfg.state.lock_timeout_seconds))
@@ -378,6 +388,8 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.codex.env = {}
     if not cfg.codex.json:
         cfg.codex.json = True
+    if not cfg.agent.default_backend:
+        cfg.agent.default_backend = "codex"
 
     if cfg.state.lock_timeout_seconds <= 0:
         cfg.state.lock_timeout_seconds = DEFAULT_LOCK_TIMEOUT_SECONDS

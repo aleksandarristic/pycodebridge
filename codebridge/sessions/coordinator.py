@@ -105,6 +105,12 @@ class SessionCoordinator:
     ) -> None:
         self._sessions.set_session_model(channel_id, session, repo_name, repo_path, model, reasoning_effort)
 
+    def session_backend(self, channel_id: str, session: str) -> str:
+        return self._sessions.session_backend(channel_id, session)
+
+    def set_session_backend(self, channel_id: str, session: str, backend: str) -> dict:
+        return self._sessions.set_session_backend(channel_id, session, backend)
+
     def update_activity(self, channel_id: str, session: str) -> None:
         self._sessions.update_activity(channel_id, session)
 

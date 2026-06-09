@@ -15,6 +15,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from .. import config as cfgmod
 
 DEFAULT_BACKEND = "codex"
+KNOWN_BACKENDS: frozenset[str] = frozenset({"codex"})
 
 
 def build_backend(cfg: "cfgmod.Config", name: str = DEFAULT_BACKEND) -> AgentBackend:
