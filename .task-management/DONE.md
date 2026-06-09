@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0070] Per-session agent backend selection with `!agent` command.
+  - Completed: 2026-06-09
+  - Notes: `AgentConfig.default_backend` added to config; `SessionState.backend` field (backward-compat with existing state files); `SessionService.session_backend`/`set_session_backend` (switch clears thread_id, resets model/effort); `Router.backend_for` returns `self.runner` for default (test-injectable), builds fresh instance only on explicit override; `_session_backend_from_state` helper in `handlers/core.py`; all `handle_start`/`resume`/`spec`/`choose` call sites route through resolved backend; new `!c agent [session] <backend>` command mirroring `!c model` flow with queuing/validation/reset notification; `run_codex` accepts optional `backend` param; `on_jsonl` uses backend for parse(); `run.start` session log entry includes backend class name. 17 focused tests in `tests/test_agent_backend_selection.py`. Full suite green.
+
 - [TASK-0072] `!reset`/`!c reset` raises `TypeError` when a session has an active process.
   - Completed: 2026-06-09
   - Notes: `control_reset_session` called `await proc.kill()` at `router.py:1656`, but `Process.kill` (`agents/base.py:94`) is synchronous and returns `None`, so awaiting it raised `TypeError`. Dropped the `await` to match the sibling stop path (`router.py:1610`). The 3 previously-failing `tests/test_integration_harness.py` reset tests now pass; full suite green.
