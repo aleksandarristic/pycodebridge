@@ -2320,10 +2320,15 @@ class Router:
             evt = (backend or self.runner).parse(line)
         if not evt:
             text = strip_control_codes(line).strip()
-            if text and relay_output and not (run_state and run_state.is_terminal):
-                await self._emit_output(sink, channel_id, session, repo_name, entry, text, coalescer)
-            elif text and run_state and run_state.is_terminal:
-                run_state.suppressed_progress_events += 1
+            # Skip JSON lines — these are unrecognised stream-json events (e.g.
+            # Claude/Gemini tool_use, rate_limit_event, etc.) that the backend
+            # parser intentionally returns None for. Only relay plain-text lines
+            # (e.g. Codex progress output).
+            if text and not text.startswith("{"):
+                if relay_output and not (run_state and run_state.is_terminal):
+                    await self._emit_output(sink, channel_id, session, repo_name, entry, text, coalescer)
+                elif run_state and run_state.is_terminal:
+                    run_state.suppressed_progress_events += 1
             return
         self.update_usage(channel_id, session, evt)
         self.update_activity(channel_id, session)
@@ -2348,7 +2353,8 @@ class Router:
             awaiting = needs_user_input(text)
             if awaiting:
                 self._mark_awaiting_input(channel_id, session)
-                text = f"Codex asks: {text}"
+                ask_prefix = (backend or self.runner).ask_prefix
+                text = f"{ask_prefix} {text}"
             if tracker is not None and text.strip():
                 tracker.events += 1
                 tracker.last = text.strip()

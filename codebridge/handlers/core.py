@@ -98,27 +98,30 @@ async def handle_resume(
         idle_seconds = _session_idle_seconds(sess.last_used_at or sess.created_at)
         if idle_seconds >= idle_ttl_seconds:
             router.logger.info(
-                "session.expired.auto_compact",
+                "session.expired",
                 extra={"channel_id": channel_id, "session": session, "idle_seconds": idle_seconds},
             )
-            model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)
-            backend = _session_backend_from_state(router, state, channel_id, session)
-            # Build the summary while the expired thread is still readable, then clear it.
-            start_prompt = router.build_compacted_session_prompt(
-                channel_id, session, repo_name, repo_path, (prompt or "").strip()
+            thread_id = existing_thread(state, channel_id, session) or ""
+            await router.coordinator.set_pending_conflict(
+                channel_id,
+                session,
+                PendingConflict(
+                    repo_name=repo_name,
+                    session=session,
+                    thread_id=thread_id,
+                    user_id=event.author_id,
+                    expires_at=time.time() + router.cfg.state.conflict_ttl_seconds,
+                    reason="session_expired",
+                    prompt=prompt or "",
+                ),
             )
-            router.clear_session_thread(channel_id, session)
-            args = backend.build_start_args(repo_path, start_prompt, model, reasoning)
             await router.reply(
                 sink,
-                f"Session expired (idle {router._format_duration(idle_seconds)}), compacting prior context into a new session in '{session}'...",
+                f"Session '{session}' expired (idle {router._format_duration(idle_seconds)}). What would you like to do?\n"
+                "!cont    – resume where you left off\n"
+                "!compact – summarize context, then start fresh\n"
+                "!new     – start completely fresh",
             )
-
-            async def expired_job() -> None:
-                await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args, backend=backend)
-
-            pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, expired_job)
-            router.logger.info("enqueue.resume_auto_compact", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
             return
     thread_id = existing_thread(state, channel_id, session)
     model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)
@@ -524,12 +527,18 @@ async def handle_steer(router: "Router", event: MessageEvent, sink: ResponseSink
 
 def _session_model_reasoning_from_state(router: "Router", state, channel_id: str, session: str) -> tuple[str, str]:
     """Resolve model/reasoning for a session using one already-loaded state snapshot."""
-    default_model = router.cfg.codex.model
-    default_reasoning = router.cfg.codex.model_reasoning_effort
     ch = state.channels.get(channel_id)
-    if not ch:
-        return default_model, default_reasoning
-    sess = ch.sessions.get(session or DEFAULT_SESSION)
+    sess = ch.sessions.get(session or DEFAULT_SESSION) if ch else None
+    backend_name = (sess.backend if sess else "") or router.cfg.agent.default_backend
+    if backend_name == "claude":
+        default_model = router.cfg.claude.model
+        default_reasoning = router.cfg.claude.effort
+    elif backend_name == "gemini":
+        default_model = router.cfg.gemini.model
+        default_reasoning = ""
+    else:
+        default_model = router.cfg.codex.model
+        default_reasoning = router.cfg.codex.model_reasoning_effort
     if not sess:
         return default_model, default_reasoning
     model = sess.model or default_model

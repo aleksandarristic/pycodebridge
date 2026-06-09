@@ -1892,7 +1892,7 @@ def test_integration_session_archive_and_restore(tmp_path):
     assert any(args and args[0] == "resume" for args in runner.calls)
 
 
-def test_integration_resume_expired_session_auto_compacts(tmp_path):
+def test_integration_resume_expired_session_asks_user(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
@@ -1922,14 +1922,14 @@ def test_integration_resume_expired_session_auto_compacts(tmp_path):
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
     assert any("expired" in t.lower() for t in texts)
-    assert not any("is inactive" in t for t in texts)
-    assert not any("Choose one" in t for t in texts)
-    assert any("compact" in t.lower() for t in texts)
-    assert not any(args == ["resume", "thread-old"] for args in runner.calls)
-    assert any(args == ["start"] for args in runner.calls)
+    assert any("!cont" in t for t in texts)
+    assert any("!compact" in t for t in texts)
+    assert any("!new" in t for t in texts)
+    # No job started yet — waiting for user choice
+    assert not runner.calls
 
 
-def test_integration_resume_expired_session_compacts_with_original_prompt(tmp_path):
+def test_integration_resume_expired_session_compact_choice_uses_original_prompt(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
@@ -1963,6 +1963,7 @@ def test_integration_resume_expired_session_compacts_with_original_prompt(tmp_pa
 
     async def run():
         await router.handle_message(_discord_event("!c resume default focus only tests", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!compact", "codex-repo"), sink)
 
     asyncio.run(run())
     assert "Session summary from the previous thread" in captured_prompt["value"]
