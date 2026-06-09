@@ -124,6 +124,7 @@ class _ProcDone:
 class _FakeRunner:
     # Emulate the Codex backend's JSONL parsing for router fallback parsing.
     parse = CodexBackend.parse
+    ask_prefix = "Codex asks:"
 
     def __init__(self) -> None:
         self.calls = []

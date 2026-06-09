@@ -52,8 +52,11 @@ COMMAND_MODEL_META: Dict[str, Dict[str, str]] = {
     "choose": {"surface": SURFACE_SUPPORT, "namespace": "session"},
     "use": {"surface": SURFACE_CORE, "namespace": "session"},
     "agent": {"surface": SURFACE_ADVANCED, "namespace": "session"},
+    "agents": {"surface": SURFACE_ADVANCED, "namespace": "session"},
     "model": {"surface": SURFACE_ADVANCED, "namespace": "session"},
     "models": {"surface": SURFACE_ADVANCED, "namespace": "session"},
+    "effort": {"surface": SURFACE_ADVANCED, "namespace": "session"},
+    "efforts": {"surface": SURFACE_ADVANCED, "namespace": "session"},
     "thread": {"surface": SURFACE_ADMIN, "namespace": "session"},
     "reset": {"surface": SURFACE_CORE, "namespace": "session"},
     "workflow": {"surface": SURFACE_SUPPORT, "namespace": "session"},
@@ -87,7 +90,10 @@ COMMAND_MODEL_META: Dict[str, Dict[str, str]] = {
 }
 
 _MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{1,63}$")
-_REASONING_ALIASES = {
+
+# Codex: canonical values as of current codex CLI
+_CODEX_EFFORT_VALID = ("low", "medium", "high", "extra-high")
+_CODEX_EFFORT_ALIASES: Dict[str, str] = {
     "low": "low",
     "med": "medium",
     "medium": "medium",
@@ -98,6 +104,27 @@ _REASONING_ALIASES = {
     "extrahigh": "extra-high",
     "xhigh": "extra-high",
 }
+# Claude: canonical values per Claude CLI --help
+_CLAUDE_EFFORT_VALID = ("none", "minimal", "low", "medium", "high", "xhigh")
+_CLAUDE_EFFORT_ALIASES: Dict[str, str] = {
+    "none": "none",
+    "minimal": "minimal",
+    "min": "minimal",
+    "low": "low",
+    "med": "medium",
+    "medium": "medium",
+    "high": "high",
+    "xhigh": "xhigh",
+    "extra": "xhigh",
+    "extra-high": "xhigh",
+    "extrahigh": "xhigh",
+    "extra-highest": "xhigh",
+    "max": "xhigh",
+}
+# Gemini: no effort/reasoning parameter supported
+_GEMINI_EFFORT_VALID: tuple[str, ...] = ()
+_GEMINI_EFFORT_ALIASES: Dict[str, str] = {}
+
 _TTL_RE = re.compile(r"^(\d+)\s*([mhd])$", re.IGNORECASE)
 
 _DEFAULT_MODELS_CACHE = os.path.expanduser("~/.codex/models_cache.json")
@@ -152,16 +179,52 @@ def _looks_like_model_id(token: str) -> bool:
     return True
 
 
-def _normalize_reasoning_level(value: str) -> str | None:
+def _normalize_effort_for_backend(value: str, backend_name: str) -> str | None:
+    """Normalize an effort/reasoning string for a specific backend.
+
+    Returns the canonical effort string on success, "" for "clear/default",
+    or None when the value is unrecognized.
+    """
     if value is None:
         return ""
     raw = value.strip()
     if not raw:
         return ""
     token = re.sub(r"\s+", "-", raw.lower()).replace("_", "-")
-    if token in {"default", "auto", "none"}:
+    if token in {"default", "auto"}:
         return ""
-    return _REASONING_ALIASES.get(token)
+    bn = (backend_name or "").lower()
+    if bn == "claude":
+        return _CLAUDE_EFFORT_ALIASES.get(token)
+    if bn == "gemini":
+        return None  # Gemini has no effort parameter — always invalid
+    return _CODEX_EFFORT_ALIASES.get(token)
+
+
+def _normalize_reasoning_level(value: str) -> str | None:
+    """Legacy wrapper; uses Codex aliases."""
+    return _normalize_effort_for_backend(value, "codex")
+
+
+def _effort_list_for_backend(backend_name: str) -> tuple[str, ...]:
+    bn = (backend_name or "").lower()
+    if bn == "claude":
+        return _CLAUDE_EFFORT_VALID
+    if bn == "gemini":
+        return _GEMINI_EFFORT_VALID
+    return _CODEX_EFFORT_VALID
+
+
+def _backend_name_for_session(router: Any, channel_id: str, session_name: str) -> str:
+    """Return the backend name string ('codex'/'claude'/'gemini') for a session."""
+    from ..agents.claude import ClaudeBackend
+    from ..agents.gemini import GeminiBackend
+    backend = router.backend_for(channel_id, session_name)
+    if isinstance(backend, ClaudeBackend):
+        return "claude"
+    if isinstance(backend, GeminiBackend):
+        return "gemini"
+    return "codex"
 
 
 def _parse_workflow_request(rest: str) -> tuple[str, str, str]:
@@ -360,7 +423,8 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             aliases=("pick",),
         ),
         CommandSpec("use", "use <session>", "set your sticky session", "Sessions", _cmd_use, AUTH_UNLOCK, aliases=("select",)),
-        CommandSpec("agent", "agent [session] <backend>", "set session agent backend", "Sessions", _cmd_agent, AUTH_UNLOCK),
+        CommandSpec("agent", "agent [session] <backend> [model] [effort]", "set session agent backend (optionally with model and effort)", "Sessions", _cmd_agent, AUTH_UNLOCK),
+        CommandSpec("agents", "agents", "list available agent backends with usage", "Sessions", _cmd_agents, AUTH_OPEN),
         CommandSpec("model", "model [session] <id> [reasoning]", "set session model", "Sessions", _cmd_model, AUTH_UNLOCK, aliases=("mdl",)),
         CommandSpec(
             "models",
@@ -371,6 +435,8 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             AUTH_OPEN,
             aliases=("mdls",),
         ),
+        CommandSpec("effort", "effort [session] <level>", "set reasoning effort for current session", "Sessions", _cmd_effort, AUTH_UNLOCK, aliases=("eff",)),
+        CommandSpec("efforts", "efforts [session]", "list valid effort levels for current backend", "Sessions", _cmd_efforts, AUTH_OPEN),
         CommandSpec("thread", "thread [session] <id>", "set thread id", "Sessions", _cmd_thread, AUTH_UNLOCK, aliases=("tid",)),
         CommandSpec("reset", "reset [session]", "reset session context", "Sessions", _cmd_reset, AUTH_UNLOCK),
         CommandSpec(
@@ -643,14 +709,17 @@ async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, rep
         model = parts[0]
     else:
         candidate_reasoning = " ".join(parts[1:]).strip()
-        normalized_reasoning = _normalize_reasoning_level(candidate_reasoning) if candidate_reasoning else None
+        # peek at backend before session resolution for early-exit error message
+        bn_peek = _backend_name_for_session(router, message.channel_id, session_name)
+        normalized_reasoning = _normalize_effort_for_backend(candidate_reasoning, bn_peek) if candidate_reasoning else None
         if candidate_reasoning and normalized_reasoning is not None:
             model = parts[0]
             reasoning_raw = candidate_reasoning
         elif candidate_reasoning and _looks_like_model_id(parts[0]):
+            valid = _effort_list_for_backend(bn_peek)
             await router.reply_forbidden(
                 sink,
-                "Unknown reasoning level. Use low, medium, high, or extra-high.",
+                f"Unknown reasoning level. Valid values for {bn_peek}: {', '.join(valid) if valid else '(none supported)'}.",
             )
             return
         else:
@@ -669,13 +738,15 @@ async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, rep
             "Model id 'list' is not supported. Pick a real model id (try `!c models`), or set the session model back to your configured default.",
         )
         return
+    backend_name = _backend_name_for_session(router, message.channel_id, session_name)
     reasoning = ""
     if reasoning_raw:
-        normalized = _normalize_reasoning_level(reasoning_raw)
+        normalized = _normalize_effort_for_backend(reasoning_raw, backend_name)
         if normalized is None:
+            valid = _effort_list_for_backend(backend_name)
             await router.reply_forbidden(
                 sink,
-                "Unknown reasoning level. Use low, medium, high, or extra-high.",
+                f"Unknown reasoning level. Valid values for {backend_name}: {', '.join(valid) if valid else '(none supported)'}.",
             )
             return
         reasoning = normalized
@@ -715,22 +786,45 @@ async def _cmd_agent(router: Any, message: MessageEvent, sink: ResponseSink, rep
     from ..agents.factory import KNOWN_BACKENDS
     parts = rest.split()
     if not parts:
-        await router.reply_forbidden(sink, "Usage: !c agent [session] <backend-name>")
+        await router.reply_forbidden(sink, "Usage: !c agent [session] <backend> [model] [effort]")
         return
     session_name = _current_session(router, message)
     backend_name = ""
-    if len(parts) == 1:
-        backend_name = parts[0]
-    else:
+    model_override = ""
+    effort_override = ""
+
+    # Disambiguate: first token is a backend name or a session name
+    first = parts[0].strip().lower()
+    if first in KNOWN_BACKENDS:
+        # !c agent <backend> [model] [effort]
+        backend_name = first
+        remaining = parts[1:]
+    elif len(parts) >= 2 and parts[1].strip().lower() in KNOWN_BACKENDS:
+        # !c agent <session> <backend> [model] [effort]
         session_name = parts[0]
-        backend_name = parts[1]
+        backend_name = parts[1].strip().lower()
+        remaining = parts[2:]
+    else:
+        known = ", ".join(sorted(KNOWN_BACKENDS))
+        await router.reply_forbidden(sink, f"Unknown backend. Available: {known}.")
+        return
+
+    if remaining:
+        model_override = remaining[0]
+        if len(remaining) >= 2:
+            effort_raw = " ".join(remaining[1:])
+            normalized_effort = _normalize_effort_for_backend(effort_raw, backend_name)
+            if normalized_effort is None:
+                valid = _effort_list_for_backend(backend_name)
+                await router.reply_forbidden(
+                    sink,
+                    f"Unknown effort level. Valid values for {backend_name}: {', '.join(valid) if valid else '(none supported)'}.",
+                )
+                return
+            effort_override = normalized_effort
+
     session_name = await _resolve_session_name(router, message, sink, session_name)
     if not session_name:
-        return
-    backend_name = backend_name.strip().lower()
-    if backend_name not in KNOWN_BACKENDS:
-        known = ", ".join(sorted(KNOWN_BACKENDS))
-        await router.reply_forbidden(sink, f"Unknown backend {backend_name!r}. Available: {known}.")
         return
 
     async def apply_backend() -> None:
@@ -738,7 +832,15 @@ async def _cmd_agent(router: Any, message: MessageEvent, sink: ResponseSink, rep
         parts_msg = [f"Backend for session '{session_name}' set to {backend_name!r}."]
         if result.get("cleared_thread"):
             parts_msg.append("Thread id cleared (cross-backend ids cannot resume).")
-        if result.get("cleared_model") or result.get("cleared_effort"):
+        if model_override or effort_override:
+            router.set_session_model(message.channel_id, session_name, repo_name, repo_path, model_override, effort_override)
+            info_parts = []
+            if model_override:
+                info_parts.append(f"model={model_override}")
+            if effort_override:
+                info_parts.append(f"effort={effort_override}")
+            parts_msg.append(f"Applied: {', '.join(info_parts)}.")
+        elif result.get("cleared_model") or result.get("cleared_effort"):
             parts_msg.append("Model and reasoning effort reset to backend defaults.")
         await router.reply(sink, " ".join(parts_msg))
         await router.update_pinned_status(sink, message.author_id, session_name)
@@ -751,6 +853,120 @@ async def _cmd_agent(router: Any, message: MessageEvent, sink: ResponseSink, rep
         return
 
     await apply_backend()
+
+
+async def _cmd_effort(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    parts = rest.split()
+    session_name = _current_session(router, message)
+    effort_raw = ""
+    if not parts:
+        await router.reply_forbidden(sink, "Usage: !c effort [session] <level>")
+        return
+    # peek to see if first token is a known session vs an effort value
+    first_lower = parts[0].strip().lower()
+    first_is_effort = (
+        _normalize_effort_for_backend(first_lower, "codex") is not None
+        or _normalize_effort_for_backend(first_lower, "claude") is not None
+        or first_lower in {"default", "auto"}
+    )
+    if not first_is_effort and len(parts) >= 2:
+        # treat first as session name
+        session_name = parts[0]
+        effort_raw = " ".join(parts[1:])
+    else:
+        effort_raw = " ".join(parts)
+    session_name = await _resolve_session_name(router, message, sink, session_name)
+    if not session_name:
+        return
+    backend_name = _backend_name_for_session(router, message.channel_id, session_name)
+    if backend_name == "gemini":
+        await router.reply_forbidden(sink, "Gemini does not support an effort/reasoning parameter.")
+        return
+    normalized = _normalize_effort_for_backend(effort_raw, backend_name)
+    if normalized is None:
+        valid = _effort_list_for_backend(backend_name)
+        await router.reply_forbidden(
+            sink,
+            f"Unknown effort level {effort_raw!r}. Valid values for {backend_name}: {', '.join(valid)}.",
+        )
+        return
+    state = router.state.load()
+    if not session_exists(state, message.channel_id, session_name) and count_active_sessions(
+        state, message.channel_id
+    ) >= MAX_SESSIONS_PER_CHANNEL:
+        await router.reply_forbidden(
+            sink,
+            f"Session limit reached ({MAX_SESSIONS_PER_CHANNEL}). Stop or reuse an existing session.",
+        )
+        return
+
+    async def apply_effort() -> None:
+        sess_state = router.state.load().channels.get(message.channel_id, None)
+        current_model = ""
+        if sess_state:
+            s = sess_state.sessions.get(session_name)
+            if s:
+                current_model = s.model or ""
+        router.set_session_model(message.channel_id, session_name, repo_name, repo_path, current_model, normalized)
+        effort_label = normalized or "(default)"
+        await router.reply(sink, f"Effort for session '{session_name}' set to {effort_label}.")
+        await router.update_pinned_status(sink, message.author_id, session_name)
+
+    if await router.has_active(message.channel_id):
+        async def job() -> None:
+            await apply_effort()
+        pos, job_id, _ = await router.coordinator.enqueue(message.channel_id, session_name, job)
+        effort_label = normalized or "(default)"
+        await router.reply(
+            sink,
+            f"Queued effort change for session '{session_name}' to {effort_label} as {job_id} (pos {pos}).",
+        )
+        return
+
+    await apply_effort()
+
+
+async def _cmd_efforts(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    session_name = (rest.strip() or "") or _current_session(router, message) or DEFAULT_SESSION
+    session_name = await _resolve_session_name(router, message, sink, session_name, default_from_user=False)
+    if not session_name:
+        return
+    backend_name = _backend_name_for_session(router, message.channel_id, session_name)
+    valid = _effort_list_for_backend(backend_name)
+    if not valid:
+        await router.reply(sink, f"Backend {backend_name!r} does not support effort/reasoning levels.")
+        return
+    await router.reply(
+        sink,
+        f"Valid effort levels for {backend_name}:\n" + "\n".join(f"- {v}" for v in valid),
+    )
+
+
+async def _cmd_agents(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    _ = (repo_name, repo_path, rest)
+    from ..agents.factory import KNOWN_BACKENDS
+    prefix = router.cfg.discord.prefix if hasattr(router.cfg, "discord") else "!c"
+    lines = [
+        f"Available agent backends ({len(KNOWN_BACKENDS)}):",
+        "",
+    ]
+    for bn in sorted(KNOWN_BACKENDS):
+        if bn == "codex":
+            efforts = ", ".join(_CODEX_EFFORT_VALID)
+            lines.append(f"**codex** — OpenAI Codex CLI")
+            lines.append(f"  Effort levels: {efforts}")
+            lines.append(f"  Example: `{prefix} agent codex` or `{prefix} agent codex gpt-5.3-codex high`")
+        elif bn == "claude":
+            efforts = ", ".join(_CLAUDE_EFFORT_VALID)
+            lines.append(f"**claude** — Anthropic Claude Code CLI")
+            lines.append(f"  Effort levels: {efforts}")
+            lines.append(f"  Example: `{prefix} agent claude` or `{prefix} agent claude sonnet xhigh`")
+        elif bn == "gemini":
+            lines.append(f"**gemini** — Google Gemini CLI")
+            lines.append(f"  Effort levels: (not supported)")
+            lines.append(f"  Example: `{prefix} agent gemini` or `{prefix} agent gemini gemini-2.5-pro`")
+        lines.append("")
+    await router.reply(sink, "\n".join(lines).rstrip())
 
 
 async def _cmd_models(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
