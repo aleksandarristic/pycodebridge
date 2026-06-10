@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0082] Revisit Gemini backend because Gemini is not working.
+  - Completed: 2026-06-10
+  - Notes: Root cause was a silent failure when a configured/unavailable model is rejected by the API — the run ended with no user-facing message. Fixed by parsing the direct `error` object in the stream-json `result` event and adding backend-aware router detection for Gemini model-not-found (`ModelNotFoundError` / `Requested entity was not found` / `code: 404`), surfacing an actionable reply that points to `!models` / `!model <id>`. Validated end to end against real `gemini 0.45.2` (OAuth) in a temp git repo: start, resume-by-id (context carried across turns), and resume-latest all returned `result/status=success` with exit 0; an invalid `-m` run reproduced the failure (exit 1) emitting a `result/status=error` with `error.type=unknown` on stdout and `ModelNotFoundError: Requested entity was not found. code: 404` on stderr. Fed the captured real lines back through `GeminiBackend.parse()` and `_GEMINI_MODEL_NOT_FOUND_RE` to confirm they match the existing fixtures. Live stream-json shape matches `.task-management/TASK-0020-gemini-stream-json-schema.md` (default model `gemini-3-flash-preview`), so no schema refresh was needed. Full suite green.
+
 - [TASK-0081] Surface Claude usage-limit exhaustion immediately.
   - Completed: 2026-06-09
   - Notes: Added backend-aware friendly error detection for Claude usage-limit messages from stream-json result errors and stderr. Captured friendly errors now produce a user-facing reply even when the CLI exits with code 0, avoiding silent completion after typing clears. Verified against local Claude Code 2.1.169 stream-json output: a `rate_limit_event`, assistant text `You've hit your session limit · resets ...`, and an `is_error` result with `api_error_status: 429`; the UTC reset time is parsed and shown as Central European local time. Focused router coverage uses that wording plus a stderr limit case.
