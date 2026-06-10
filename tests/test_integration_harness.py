@@ -28,6 +28,7 @@ from types import SimpleNamespace
 
 from codebridge import config as cfgmod
 from codebridge.agents.claude import ClaudeBackend
+from codebridge.agents.gemini import GeminiBackend
 from codebridge.codex import CodexBackend, Options, Runner
 from codebridge.observability.audit import Logger as AuditLogger, Redactor
 from codebridge.routing.event_context import build_contextual_sink
@@ -215,6 +216,18 @@ class _ClaudeImmediateExitRunner(_ImmediateExitRunner):
     def __init__(self, *, jsonl_lines=(), stderr_lines=(), rc: int = 1) -> None:
         super().__init__(jsonl_lines=jsonl_lines, stderr_lines=stderr_lines, rc=rc)
         self._backend = ClaudeBackend(binary="claude")
+
+    def parse(self, line: str):
+        return self._backend.parse(line)
+
+
+class _GeminiImmediateExitRunner(_ImmediateExitRunner):
+    ask_prefix = "Gemini asks:"
+
+    def __init__(self, *, jsonl_lines=(), stderr_lines=(), rc: int = 1, model: str = "") -> None:
+        super().__init__(jsonl_lines=jsonl_lines, stderr_lines=stderr_lines, rc=rc)
+        self._backend = GeminiBackend(binary="gemini", model=model)
+        self.default_model = self._backend.default_model
 
     def parse(self, line: str):
         return self._backend.parse(line)
@@ -3215,6 +3228,43 @@ def test_run_codex_surfaces_claude_usage_limit_stderr(tmp_path):
     assert "Claude reported a usage limit:" in output
     assert message in output
     assert "Last stderr:" not in output
+
+
+def test_run_codex_wraps_gemini_model_not_found_stderr(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    runner = _GeminiImmediateExitRunner(
+        stderr_lines=["ModelNotFoundError: Requested entity was not found."],
+        rc=1,
+    )
+    router, _ = _build_router(tmp_path, runner=runner)
+    router.set_session_model("chan", "default", "repo", str(repo), "gpt-5.3-codex", "")
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    event = _discord_event("!c resume fix", "codex-repo")
+
+    async def run():
+        await router.run_codex(
+            event,
+            sink,
+            "repo",
+            str(repo),
+            "default",
+            "gpt-5.3-codex",
+            "",
+            ["-m", "gpt-5.3-codex", "-p", "fix"],
+            backend=runner,
+        )
+
+    asyncio.run(run())
+    output = "\n".join(msg for msg, _, _ in sink.sent)
+    assert "Gemini could not find the configured model." in output
+    assert "Session 'default' is configured for Gemini model 'gpt-5.3-codex'" in output
+    assert "`!models`" in output
+    assert "`!model <model-id>`" in output
+    assert "`!model default`" in output
+    assert "Last stderr:" not in output
+    assert "Codex exited with code" not in output
 
 
 def test_run_codex_wraps_unsupported_model_stderr_error(tmp_path):

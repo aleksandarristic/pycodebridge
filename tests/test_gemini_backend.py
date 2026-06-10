@@ -195,6 +195,26 @@ class TestParse:
         assert evt.error["message"] == "Invalid stream: malformed tool call."
         assert evt.error["subtype"] == "error"
 
+    def test_result_error_captures_direct_result_error_message(self):
+        b = _backend()
+        stats = {"total_tokens": 0, "input_tokens": 0, "output_tokens": 0}
+        line = self._line({
+            "type": "result",
+            "status": "error",
+            "error": {
+                "type": "unknown",
+                "message": "[API Error: An unknown error occurred.]",
+            },
+            "stats": stats,
+        })
+        evt = b.parse(line)
+        assert evt is not None
+        assert evt.type == "result"
+        assert evt.usage == stats
+        assert evt.error is not None
+        assert evt.error["message"] == "[API Error: An unknown error occurred.]"
+        assert evt.error["subtype"] == "unknown"
+
     def test_error_msg_cleared_after_result(self):
         b = _backend()
         b.parse(self._line({"type": "error", "message": "oops"}))

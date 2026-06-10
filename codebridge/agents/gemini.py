@@ -88,9 +88,19 @@ class GeminiBackend(AgentBackend):
             is_error = obj.get("status") == "error"
             error = None
             if is_error:
+                result_error = obj.get("error")
+                if isinstance(result_error, dict):
+                    error_msg = result_error.get("message", "")
+                    error_type = result_error.get("type", "error")
+                elif isinstance(result_error, str):
+                    error_msg = result_error
+                    error_type = "error"
+                else:
+                    error_msg = self._last_error_msg
+                    error_type = "error"
                 error = {
-                    "message": self._last_error_msg,
-                    "subtype": "error",
+                    "message": error_msg,
+                    "subtype": error_type or "error",
                 }
                 self._last_error_msg = ""
             return NormalizedEvent(

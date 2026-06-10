@@ -92,6 +92,10 @@ _CODEX_UNSUPPORTED_CHATGPT_MODEL_RE = re.compile(
     r"The ['\"]([^'\"]+)['\"] model is not supported when using Codex with a ChatGPT account",
     re.IGNORECASE,
 )
+_GEMINI_MODEL_NOT_FOUND_RE = re.compile(
+    r"\b(ModelNotFoundError|Requested entity was not found|model .{0,80}not found|code:\s*404)\b",
+    re.IGNORECASE,
+)
 _CLAUDE_USAGE_LIMIT_RE = re.compile(
     r"\b("
     r"usage limit|rate limit|limit reached|"
@@ -2393,6 +2397,9 @@ class Router:
         unsupported = self._friendly_unsupported_model_error_from_candidates(channel_id, session, candidates)
         if unsupported:
             return unsupported
+        gemini_model = self._friendly_gemini_model_error_from_candidates(channel_id, session, candidates, backend)
+        if gemini_model:
+            return gemini_model
         return self._friendly_claude_usage_limit_error_from_candidates(candidates, backend)
 
     def _friendly_unsupported_model_error_from_line(self, channel_id: str, session: str, line: str) -> str:
@@ -2454,6 +2461,9 @@ class Router:
         unsupported = self._friendly_unsupported_model_error_from_candidates(channel_id, session, candidates)
         if unsupported:
             return unsupported
+        gemini_model = self._friendly_gemini_model_error_from_candidates(channel_id, session, candidates, backend)
+        if gemini_model:
+            return gemini_model
         return self._friendly_claude_usage_limit_error_from_candidates(candidates, backend)
 
     def _friendly_unsupported_model_error_from_candidates(
@@ -2466,6 +2476,22 @@ class Router:
             match = _CODEX_UNSUPPORTED_CHATGPT_MODEL_RE.search(candidate or "")
             if match:
                 return self._format_unsupported_model_error(channel_id, session, match.group(1))
+        return ""
+
+    def _friendly_gemini_model_error_from_candidates(
+        self,
+        channel_id: str,
+        session: str,
+        candidates: list[str],
+        backend: Optional[AgentBackend],
+    ) -> str:
+        backend_name = type(backend or self.runner).__name__.lower()
+        if "gemini" not in backend_name:
+            return ""
+        for candidate in candidates:
+            text = strip_control_codes((candidate or "").strip())
+            if text and _GEMINI_MODEL_NOT_FOUND_RE.search(text):
+                return self._format_gemini_model_not_found_error(channel_id, session, backend)
         return ""
 
     def _friendly_claude_usage_limit_error_from_candidates(
@@ -2526,6 +2552,39 @@ class Router:
             f"{model_line}\n"
             f"Run `!c models` to list available models, then `!model {session_name} <model-id>` "
             f"to replace the stale override. To discard stale session state, run `!reset {session_name}`."
+        )
+
+    def _format_gemini_model_not_found_error(
+        self,
+        channel_id: str,
+        session: str,
+        backend: Optional[AgentBackend],
+    ) -> str:
+        session_name = session or DEFAULT_SESSION
+        current_model = self.session_model(channel_id, session_name)
+        default_model = getattr(backend or self.runner, "default_model", "")
+        model = current_model or default_model
+        if model:
+            model_line = (
+                f"Session '{session_name}' is configured for Gemini model '{model}', "
+                "but Gemini reported it was not found."
+            )
+        else:
+            model_line = (
+                f"Session '{session_name}' is configured for a Gemini model "
+                "that Gemini reported was not found."
+            )
+        if session_name == DEFAULT_SESSION:
+            set_cmd = "`!model <model-id>`"
+            clear_cmd = "`!model default`"
+        else:
+            set_cmd = f"`!model {session_name} <model-id>`"
+            clear_cmd = f"`!model {session_name} default`"
+        return (
+            "Gemini could not find the configured model.\n"
+            f"{model_line}\n"
+            f"Run `!models` to list Gemini models, then {set_cmd} to choose one, "
+            f"or {clear_cmd} to clear the override."
         )
 
     async def on_jsonl(
