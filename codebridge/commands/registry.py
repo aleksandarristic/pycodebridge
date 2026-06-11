@@ -703,14 +703,37 @@ async def _cmd_use(router: Any, message: MessageEvent, sink: ResponseSink, repo_
     await router.handle_select_session(message, sink, session_name)
 
 
+async def _show_session_model_info(router: Any, message: MessageEvent, sink: ResponseSink, session_name: str) -> None:
+    state = router.state.load()
+    ch = state.channels.get(message.channel_id)
+    sess = ch.sessions.get(session_name) if ch else None
+    if sess and sess.model:
+        label = f"{sess.model} (session override)"
+    else:
+        default_model = router.session_model(message.channel_id, session_name)
+        label = f"{default_model} (configured default)" if default_model else "(none configured)"
+    await router.reply(sink, f"Session '{session_name}' model: {label}.")
+
+
 async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     if not rest:
-        await router.reply_forbidden(sink, "Usage: !c model [session] <model-id|default> [reasoning|default]")
+        session_name = _current_session(router, message)
+        session_name = await _resolve_session_name(router, message, sink, session_name)
+        if not session_name:
+            return
+        await _show_session_model_info(router, message, sink, session_name)
         return
     parts = rest.split()
     session_name = _current_session(router, message)
     model = ""
     reasoning_raw = ""
+    if len(parts) == 1 and not _looks_like_model_id(parts[0]) and not _is_default_override_token(parts[0]):
+        # Lone token that isn't a model ID or "default" — treat as session name, show info
+        candidate_session = await _resolve_session_name(router, message, sink, parts[0])
+        if not candidate_session:
+            return
+        await _show_session_model_info(router, message, sink, candidate_session)
+        return
     if len(parts) == 1:
         model = parts[0]
     else:
@@ -824,13 +847,31 @@ async def _cmd_model(router: Any, message: MessageEvent, sink: ResponseSink, rep
 async def _cmd_agent(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     from ..agents.factory import KNOWN_BACKENDS
     parts = rest.split()
-    if not parts:
-        await router.reply_forbidden(sink, "Usage: !c agent [session] <backend> [model] [effort]")
-        return
     session_name = _current_session(router, message)
     backend_name = ""
     model_override = ""
     effort_override = ""
+
+    # No args or lone non-backend token → show current selection
+    show_session: str | None = None
+    if not parts:
+        show_session = session_name
+    elif len(parts) == 1 and parts[0].strip().lower() not in KNOWN_BACKENDS:
+        show_session = parts[0]
+    if show_session is not None:
+        resolved = await _resolve_session_name(router, message, sink, show_session)
+        if not resolved:
+            return
+        state = router.state.load()
+        ch = state.channels.get(message.channel_id)
+        sess = ch.sessions.get(resolved) if ch else None
+        if sess and sess.backend:
+            label = f"{sess.backend} (session override)"
+        else:
+            default_bn = (getattr(router.cfg, "agent", None) and router.cfg.agent.default_backend) or "codex"
+            label = f"{default_bn} (configured default)"
+        await router.reply(sink, f"Session '{resolved}' backend: {label}.")
+        return
 
     # Disambiguate: first token is a backend name or a session name
     first = parts[0].strip().lower()
@@ -899,7 +940,23 @@ async def _cmd_effort(router: Any, message: MessageEvent, sink: ResponseSink, re
     session_name = _current_session(router, message)
     effort_raw = ""
     if not parts:
-        await router.reply_forbidden(sink, "Usage: !c effort [session] <level|default>")
+        # No args: show current effort for current session
+        resolved = await _resolve_session_name(router, message, sink, session_name)
+        if not resolved:
+            return
+        bn = _backend_name_for_session(router, message.channel_id, resolved)
+        if bn == "gemini":
+            await router.reply(sink, f"Session '{resolved}' effort: not applicable (Gemini does not support effort levels).")
+            return
+        state = router.state.load()
+        ch = state.channels.get(message.channel_id)
+        sess = ch.sessions.get(resolved) if ch else None
+        if sess and sess.reasoning_effort:
+            label = f"{sess.reasoning_effort} (session override)"
+        else:
+            default_effort = router.session_reasoning_effort(message.channel_id, resolved)
+            label = f"{default_effort} (configured default)" if default_effort else "(none configured)"
+        await router.reply(sink, f"Session '{resolved}' effort: {label}.")
         return
     # peek to see if first token is a known session vs an effort value
     first_lower = parts[0].strip().lower()
@@ -908,6 +965,25 @@ async def _cmd_effort(router: Any, message: MessageEvent, sink: ResponseSink, re
         or _normalize_effort_for_backend(first_lower, "claude") is not None
         or first_lower in {"default", "auto"}
     )
+    if not first_is_effort and len(parts) == 1:
+        # Lone non-effort token — treat as session name, show info
+        resolved = await _resolve_session_name(router, message, sink, first_lower)
+        if not resolved:
+            return
+        bn = _backend_name_for_session(router, message.channel_id, resolved)
+        if bn == "gemini":
+            await router.reply(sink, f"Session '{resolved}' effort: not applicable (Gemini does not support effort levels).")
+            return
+        state = router.state.load()
+        ch = state.channels.get(message.channel_id)
+        sess = ch.sessions.get(resolved) if ch else None
+        if sess and sess.reasoning_effort:
+            label = f"{sess.reasoning_effort} (session override)"
+        else:
+            default_effort = router.session_reasoning_effort(message.channel_id, resolved)
+            label = f"{default_effort} (configured default)" if default_effort else "(none configured)"
+        await router.reply(sink, f"Session '{resolved}' effort: {label}.")
+        return
     if not first_is_effort and len(parts) >= 2:
         # treat first as session name
         session_name = parts[0]
