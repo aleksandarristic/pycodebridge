@@ -2564,20 +2564,45 @@ class Router:
 
     def _format_unsupported_model_error(self, channel_id: str, session: str, unsupported_model: str) -> str:
         session_name = session or DEFAULT_SESSION
+        configured_model = self.cfg.codex.model or ""
+        stored_model = self._stored_session_model(channel_id, session_name)
         current_model = self.session_model(channel_id, session_name)
-        if current_model and current_model != unsupported_model:
+        if configured_model and configured_model == unsupported_model and (
+            not stored_model or stored_model == unsupported_model
+        ):
+            model_line = f"Configured Codex default model is unsupported: '{unsupported_model}'."
+            action_line = (
+                "Change `codex.model` in the bridge config to a supported model, or set it to an empty string "
+                "to use the Codex CLI default, then restart/redeploy the bridge."
+            )
+        elif current_model and current_model != unsupported_model:
             model_line = (
                 f"Session '{session_name}' is configured for model '{current_model}', "
                 f"but Codex rejected '{unsupported_model}'."
             )
+            action_line = (
+                f"Run `!c models` to list available models, then `!model {session_name} <model-id>` "
+                f"to replace the stale override. To discard stale session state, run `!reset {session_name}`."
+            )
         else:
             model_line = f"Session '{session_name}' is configured for unsupported model '{unsupported_model}'."
+            action_line = (
+                f"Run `!c models` to list available models, then `!model {session_name} <model-id>` "
+                f"to replace the stale override. To discard stale session state, run `!reset {session_name}`."
+            )
         return (
             f"Codex cannot use model '{unsupported_model}' with this ChatGPT account.\n"
             f"{model_line}\n"
-            f"Run `!c models` to list available models, then `!model {session_name} <model-id>` "
-            f"to replace the stale override. To discard stale session state, run `!reset {session_name}`."
+            f"{action_line}"
         )
+
+    def _stored_session_model(self, channel_id: str, session: str) -> str:
+        state = self.state.load()
+        ch = state.channels.get(channel_id)
+        if not ch:
+            return ""
+        sess = ch.sessions.get(session or DEFAULT_SESSION)
+        return sess.model if sess else ""
 
     def _format_gemini_model_not_found_error(
         self,

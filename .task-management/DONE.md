@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0087] Unsupported configured default Codex model is reported as a stale session override.
+  - Completed: 2026-06-11
+  - Notes: Session state no longer persists configured Codex model/reasoning defaults as session overrides during thread updates; effective defaults still resolve at run time. Unsupported-model guidance now detects when the rejected model is `cfg.codex.model` and tells the operator to change or clear config instead of suggesting `!model default` / `!reset default`. Targeted tests: `tests/test_session_service.py`, `tests/test_integration_harness.py::test_run_codex_wraps_duplicate_unsupported_model_jsonl_error`, `tests/test_integration_harness.py::test_run_codex_unsupported_configured_default_points_to_config`, `tests/test_integration_harness.py::test_run_codex_wraps_unsupported_model_stderr_error`.
+
 - [TASK-0085] Wrong backend error on stop command after backend switch.
   - Completed: 2026-06-11
   - Notes: Replaced the hardcoded "No running Codex process." string in handle_stop, handle_interrupt, handle_kill, and handle_quit with a backend-agnostic "No agent running in session 'X'." message. Added a hint listing other active sessions in the channel so the user can identify where the real run is (e.g. the thread session vs the default session). Docstrings updated to remove Codex-specific language.

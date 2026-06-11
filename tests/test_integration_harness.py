@@ -3156,6 +3156,37 @@ def test_run_codex_wraps_duplicate_unsupported_model_jsonl_error(tmp_path):
     assert '{"type":"error"' not in output
 
 
+def test_run_codex_unsupported_configured_default_points_to_config(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    line = _unsupported_model_error_line()
+    runner = _ImmediateExitRunner(jsonl_lines=[line], rc=1)
+    router, _ = _build_router(tmp_path, runner=runner)
+    router.cfg.codex.model = "gpt-5.3-codex"
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    event = _discord_event("!c resume fix", "codex-repo")
+
+    async def run():
+        await router.run_codex(
+            event,
+            sink,
+            "repo",
+            str(repo),
+            "default",
+            "gpt-5.3-codex",
+            "",
+            ["exec", "--model", "gpt-5.3-codex"],
+        )
+
+    asyncio.run(run())
+    output = "\n".join(msg for msg, _, _ in sink.sent)
+    assert "Configured Codex default model is unsupported: 'gpt-5.3-codex'." in output
+    assert "Change `codex.model` in the bridge config" in output
+    assert "`!model default <model-id>`" not in output
+    assert "`!reset default`" not in output
+
+
 def test_run_codex_surfaces_claude_usage_limit_result_even_on_zero_exit(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()

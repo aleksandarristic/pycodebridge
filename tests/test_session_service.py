@@ -88,6 +88,23 @@ def test_session_service_update_state_preserves_existing_repo_context_on_empty_u
     assert sess.thread_id == "thread-1"
 
 
+def test_session_service_update_state_does_not_persist_configured_defaults(tmp_path):
+    store = Store(str(tmp_path))
+    cfg = config.Config()
+    cfg.codex.model = "gpt-default"
+    cfg.codex.model_reasoning_effort = "medium"
+    service = SessionService(store, cfg)
+
+    service.update_state("chan", "default", "repo", "/tmp/repo", "thread-1", "gpt-default", "medium")
+
+    state = store.load()
+    sess = state.channels["chan"].sessions["default"]
+    assert sess.model == ""
+    assert sess.reasoning_effort == ""
+    assert service.session_model("chan", "default") == "gpt-default"
+    assert service.session_reasoning_effort("chan", "default") == "medium"
+
+
 def test_session_service_set_session_model_can_clear_overrides(tmp_path):
     store = Store(str(tmp_path))
     cfg = config.Config()

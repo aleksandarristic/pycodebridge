@@ -231,14 +231,12 @@ class SessionService:
                 sess.repo_path = repo_path
             if thread_id:
                 sess.thread_id = thread_id
-            if model:
+            if model and (sess.model or model != self._cfg.codex.model):
                 sess.model = model
-            elif not sess.model and self._cfg.codex.model:
-                sess.model = self._cfg.codex.model
-            if reasoning_effort:
+            if reasoning_effort and (
+                sess.reasoning_effort or reasoning_effort != self._cfg.codex.model_reasoning_effort
+            ):
                 sess.reasoning_effort = reasoning_effort
-            elif not sess.reasoning_effort and self._cfg.codex.model_reasoning_effort:
-                sess.reasoning_effort = self._cfg.codex.model_reasoning_effort
             sess.last_used_at = utc_now_iso()
             ch.sessions[session] = sess
             fs.channels[channel_id] = ch
