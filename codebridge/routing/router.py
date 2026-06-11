@@ -306,6 +306,11 @@ class Router:
         self._runtime_options_global: Dict[str, Any] = {}
         self._runtime_options_channels: Dict[str, Dict[str, Any]] = {}
         self._load_runtime_options_from_state()
+        self._guild_text_channels_fn: Any = None
+
+    def set_guild_text_channels_fn(self, fn: Any) -> None:
+        """Set a callback returning guild text channels (wired by the Discord client)."""
+        self._guild_text_channels_fn = fn
 
     async def handle_message(self, event: MessageEvent, sink: ResponseSink) -> None:
         """Handle an incoming message event."""
@@ -809,6 +814,14 @@ class Router:
     async def handle_steer(self, event: MessageEvent, sink: ResponseSink, session: str, text: str) -> None:
         """Send steering text to an active Codex session."""
         await core_handlers.handle_steer(self, event, sink, session, text)
+
+    async def handle_unpin(self, event: MessageEvent, sink: ResponseSink) -> None:
+        """Unpin all but the most recently pinned message in the current channel."""
+        await core_handlers.handle_unpin(self, event, sink)
+
+    async def handle_unpin_all_channels(self, sink: ResponseSink) -> None:
+        """Unpin all but the last pin in every channel matching the configured regex."""
+        await core_handlers.handle_unpin_all_channels(self, sink)
 
     async def handle_wait(self, event: MessageEvent, sink: ResponseSink) -> None:
         """Show sessions currently awaiting user input from Codex prompts."""

@@ -65,6 +65,7 @@ _DM_SHORTCUT_COMMANDS = {
     "repos",
     "reset",
     "sessions",
+    "unpin",
     "status",
     "unbind",
     "unlock",
@@ -98,6 +99,7 @@ _DM_SHORTCUT_ALIASES = (
     ("!rename", "renamerepo"),
     ("!ren", "renamerepo"),
     ("!reset", "reset"),
+    ("!unpin", "unpin"),
     ("!lk", "lock"),
     ("!bind", "bind"),
     ("!use", "use"),
@@ -132,6 +134,7 @@ _DM_ADMIN_HELP_OVERVIEW_ORDER = (
     "sessions",
     "config",
     "reset",
+    "unpin",
     "create",
     "clone",
     "copy",
@@ -159,6 +162,7 @@ _DM_HELP_DETAILS: dict[str, tuple[str, str]] = {
     "sessions": ("sessions", "list sessions across channels"),
     "config": ("config", "show effective config"),
     "reset": ("reset all", "request reset-all confirmation"),
+    "unpin": ("unpin", "remove all but the last pin from every codex channel"),
     "create": ("create/new <name>", "create repo"),
     "clone": ("clone <name> <url>", "clone repo"),
     "copy": ("copy/cp <from> <to>", "copy repo"),
@@ -590,6 +594,7 @@ async def _dispatch_prefixed_dm_command(
         "sessions",
         "config",
         "reset",
+        "unpin",
         "create",
         "clone",
         "copy",
@@ -672,6 +677,9 @@ async def _dispatch_prefixed_dm_command(
                 )
                 return
             await send_forbidden("Usage: !c reset all")
+            return
+        if cmd == "unpin":
+            await router.handle_unpin_all_channels(sink)
             return
         if cmd == "create":
             name = rest.strip()

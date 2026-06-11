@@ -535,6 +535,90 @@ async def handle_steer(router: "Router", event: MessageEvent, sink: ResponseSink
     )
 
 
+async def handle_unpin(router: "Router", event: MessageEvent, sink: ResponseSink) -> None:
+    """Unpin all but the most recently pinned message in the current channel."""
+    message = getattr(event, "raw_event", None)
+    channel = getattr(message, "channel", None) if message is not None else None
+    if channel is None or not callable(getattr(channel, "pins", None)):
+        await router.reply_forbidden(sink, "Unpin is not supported in this context.")
+        return
+    try:
+        pins = await channel.pins()
+    except Exception as exc:
+        await router.reply_forbidden(sink, f"Could not fetch pins: {exc}")
+        return
+    if len(pins) <= 1:
+        noun = "pin" if len(pins) == 1 else "pins"
+        await router.reply(sink, f"Nothing to remove ({len(pins)} {noun} in this channel).")
+        return
+    to_remove = pins[:-1]
+    removed = 0
+    for msg in to_remove:
+        try:
+            await msg.unpin()
+            removed += 1
+        except Exception:
+            pass
+    kept = len(pins) - removed
+    await router.reply(
+        sink,
+        f"Removed {removed} old pin{'s' if removed != 1 else ''}"
+        f"{', kept ' + str(kept) if kept else ''}."
+        if removed else "No pins could be removed (permission error?).",
+    )
+    router.logger.info(
+        "relay.unpin",
+        extra={
+            "platform": event.platform,
+            "channel_id": event.channel_id,
+            "user_id": event.author_id,
+            "removed": removed,
+            "total": len(pins),
+        },
+    )
+
+
+async def handle_unpin_all_channels(router: "Router", sink: ResponseSink) -> None:
+    """Unpin all but the last pin in every channel matching the configured regex."""
+    fn = getattr(router, "_guild_text_channels_fn", None)
+    if not callable(fn):
+        await router.reply_forbidden(sink, "Unpin-all is not available (no guild channel access wired up).")
+        return
+    try:
+        channels = await fn()
+    except Exception as exc:
+        await router.reply_forbidden(sink, f"Could not list guild channels: {exc}")
+        return
+    regex = router.cfg.channel_regex()
+    results: list[str] = []
+    for ch in channels:
+        name = str(getattr(ch, "name", "") or "")
+        if not regex.match(name):
+            continue
+        try:
+            pins = await ch.pins()
+        except Exception as exc:
+            results.append(f"{name}: error fetching pins ({exc})")
+            continue
+        if len(pins) <= 1:
+            noun = "pin" if len(pins) == 1 else "pins"
+            results.append(f"{name}: {len(pins)} {noun}, nothing to remove")
+            continue
+        to_remove = pins[:-1]
+        removed = 0
+        for msg in to_remove:
+            try:
+                await msg.unpin()
+                removed += 1
+            except Exception:
+                pass
+        results.append(f"{name}: removed {removed}/{len(to_remove)} old pin{'s' if len(to_remove) != 1 else ''}")
+    if not results:
+        await router.reply(sink, "No matching channels found.")
+        return
+    await router.reply(sink, "\n".join(results))
+
+
 def _session_model_reasoning_from_state(router: "Router", state, channel_id: str, session: str) -> tuple[str, str]:
     """Resolve model/reasoning for a session using one already-loaded state snapshot."""
     ch = state.channels.get(channel_id)

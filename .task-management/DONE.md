@@ -12,6 +12,14 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0091] Command to clear all but the last pinned message in a channel.
+  - Completed: 2026-06-11
+  - Notes: Added `!c unpin` (in-channel) and `!c unpin` (DM admin) command. In-channel variant unpins all but the most recently pinned message in the current channel. DM admin variant iterates all guild text channels matching `channel_name_regex` and does the same for each. Guild channel access is wired via `Router.set_guild_text_channels_fn`, set by `BridgeClient.__init__`. Zero/one-pin channels are no-ops with a message. Targeted tests: `tests/test_unpin_command.py` (12 tests covering unit and integration paths for both surfaces).
+
+- [TASK-0090] Auto-steer plain messages to the active session.
+  - Completed: 2026-06-11
+  - Notes: Plain messages in a channel with exactly one running session are now written directly to that session's stdin instead of being silently queued as the next resume prompt. Multi-session channels get a disambiguation error pointing to `!s:<session> <text>`. Zero-session channels fall through to the existing allow-plain/resume path unchanged. Targeted tests: `tests/test_integration_harness.py` — `test_integration_plain_message_auto_steers_single_active_session`, `test_integration_plain_message_with_multiple_active_sessions_is_rejected`, `test_integration_plain_message_with_no_active_session_falls_through_to_resume`.
+
 - [TASK-0086] Thread messages silently dropped when parent channel not in Discord cache.
   - Completed: 2026-06-11
   - Notes: Discord message handling now enriches thread events by fetching missing parent channel metadata before routing, and event normalization can also recover parent names from a guild cache lookup. This preserves parent-channel repo mapping when `Thread.parent` is absent after restarts or cache misses. Targeted tests: `tests/test_router_contextual_sink.py`, `tests/test_discord_bot.py`, `tests/test_integration_harness.py::test_integration_discord_thread_uses_parent_repo_mapping_and_room_scope`, `tests/test_integration_harness.py::test_integration_discord_sibling_threads_are_isolated`, `tests/test_integration_harness.py::test_integration_discord_thread_stop_rekeys_legacy_thread_scope`.

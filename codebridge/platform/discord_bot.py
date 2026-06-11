@@ -20,6 +20,16 @@ class BridgeClient(discord.Client):
         self.adapter = DiscordAdapter()
         self._startup_notified = False
         self._shutdown_notified = False
+        self.router.set_guild_text_channels_fn(self._get_guild_text_channels)
+
+    async def _get_guild_text_channels(self) -> list[discord.TextChannel]:
+        """Return all text channels across all connected guilds."""
+        channels: list[discord.TextChannel] = []
+        for guild in self.guilds:
+            for ch in guild.channels:
+                if isinstance(ch, discord.TextChannel):
+                    channels.append(ch)
+        return channels
 
     async def on_ready(self) -> None:
         """Log when the Discord client is ready."""

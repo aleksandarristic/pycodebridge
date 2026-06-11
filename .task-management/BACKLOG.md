@@ -26,3 +26,21 @@ Rules:
     - Cached tokens are tracked and visible in stats/summary output.
     - Tests cover the corrected accounting and cached-token parsing; existing usage/budget tests pass.
   - Blocked-on: a real `codex exec --json` usage line (field names + cumulative-vs-incremental) before the summation fix can be implemented safely. Moved to backlog 2026-05-30 pending that sample.
+
+- [TASK-0092] Assess and implement channel prefix rename from `codex-*` to `code-*`.
+  - Viability: **viable with low code risk; Discord side requires manual rename.**
+  - Code impact:
+    - `DEFAULT_CHANNEL_REGEX = r"^codex-([A-Za-z0-9._-]+)$"` in `config.py:13` is the only hardcoded default.
+    - The regex is already user-overridable via `discord.channel_name_regex` in the YAML config, so no deployed instance is forced to use the default.
+    - State keys use `channel_id` (a Discord snowflake), not channel name — state survives a channel rename with zero migration.
+    - Audit logs and session JSONL embed `repo_channel` (the name) as a label only; no functional dependency on it.
+  - Migration path:
+    1. Change `DEFAULT_CHANNEL_REGEX` to `r"^code-([A-Za-z0-9._-]+)$"`.
+    2. Provide a transitional regex operators can set: `r"^cod(?:ex)?-([A-Za-z0-9._-]+)$"` to accept both prefixes while renaming channels.
+    3. Rename channels on the Discord server manually (no bot API for bulk-renaming channels; `PATCH /channels/{id}` renames one at a time — could add an admin command).
+    4. Once all channels renamed, switch to the new default or remove the transitional regex.
+  - Scope:
+    - Change `DEFAULT_CHANNEL_REGEX` and update all references in docs/tests/examples.
+    - Update `!c help` and README to reflect the new prefix.
+    - Optional: add a one-shot DM admin command `!rename-channels code-` that renames all matching guild channels via Discord API (requires `MANAGE_CHANNELS` permission).
+  - Risk: **low** — regex is config-driven; state is ID-keyed; no data migration needed. Main work is coordinating the Discord channel renames in production.

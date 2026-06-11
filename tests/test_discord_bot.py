@@ -13,6 +13,9 @@ class _FakeRouter:
         self.startup_calls = 0
         self.shutdown_calls = 0
 
+    def set_guild_text_channels_fn(self, fn) -> None:
+        pass
+
     async def startup_summary(self) -> str:
         self.startup_calls += 1
         return "Default model: gpt-test (reasoning medium)"

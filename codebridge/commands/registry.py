@@ -87,6 +87,7 @@ COMMAND_MODEL_META: Dict[str, Dict[str, str]] = {
     "ps": {"surface": SURFACE_SUPPORT, "namespace": "diag"},
     "cancel": {"surface": SURFACE_SUPPORT, "namespace": "run"},
     "rerun": {"surface": SURFACE_ADVANCED, "namespace": "run"},
+    "unpin": {"surface": SURFACE_ADMIN, "namespace": "admin"},
 }
 
 _MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{1,63}$")
@@ -565,6 +566,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec("ps", "ps", "list queued/running jobs", "Queue", _cmd_ps, AUTH_OPEN),
         CommandSpec("cancel", "cancel <job-id>", "cancel queued job", "Queue", _cmd_cancel, AUTH_UNLOCK, aliases=("drop",)),
         CommandSpec("rerun", "rerun", "requeue last job", "Queue", _cmd_rerun, AUTH_UNLOCK, aliases=("retry",)),
+        CommandSpec("unpin", "unpin", "remove all but the most recent pin from this channel", "Admin and maintenance", _cmd_unpin, AUTH_UNLOCK),
     ]
     registry: Dict[str, CommandSpec] = {}
     for spec in specs:
@@ -1612,3 +1614,7 @@ async def _cmd_cancel(router: Any, message: MessageEvent, sink: ResponseSink, re
 
 async def _cmd_rerun(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     await router.handle_rerun(sink)
+
+
+async def _cmd_unpin(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    await router.handle_unpin(message, sink)
