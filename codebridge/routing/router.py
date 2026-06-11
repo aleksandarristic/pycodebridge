@@ -456,6 +456,23 @@ class Router:
                     return True
             await self.handle_answer(event, sink, relay_session, relay_text)
             return True
+        active = await self.active_sessions(event.channel_id)
+        if len(active) == 1:
+            steer_text = content.strip()
+            if not steer_text:
+                return True
+            if self._totp_enabled(event) and not self._totp_is_unlocked(event):
+                ok, steer_text = await self.require_totp(event, sink, "steer", steer_text)
+                if not ok:
+                    return True
+            await self.handle_steer(event, sink, active[0], steer_text)
+            return True
+        if len(active) > 1:
+            await self.reply_forbidden(
+                sink,
+                "Multiple sessions are running. Use `!s:<session> <text>` to steer a specific one.",
+            )
+            return True
         pending_session = self.current_session_for_event(event)
         pending_conflict = await self.consume_pending(event.channel_id, pending_session)
         if pending_conflict is not None:

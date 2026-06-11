@@ -1558,6 +1558,61 @@ def test_integration_steer_fails_loudly_when_multiple_active_sessions(tmp_path):
     assert any("Cannot steer: multiple active sessions (alpha, default)." in msg for msg in texts)
 
 
+def test_integration_plain_message_auto_steers_single_active_session(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    proc = _FakeProc()
+
+    async def run():
+        await router.set_active("chan", "default", proc)
+        await router.handle_message(_discord_event("focus on the failing tests", "codex-repo"), sink)
+
+    asyncio.run(run())
+    assert "focus on the failing tests\n" in proc.writes
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Steer delivered to session 'default'." in msg for msg in texts)
+
+
+def test_integration_plain_message_with_multiple_active_sessions_is_rejected(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.set_active("chan", "default", _FakeProc())
+        await router.set_active("chan", "alpha", _FakeProc())
+        await router.handle_message(_discord_event("focus on the failing tests", "codex-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Multiple sessions are running." in msg for msg in texts)
+    assert any("!s:<session>" in msg for msg in texts)
+
+
+def test_integration_plain_message_with_no_active_session_falls_through_to_resume(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    router.cfg.discord.allow_plain_prompts = True
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("start fresh on the API", "codex-repo"), sink)
+        await asyncio.sleep(0)
+
+    asyncio.run(run())
+    assert runner.calls != [] or runner.last_proc is not None
+
+
 def test_integration_session_targeted_steer_and_answer_shortcuts(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
