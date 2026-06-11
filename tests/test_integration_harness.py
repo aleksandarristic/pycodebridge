@@ -124,6 +124,29 @@ class _ProcDone:
         return None
 
 
+class _ProcNeverDone:
+    def __init__(self) -> None:
+        self.killed = False
+        self._done = asyncio.Event()
+
+    async def wait(self) -> int:
+        await self._done.wait()
+        return 0
+
+    async def stop(self) -> None:
+        return None
+
+    def interrupt(self) -> None:
+        return None
+
+    def kill(self) -> None:
+        self.killed = True
+
+    async def write(self, data: str) -> None:
+        _ = data
+        return None
+
+
 class _FakeRunner:
     # Emulate the Codex backend's JSONL parsing for router fallback parsing.
     parse = CodexBackend.parse
@@ -216,6 +239,28 @@ class _ClaudeImmediateExitRunner(_ImmediateExitRunner):
     def __init__(self, *, jsonl_lines=(), stderr_lines=(), rc: int = 1) -> None:
         super().__init__(jsonl_lines=jsonl_lines, stderr_lines=stderr_lines, rc=rc)
         self._backend = ClaudeBackend(binary="claude")
+
+    def parse(self, line: str):
+        return self._backend.parse(line)
+
+
+class _ClaudeFinalResultLingeringRunner:
+    ask_prefix = "Claude asks:"
+
+    def __init__(self, line: str) -> None:
+        self.calls = []
+        self._backend = ClaudeBackend(binary="claude")
+        self.last_proc: _ProcNeverDone | None = None
+        self.line = line
+
+    async def run(self, opts: Options):
+        self.calls.append(list(opts.args))
+        if opts.on_thread:
+            await opts.on_thread("thread-1")
+        if opts.on_jsonl:
+            await opts.on_jsonl(self.line)
+        self.last_proc = _ProcNeverDone()
+        return self.last_proc
 
     def parse(self, line: str):
         return self._backend.parse(line)
@@ -3124,6 +3169,18 @@ def _claude_usage_limit_result_line(message: str = "You've hit your session limi
     )
 
 
+def _claude_success_result_line() -> str:
+    return json.dumps(
+        {
+            "type": "result",
+            "subtype": "success",
+            "is_error": False,
+            "session_id": "thread-1",
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+        }
+    )
+
+
 def test_run_codex_wraps_duplicate_unsupported_model_jsonl_error(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -3215,6 +3272,46 @@ def test_run_codex_surfaces_claude_usage_limit_result_even_on_zero_exit(tmp_path
     assert message in output
     assert "local reset: 20:30 Central European time" in output
     assert "Run complete" not in output
+
+
+def test_run_codex_final_result_kills_lingering_process(tmp_path, monkeypatch):
+    import codebridge.routing.router as router_mod
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    runner = _ClaudeFinalResultLingeringRunner(_claude_success_result_line())
+    router, _ = _build_router(tmp_path, runner=runner)
+    router._runtime_options_channels["chan"] = {
+        "run_heartbeat_seconds": 1,
+        "run_completion_min_seconds": 0,
+    }
+    monkeypatch.setattr(router_mod, "_FINAL_RESULT_EXIT_GRACE_SECONDS", 0.01)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    event = _discord_event("!c resume fix", "codex-repo")
+    active_after = {}
+
+    async def run():
+        await router.run_codex(
+            event,
+            sink,
+            "repo",
+            str(repo),
+            "default",
+            "",
+            "",
+            ["-p", "fix"],
+            backend=runner,
+        )
+        active_after["proc"] = await router.get_active("chan", "default")
+
+    asyncio.run(run())
+    assert runner.last_proc is not None
+    assert runner.last_proc.killed is True
+    assert active_after["proc"] is None
+    texts = [msg for msg, _, _ in sink.sent]
+    assert not any("working for" in text for text in texts)
+    assert any("Run complete for session 'default'" in text for text in texts)
 
 
 def test_claude_usage_limit_formatter_adds_central_european_reset_time(tmp_path):

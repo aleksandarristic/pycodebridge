@@ -8,7 +8,7 @@ import shlex
 import subprocess
 import time
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Optional, Set
@@ -86,6 +86,7 @@ _READ_ONLY_COMMANDS = {
 _RUN_HEARTBEAT_SECONDS = 120
 _RUN_COMPLETION_MIN_SECONDS = 300
 _RUN_KEY_RESULT_MAX = 180
+_FINAL_RESULT_EXIT_GRACE_SECONDS = 2.0
 _RUNTIME_OPTION_KEYS = ("run_heartbeat_seconds", "run_completion_min_seconds", "show_reasoning_details")
 _TOP_LEVEL_SHORTCUT_ALIASES = (("!reset", "reset"),)
 _CODEX_UNSUPPORTED_CHATGPT_MODEL_RE = re.compile(
@@ -143,6 +144,10 @@ class _RunRelayState:
     suppressed_progress_events: int = 0
     friendly_error: str = ""
     friendly_error_relayed: bool = False
+    final_result_seen: bool = False
+    final_result_error: bool = False
+    final_result_forced_exit: bool = False
+    final_result_event: asyncio.Event = field(default_factory=asyncio.Event)
 
     @property
     def is_terminal(self) -> bool:
@@ -2115,9 +2120,31 @@ class Router:
                         reasoning_effort=reasoning_effort,
                     )
                 )
+            wait_task = asyncio.create_task(proc.wait())
+            final_result_task = asyncio.create_task(self._wait_for_final_result_grace(run_state))
             try:
-                rc = await proc.wait()
+                done, _ = await asyncio.wait(
+                    {wait_task, final_result_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if wait_task in done:
+                    rc = await wait_task
+                else:
+                    run_state.final_result_forced_exit = True
+                    rc = 1 if run_state.final_result_error or run_state.friendly_error else 0
+                    self.logger.warning(
+                        "agent.final_result_lingering_process",
+                        extra={"channel_id": channel_id, "repo": repo_name, "session": session, "code": rc},
+                    )
+                    with contextlib.suppress(Exception):
+                        proc.kill()
+                    wait_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await wait_task
             finally:
+                final_result_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await final_result_task
                 if heartbeat_task:
                     heartbeat_task.cancel()
                     with contextlib.suppress(asyncio.CancelledError):
@@ -2158,6 +2185,7 @@ class Router:
                         "terminal": True,
                         "status": "failed",
                         "friendly_error": True,
+                        "final_result_forced_exit": run_state.final_result_forced_exit,
                     },
                     repo_name=repo_name,
                 )
@@ -2183,7 +2211,13 @@ class Router:
                     channel_id,
                     session or DEFAULT_SESSION,
                     "run.complete",
-                    {"code": 0, "output_events": tracker.events, "terminal": True, "status": "success"},
+                    {
+                        "code": 0,
+                        "output_events": tracker.events,
+                        "terminal": True,
+                        "status": "success",
+                        "final_result_forced_exit": run_state.final_result_forced_exit,
+                    },
                     repo_name=repo_name,
                 )
             else:
@@ -2214,7 +2248,13 @@ class Router:
                     channel_id,
                     session or DEFAULT_SESSION,
                     "run.failed",
-                    {"code": rc, "stderr_tail": list(stderr_tail[-5:]), "terminal": True, "status": "failed"},
+                    {
+                        "code": rc,
+                        "stderr_tail": list(stderr_tail[-5:]),
+                        "terminal": True,
+                        "status": "failed",
+                        "final_result_forced_exit": run_state.final_result_forced_exit,
+                    },
                     repo_name=repo_name,
                 )
             self._audit_helper.close(entry)
@@ -2328,6 +2368,11 @@ class Router:
             emitted.add("session_soft")
         if notices:
             await self.reply(sink, "Budget notice: " + "; ".join(notices) + ".")
+
+    async def _wait_for_final_result_grace(self, run_state: _RunRelayState) -> None:
+        """Wait until a final stream result has had time to be followed by process exit."""
+        await run_state.final_result_event.wait()
+        await asyncio.sleep(_FINAL_RESULT_EXIT_GRACE_SECONDS)
 
     async def _run_heartbeat(
         self,
@@ -2684,7 +2729,10 @@ class Router:
             return
         self.update_usage(channel_id, session, evt)
         self.update_activity(channel_id, session)
-        if run_state is not None and run_state.is_terminal:
+        is_result_event = evt.type == "result"
+        if is_result_event and run_state is not None:
+            self._mark_stream_result_terminal(channel_id, session, run_state, bool(evt.error))
+        if run_state is not None and run_state.is_terminal and not is_result_event:
             if evt.texts:
                 run_state.suppressed_progress_events += 1
             return
@@ -2724,6 +2772,20 @@ class Router:
                 await self._emit_output(
                     sink, channel_id, session, repo_name, entry, text, coalescer, flush=awaiting
                 )
+
+    def _mark_stream_result_terminal(
+        self,
+        channel_id: str,
+        session: str,
+        run_state: _RunRelayState,
+        is_error: bool,
+    ) -> None:
+        """Mark a final stream result so heartbeat and process waiting can stop."""
+        if not run_state.final_result_seen:
+            run_state.final_result_seen = True
+            run_state.final_result_error = is_error
+            run_state.final_result_event.set()
+        self._mark_run_terminal(channel_id, session, "failed" if is_error else "success", 1 if is_error else 0)
 
     async def on_thread(
         self,

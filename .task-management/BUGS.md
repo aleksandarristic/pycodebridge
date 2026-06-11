@@ -20,16 +20,6 @@ Rules:
 
 **Affected files:** `codebridge/routing/router.py`, `codebridge/codex.py`, `tests/test_integration_harness.py`
 
-### TASK-0088: Final stream result does not stop heartbeat when the CLI process lingers
-
-**Symptom:** Claude can appear to keep running and keep sending "working" heartbeat messages even though the agent session has logically ended.
-
-**Root cause:** Backend parsers expose terminal stream events as `NormalizedEvent(type="result", ...)`, but the router does not treat `result` as a lifecycle signal. The run remains active and heartbeat continues until `proc.wait()` returns (`router.py:2106-2128`, `router.py:2332-2357`). The shared runner also invokes `on_exit` only after both stream readers finish and then `proc.wait()` returns (`agents/base.py:235-246`). If a CLI emits a final result but leaves the process or one stream open, the bridge has no grace-period watchdog to mark the run terminal, stop heartbeat, notify the user, or clean up the stuck process.
-
-**Fix sketch:** Track terminal `result` events in `on_jsonl`, mark the run as terminal after a short grace period if the process has not exited, stop heartbeat once a final result is seen, and either kill/interrupt the lingering process or surface an explicit "agent emitted final result but process did not exit" error. Add Claude-focused coverage where a `result` event is emitted and `Process.wait()` never completes.
-
-**Affected files:** `codebridge/routing/router.py`, `codebridge/agents/base.py`, `codebridge/agents/claude.py`, `tests/test_integration_harness.py`
-
 ### TASK-0086: Thread messages silently dropped when parent channel not in Discord cache
 
 **Symptom:** Bot does not respond to messages sent in a Discord thread after bot restart or in large guilds, with no error sent to the user.

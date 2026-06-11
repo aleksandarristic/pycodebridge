@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0088] Final stream result does not stop heartbeat when the CLI process lingers.
+  - Completed: 2026-06-11
+  - Notes: Router now treats backend `result` stream events as terminal lifecycle signals, marks the run relay terminal so heartbeat stops, and races process wait against a short final-result grace window. If the process lingers past the grace period, the bridge kills/cancels it and finishes through the normal success/failure path. Targeted tests: `tests/test_integration_harness.py::test_run_codex_final_result_kills_lingering_process`, `tests/test_integration_harness.py::test_run_codex_surfaces_claude_usage_limit_result_even_on_zero_exit`, `tests/test_integration_harness.py::test_run_codex_surfaces_claude_usage_limit_stderr`, `tests/test_claude_backend.py`.
+
 - [TASK-0087] Unsupported configured default Codex model is reported as a stale session override.
   - Completed: 2026-06-11
   - Notes: Session state no longer persists configured Codex model/reasoning defaults as session overrides during thread updates; effective defaults still resolve at run time. Unsupported-model guidance now detects when the rejected model is `cfg.codex.model` and tells the operator to change or clear config instead of suggesting `!model default` / `!reset default`. Targeted tests: `tests/test_session_service.py`, `tests/test_integration_harness.py::test_run_codex_wraps_duplicate_unsupported_model_jsonl_error`, `tests/test_integration_harness.py::test_run_codex_unsupported_configured_default_points_to_config`, `tests/test_integration_harness.py::test_run_codex_wraps_unsupported_model_stderr_error`.
