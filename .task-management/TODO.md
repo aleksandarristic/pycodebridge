@@ -51,3 +51,47 @@ Rules:
     - No session is created as a side-effect of the read.
     - Tests cover: bare call on default session, bare call with explicit session name, Gemini
       session no-arg effort, and at least one case where a session override is active vs. none.
+
+- [TASK-0083b] Heartbeat ping message shows agent, model, and effort.
+  - Context: The heartbeat (emitted every `run_heartbeat_seconds`) currently says:
+    `"Still running in session 'default' (2m elapsed)."` — no hint of what's actually running.
+  - Goal: enrich the message to read e.g.:
+    `"Gemini (gemini-2.5-pro) working for 2m with yolo effort."` or
+    `"Claude (claude-sonnet-4-6) working for 2m with high effort."` or
+    `"Codex (gpt-5.4-codex) working for 2m."` (no effort clause for Codex when it's the default,
+    but include it when a non-default effort is set).
+    Omit the effort clause entirely for Gemini (no effort concept) and when effort is unset/default.
+    Include the session name only when it's not `"default"` (to avoid noise in the common case).
+  - Scope:
+    - `_run_heartbeat` (`router.py:2324`) currently receives only `sink`, `session`,
+      `started_at`. Extend its signature to also accept `backend_name: str`, `model: str`,
+      `reasoning_effort: str` — all already available as locals in `run_codex` at the
+      `create_task` call site (`router.py:2109`).
+    - Build a helper (private to `router.py` or inline) that produces the formatted prefix:
+      `"{BackendDisplay} ({model}) working for {elapsed}"` where:
+        - `BackendDisplay` = capitalised backend name (`Gemini`, `Claude`, `Codex`); use the
+          backend's class name or the `backend_name` string.
+        - `model` = active model if set, else omit the parenthetical entirely.
+        - effort clause = `" with {effort} effort"` appended only when `reasoning_effort` is
+          non-empty AND `backend_name != "gemini"`.
+        - Session clause = `" in session '{session}'"` appended only when `session` differs
+          from `DEFAULT_SESSION`.
+    - Example outputs:
+        - `"Gemini working for 2m."` (no model override, no effort, default session)
+        - `"Gemini (gemini-2.5-pro) working for 2m."` (model set, default session)
+        - `"Claude (claude-sonnet-4-6) working for 4m with high effort in session 'feat'."` (all fields)
+        - `"Codex working for 1m."` (nothing set, default session)
+  - Implementation notes:
+    - `backend_name`, `model`, and `reasoning_effort` are already resolved locals in
+      `run_codex` by the time `heartbeat_task` is created — no extra state lookup needed.
+    - The Gemini no-effort rule mirrors `_normalize_effort_for_backend` returning `None`
+      for `bn == "gemini"` — keep that as the canonical check, don't duplicate the logic.
+    - Keep the change isolated to `_run_heartbeat` and its single call site; no other
+      methods need touching.
+  - Acceptance criteria:
+    - Heartbeat message includes backend name (always), model in parens (when set),
+      effort clause (when set and not Gemini), session clause (when non-default).
+    - Gemini runs never include an effort clause regardless of what `reasoning_effort` holds.
+    - Default session runs omit the session clause.
+    - Existing `_run_heartbeat` tests (if any) updated; new tests cover the Gemini/Claude/Codex
+      variants with and without model/effort/session overrides.
