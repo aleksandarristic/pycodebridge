@@ -12,6 +12,22 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0085] Wrong backend error on stop command after backend switch.
+  - Completed: 2026-06-11
+  - Notes: Replaced the hardcoded "No running Codex process." string in handle_stop, handle_interrupt, handle_kill, and handle_quit with a backend-agnostic "No agent running in session 'X'." message. Added a hint listing other active sessions in the channel so the user can identify where the real run is (e.g. the thread session vs the default session). Docstrings updated to remove Codex-specific language.
+
+- [TASK-0084] Main conversation session hangs while heartbeat continues.
+  - Completed: 2026-06-11
+  - Notes: Root cause: _run_heartbeat checked `if run_state is not None and run_state.is_terminal` — when the run relay was cleared by on_exit (called from the background _waiter task), run_state became None and the condition was False, so the heartbeat kept looping. Fixed by changing to `if run_state is None or run_state.is_terminal` so the heartbeat stops when the relay state is gone (i.e. the run has ended). This was bundled into the TASK-0083b commit since both changes are in _run_heartbeat.
+
+- [TASK-0083b] Heartbeat ping message shows agent, model, and effort.
+  - Completed: 2026-06-11
+  - Notes: Extended _run_heartbeat signature with backend_name, model, reasoning_effort. Updated the single call site in run_codex to derive backend_name from type(_backend).__name__. New format: "Claude (claude-sonnet-4-6) working for 2m with high effort." — model parens omitted when not set, effort clause omitted for Gemini and when unset, session clause omitted for the default session.
+
+- [TASK-0083] `!agent`, `!model`, `!effort` with no args show current session selection.
+  - Completed: 2026-06-11
+  - Notes: Added no-arg display path to _cmd_model, _cmd_agent, and _cmd_effort. Each command now shows the current effective value with "session override" or "configured default" label. !c effort for Gemini sessions replies "not applicable" instead of a forbidden error. A lone token that doesn't look like a model id / backend / effort level is treated as a session name for display. No session is created as a side-effect.
+
 - [TASK-0082] Revisit Gemini backend because Gemini is not working.
   - Completed: 2026-06-10
   - Notes: Root cause was a silent failure when a configured/unavailable model is rejected by the API — the run ended with no user-facing message. Fixed by parsing the direct `error` object in the stream-json `result` event and adding backend-aware router detection for Gemini model-not-found (`ModelNotFoundError` / `Requested entity was not found` / `code: 404`), surfacing an actionable reply that points to `!models` / `!model <id>`. Validated end to end against real `gemini 0.45.2` (OAuth) in a temp git repo: start, resume-by-id (context carried across turns), and resume-latest all returned `result/status=success` with exit 0; an invalid `-m` run reproduced the failure (exit 1) emitting a `result/status=error` with `error.type=unknown` on stdout and `ModelNotFoundError: Requested entity was not found. code: 404` on stderr. Fed the captured real lines back through `GeminiBackend.parse()` and `_GEMINI_MODEL_NOT_FOUND_RE` to confirm they match the existing fixtures. Live stream-json shape matches `.task-management/TASK-0020-gemini-stream-json-schema.md` (default model `gemini-3-flash-preview`), so no schema refresh was needed. Full suite green.
