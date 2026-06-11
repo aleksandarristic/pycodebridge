@@ -9,3 +9,15 @@ Rules:
 - When a bug report is invalid/obsolete, remove it from this file and append it to `.task-management/REMOVED.md` with reason.
 
 ## Bug backlog
+
+- [TASK-0090] Gemini streamed Discord output chunks can arrive out of order.
+  - Reported: 2026-06-11
+  - Context: In a Discord channel using `!agent gemini`, the assistant response was delivered as chunks in the wrong order:
+    - Observed: `🔓 Hello! How can I help you with the s` followed by `Gemini asks: ajt repository today?`
+    - Expected: `Gemini asks: Hello! How can I help you with the sajt repository today?`
+  - Impact: Users see scrambled Gemini responses when streamed text is split across multiple Discord sends.
+  - Investigate: Gemini stream parsing, output coalescing/flushing, and Discord send ordering for backend-prefixed assistant messages.
+  - Acceptance criteria:
+    - Gemini streamed assistant text preserves source order across chunk boundaries.
+    - Backend ask prefix is emitted exactly once at the beginning of the relayed response.
+    - Regression coverage reproduces split Gemini output and verifies Discord send order.
