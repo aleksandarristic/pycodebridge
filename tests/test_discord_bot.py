@@ -42,9 +42,16 @@ class _FakeGuild:
     def __init__(self, guild_id: int) -> None:
         self.id = guild_id
         self.left = False
+        self.channels = {}
 
     async def leave(self) -> None:
         self.left = True
+
+    def get_channel(self, channel_id: int):
+        return self.channels.get(str(channel_id))
+
+    async def fetch_channel(self, channel_id: int):
+        return self.channels.get(str(channel_id))
 
 
 class _FakeChannel:
@@ -58,7 +65,11 @@ class _FakeChannel:
 
 
 class _FakeThread(_FakeChannel):
-    pass
+    def __init__(self, channel_id: str, name: str, *, parent=None, parent_id: str = "", guild=None) -> None:
+        super().__init__(channel_id, name)
+        self.parent = parent
+        self.parent_id = parent_id or str(getattr(parent, "id", "") or "")
+        self.guild = guild
 
 
 def test_startup_dm_includes_summary_and_runs_once():
@@ -169,3 +180,45 @@ def test_on_message_uses_attached_thread_sink_for_starter_messages(monkeypatch):
     assert event.platform_thread_id == "thread-1"
     assert parent.sent == []
     assert thread.sent == ["reply"]
+
+
+def test_on_message_fetches_missing_thread_parent_before_routing(monkeypatch):
+    from codebridge.routing.event_context import normalize_event_context
+
+    class _CapturingRouter(_FakeRouter):
+        def __init__(self):
+            super().__init__()
+            self.events = []
+
+        async def handle_message(self, event, sink) -> None:
+            _ = sink
+            self.events.append(normalize_event_context(event))
+
+    router = _CapturingRouter()
+    client = BridgeClient(router)
+    monkeypatch.setattr(discord, "Thread", _FakeThread)
+    guild = _FakeGuild(42)
+    parent = _FakeChannel("123", "codex-repo")
+    guild.channels["123"] = parent
+    thread = _FakeThread("thread-1", "topic-a", parent=None, parent_id="123", guild=guild)
+    message = type(
+        "FakeMessage",
+        (),
+        {
+            "channel": thread,
+            "content": "!c start",
+            "id": "msg",
+            "author": SimpleNamespace(id="1", bot=False),
+            "guild": guild,
+            "attachments": [],
+        },
+    )()
+
+    async def run():
+        await client.on_message(message)
+
+    asyncio.run(run())
+    assert len(router.events) == 1
+    event = router.events[0]
+    assert event.channel_id == "discord:123:thread-1"
+    assert event.channel_name == "codex-repo"

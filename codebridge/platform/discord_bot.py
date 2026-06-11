@@ -73,10 +73,44 @@ class BridgeClient(discord.Client):
 
     async def on_message(self, message: discord.Message) -> None:
         """Dispatch incoming messages to the Router."""
+        await self._ensure_thread_parent_context(message)
         event = self.adapter.event_from_message(message)
         sink_channel = getattr(message, "thread", None) or message.channel
         sink = self.adapter.sink_for_channel(sink_channel)
         await self.router.handle_message(event, sink)
+
+    async def _ensure_thread_parent_context(self, message: discord.Message) -> None:
+        """Attach fetched parent channel metadata when a thread parent is not cached."""
+        channel = getattr(message, "thread", None) or getattr(message, "channel", None)
+        if not isinstance(channel, discord.Thread):
+            return
+        if getattr(channel, "parent", None) is not None:
+            return
+        parent_id = getattr(channel, "parent_id", None)
+        if parent_id is None:
+            return
+        guild = getattr(message, "guild", None) or getattr(channel, "guild", None)
+        if guild is None:
+            return
+        parent = None
+        get_channel = getattr(guild, "get_channel", None)
+        if callable(get_channel):
+            try:
+                parent = get_channel(int(parent_id))
+            except Exception:
+                parent = None
+        if parent is None:
+            fetch_channel = getattr(guild, "fetch_channel", None)
+            if callable(fetch_channel):
+                try:
+                    parent = await fetch_channel(int(parent_id))
+                except Exception as exc:
+                    self.router.logger.warning(
+                        "discord.thread_parent_fetch_failed",
+                        extra={"thread_id": str(getattr(channel, "id", "")), "parent_id": str(parent_id), "error": str(exc)},
+                    )
+        if parent is not None:
+            setattr(message, "_codebridge_parent_channel", parent)
 
     async def on_guild_join(self, guild: discord.Guild) -> None:
         """Immediately leave guilds that do not match configured lock."""

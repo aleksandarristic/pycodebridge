@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0086] Thread messages silently dropped when parent channel not in Discord cache.
+  - Completed: 2026-06-11
+  - Notes: Discord message handling now enriches thread events by fetching missing parent channel metadata before routing, and event normalization can also recover parent names from a guild cache lookup. This preserves parent-channel repo mapping when `Thread.parent` is absent after restarts or cache misses. Targeted tests: `tests/test_router_contextual_sink.py`, `tests/test_discord_bot.py`, `tests/test_integration_harness.py::test_integration_discord_thread_uses_parent_repo_mapping_and_room_scope`, `tests/test_integration_harness.py::test_integration_discord_sibling_threads_are_isolated`, `tests/test_integration_harness.py::test_integration_discord_thread_stop_rekeys_legacy_thread_scope`.
+
 - [TASK-0089] Successful agent runs can finish with no user-visible terminal message.
   - Completed: 2026-06-11
   - Notes: Successful runs that relay zero assistant output now always send a terminal "no assistant message" notice with log guidance, independent of `run_completion_min_seconds`; regular short runs with output remain quiet as before. Targeted tests: `tests/test_integration_harness.py::test_run_codex_success_without_output_sends_terminal_notice`, `tests/test_integration_harness.py::test_integration_run_completion_summary_suppressed_for_short_run`, `tests/test_integration_harness.py::test_integration_late_progress_is_suppressed_after_terminal_summary`, `tests/test_integration_harness.py::test_integration_budget_notice_precedes_terminal_summary`.

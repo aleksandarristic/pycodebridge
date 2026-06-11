@@ -31,9 +31,19 @@ def discord_parent_context(event: MessageEvent) -> tuple[str, str]:
         channel = getattr(message, "channel", None) if message is not None else None
     if channel is None:
         return "", ""
-    parent = getattr(channel, "parent", None)
+    parent = getattr(message, "_codebridge_parent_channel", None)
+    if parent is None:
+        parent = getattr(channel, "parent", None)
     parent_id = getattr(channel, "parent_id", None)
     parent_name = ""
+    if parent is None and parent_id is not None:
+        guild = getattr(channel, "guild", None) or getattr(message, "guild", None)
+        get_channel = getattr(guild, "get_channel", None)
+        if callable(get_channel):
+            try:
+                parent = get_channel(int(parent_id))
+            except Exception:
+                parent = None
     if parent is not None:
         if parent_id is None:
             parent_id = getattr(parent, "id", None)

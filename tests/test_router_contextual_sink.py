@@ -39,8 +39,12 @@ class _FakeDiscordPermissions:
 
 
 class _FakeDiscordGuild:
-    def __init__(self) -> None:
+    def __init__(self, channels=None) -> None:
         self.default_role = object()
+        self._channels = channels or {}
+
+    def get_channel(self, channel_id: int):
+        return self._channels.get(str(channel_id))
 
 
 class _FakeDiscordChannelType:
@@ -147,6 +151,37 @@ def test_normalize_event_context_uses_parent_channel_metadata_for_threads():
 
     normalized = normalize_event_context(event)
     assert normalized.channel_id == "discord:chan-parent:thread-1"
+    assert normalized.channel_name == "codex-repo"
+
+
+def test_normalize_event_context_uses_guild_cache_when_thread_parent_missing():
+    parent = _FakeDiscordChannel(is_private=True, channel_id="123", channel_name="codex-repo")
+    guild = _FakeDiscordGuild(channels={"123": parent})
+    thread = _FakeDiscordChannel(
+        is_private=True,
+        channel_id="thread-1",
+        channel_name="topic-a",
+        channel_type="public_thread",
+        parent=None,
+        parent_id="123",
+    )
+    thread.guild = guild
+    event = MessageEvent(
+        platform="discord",
+        content="!c start",
+        channel_id="thread-1",
+        channel_name="topic-a",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=False,
+        message_id="m1",
+        platform_thread_id="thread-1",
+        guild_id="guild",
+        raw_event=_FakeDiscordMessage(thread),
+    )
+
+    normalized = normalize_event_context(event)
+    assert normalized.channel_id == "discord:123:thread-1"
     assert normalized.channel_name == "codex-repo"
 
 
