@@ -390,8 +390,18 @@ def _session_idle_seconds(timestamp: str) -> int:
     return max(0, int((datetime.now(timezone.utc) - dt).total_seconds()))
 
 
+async def _no_active_agent_reply(router: "Router", sink: ResponseSink, session: str) -> None:
+    sess_label = session or DEFAULT_SESSION
+    active = await router.active_sessions(sink.channel_id)
+    if active:
+        hint = f" Active sessions: {', '.join(sorted(active))}."
+    else:
+        hint = ""
+    await router.reply_forbidden(sink, f"No agent running in session '{sess_label}'.{hint}")
+
+
 async def handle_stop(router: "Router", sink: ResponseSink, session: str) -> None:
-    """Send a stop signal to a running Codex process."""
+    """Send a stop signal to a running agent process."""
     proc = await router.get_active(sink.channel_id, session)
     if proc is not None:
         await proc.stop()
@@ -402,11 +412,11 @@ async def handle_stop(router: "Router", sink: ResponseSink, session: str) -> Non
             f"Sent stop (ESC then SIGINT) to session '{session or DEFAULT_SESSION}'.{_usage_suffix(router, sink.channel_id, session)}",
         )
         return
-    await router.reply(sink, "No running Codex process.")
+    await _no_active_agent_reply(router, sink, session)
 
 
 async def handle_interrupt(router: "Router", sink: ResponseSink, session: str) -> None:
-    """Send ESC to interrupt a running Codex process."""
+    """Send ESC to interrupt a running agent process."""
     proc = await router.get_active(sink.channel_id, session)
     if proc is not None:
         await proc.stop()
@@ -415,11 +425,11 @@ async def handle_interrupt(router: "Router", sink: ResponseSink, session: str) -
             f"Sent interrupt (ESC) to session '{session or DEFAULT_SESSION}'.{_usage_suffix(router, sink.channel_id, session)}",
         )
         return
-    await router.reply(sink, "No running Codex process.")
+    await _no_active_agent_reply(router, sink, session)
 
 
 async def handle_kill(router: "Router", sink: ResponseSink, session: str) -> None:
-    """Force-kill a running Codex process."""
+    """Force-kill a running agent process."""
     proc = await router.get_active(sink.channel_id, session)
     if proc is not None:
         proc.kill()
@@ -428,11 +438,11 @@ async def handle_kill(router: "Router", sink: ResponseSink, session: str) -> Non
             f"Sent kill to session '{session or DEFAULT_SESSION}'.{_usage_suffix(router, sink.channel_id, session)}",
         )
         return
-    await router.reply_forbidden(sink, "No running Codex process.")
+    await _no_active_agent_reply(router, sink, session)
 
 
 async def handle_quit(router: "Router", sink: ResponseSink, session: str) -> None:
-    """Send /quit to the Codex process."""
+    """Send /quit to the active agent process."""
     proc = await router.get_active(sink.channel_id, session)
     if proc is not None:
         await proc.write("/quit\n")
@@ -441,7 +451,7 @@ async def handle_quit(router: "Router", sink: ResponseSink, session: str) -> Non
             f"Sent /quit to session '{session or DEFAULT_SESSION}'.{_usage_suffix(router, sink.channel_id, session)}",
         )
         return
-    await router.reply_forbidden(sink, "No running Codex process.")
+    await _no_active_agent_reply(router, sink, session)
 
 
 async def handle_answer(router: "Router", event: MessageEvent, sink: ResponseSink, session: str, text: str) -> None:
