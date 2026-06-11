@@ -2106,7 +2106,15 @@ class Router:
             await self.set_active(channel_id, session, proc)
             heartbeat_task: asyncio.Task | None = None
             if relay_output:
-                heartbeat_task = asyncio.create_task(self._run_heartbeat(sink, session, started_at))
+                _hb_backend = type(_backend).__name__.replace("Backend", "").lower()
+                heartbeat_task = asyncio.create_task(
+                    self._run_heartbeat(
+                        sink, session, started_at,
+                        backend_name=_hb_backend,
+                        model=model,
+                        reasoning_effort=reasoning_effort,
+                    )
+                )
             try:
                 rc = await proc.wait()
             finally:
@@ -2321,15 +2329,32 @@ class Router:
         if notices:
             await self.reply(sink, "Budget notice: " + "; ".join(notices) + ".")
 
-    async def _run_heartbeat(self, sink: ResponseSink, session: str, started_at: float) -> None:
+    async def _run_heartbeat(
+        self,
+        sink: ResponseSink,
+        session: str,
+        started_at: float,
+        backend_name: str = "",
+        model: str = "",
+        reasoning_effort: str = "",
+    ) -> None:
         """Emit periodic run heartbeat messages while a job is active."""
         while True:
             await asyncio.sleep(self._runtime_option_value(sink.channel_id, "run_heartbeat_seconds"))
             run_state = self._run_relay(sink.channel_id, session)
-            if run_state is not None and run_state.is_terminal:
+            if run_state is None or run_state.is_terminal:
                 return
             elapsed = int(max(1.0, time.monotonic() - started_at))
-            await self.reply(sink, f"Still running in session '{session}' ({self._format_duration(elapsed)} elapsed).")
+            display = (backend_name or "agent").capitalize()
+            if model:
+                display = f"{display} ({model})"
+            msg = f"{display} working for {self._format_duration(elapsed)}"
+            if reasoning_effort and (backend_name or "").lower() != "gemini":
+                msg += f" with {reasoning_effort} effort"
+            if session and session != DEFAULT_SESSION:
+                msg += f" in session '{session}'"
+            msg += "."
+            await self.reply(sink, msg)
 
     async def _send_run_completion_summary(
         self,
