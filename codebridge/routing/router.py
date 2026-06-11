@@ -115,6 +115,21 @@ _CLAUDE_UTC_RESET_RE = re.compile(
 )
 _CENTRAL_EUROPE_TZ = ZoneInfo("Europe/Berlin")
 
+_TOOL_CALL_LABEL_KEYS = ("command", "file_path", "path", "url", "query", "description", "prompt")
+
+
+def _format_tool_call_label(name: str, inp: Dict[str, Any]) -> str:
+    """Return a short one-line label for a tool call suitable for Discord relay."""
+    for key in _TOOL_CALL_LABEL_KEYS:
+        val = str(inp.get(key) or "").strip()
+        if val:
+            return f"[{name}] `{val[:120]}`"
+    for val in inp.values():
+        text = str(val).strip()
+        if text:
+            return f"[{name}] `{text[:120]}`"
+    return f"[{name}]"
+
 
 class _RunBudgetMonitor:
     """Track per-run/session budget notices during a single Codex run."""
@@ -2830,6 +2845,25 @@ class Router:
                 await self._emit_output(
                     sink, channel_id, session, repo_name, entry, text, coalescer, flush=awaiting
                 )
+        for call in evt.tool_calls:
+            label = _format_tool_call_label(call.get("name", "tool"), call.get("input") or {})
+            if tracker is not None:
+                tracker.events += 1
+                tracker.last = label
+            if relay_output:
+                await self._emit_output(sink, channel_id, session, repo_name, entry, label, coalescer)
+        if bool(self._runtime_option_value(channel_id, "show_reasoning_details")):
+            for thought in evt.thinking:
+                text = thought.strip()
+                if not text:
+                    continue
+                if tracker is not None:
+                    tracker.events += 1
+                if relay_output:
+                    await self._emit_output(
+                        sink, channel_id, session, repo_name, entry,
+                        f"*thinking: {text[:800]}*", coalescer,
+                    )
 
     def _mark_stream_result_terminal(
         self,

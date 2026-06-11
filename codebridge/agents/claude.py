@@ -83,14 +83,27 @@ class ClaudeBackend(AgentBackend):
 
         if t == "assistant":
             msg = obj.get("message") or {}
+            content = msg.get("content", [])
             texts = [
                 block["text"]
-                for block in msg.get("content", [])
+                for block in content
                 if isinstance(block, dict) and block.get("type") == "text" and block.get("text")
+            ]
+            tool_calls = [
+                {"name": block["name"], "input": block.get("input") or {}}
+                for block in content
+                if isinstance(block, dict) and block.get("type") == "tool_use" and block.get("name")
+            ]
+            thinking = [
+                block["thinking"]
+                for block in content
+                if isinstance(block, dict) and block.get("type") == "thinking" and block.get("thinking")
             ]
             return NormalizedEvent(
                 type="message",
                 texts=texts,
+                tool_calls=tool_calls,
+                thinking=thinking,
                 raw=line,
             )
 

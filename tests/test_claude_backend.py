@@ -125,7 +125,7 @@ class TestParse:
             "message": {
                 "content": [
                     {"type": "text", "text": "Hello!"},
-                    {"type": "thinking", "thinking": "..."},
+                    {"type": "thinking", "thinking": "I should greet."},
                 ]
             },
         })
@@ -133,6 +133,7 @@ class TestParse:
         assert evt is not None
         assert evt.type == "message"
         assert evt.texts == ["Hello!"]
+        assert evt.thinking == ["I should greet."]
 
     def test_assistant_multiple_text_blocks(self):
         b = _backend()
@@ -155,7 +156,7 @@ class TestParse:
             "type": "assistant",
             "message": {
                 "content": [
-                    {"type": "tool_use", "id": "toolu_x", "name": "Bash", "input": {}},
+                    {"type": "tool_use", "id": "toolu_x", "name": "Bash", "input": {"command": "ls"}},
                 ]
             },
         })
@@ -163,6 +164,60 @@ class TestParse:
         assert evt is not None
         assert evt.type == "message"
         assert evt.texts == []
+        assert evt.tool_calls == [{"name": "Bash", "input": {"command": "ls"}}]
+
+    def test_assistant_tool_use_extracted(self):
+        b = _backend()
+        line = self._line({
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "tool_use", "id": "t1", "name": "Read", "input": {"file_path": "/foo.py"}},
+                    {"type": "tool_use", "id": "t2", "name": "Bash", "input": {"command": "git status"}},
+                    {"type": "text", "text": "Done"},
+                ]
+            },
+        })
+        evt = b.parse(line)
+        assert evt is not None
+        assert evt.texts == ["Done"]
+        assert len(evt.tool_calls) == 2
+        assert evt.tool_calls[0] == {"name": "Read", "input": {"file_path": "/foo.py"}}
+        assert evt.tool_calls[1] == {"name": "Bash", "input": {"command": "git status"}}
+        assert evt.thinking == []
+
+    def test_assistant_thinking_extracted(self):
+        b = _backend()
+        line = self._line({
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "thinking", "thinking": "I need to check the file."},
+                    {"type": "thinking", "thinking": "Then edit it."},
+                ]
+            },
+        })
+        evt = b.parse(line)
+        assert evt is not None
+        assert evt.thinking == ["I need to check the file.", "Then edit it."]
+        assert evt.texts == []
+        assert evt.tool_calls == []
+
+    def test_assistant_empty_thinking_skipped(self):
+        b = _backend()
+        line = self._line({
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "thinking", "thinking": ""},
+                    {"type": "text", "text": "Hi"},
+                ]
+            },
+        })
+        evt = b.parse(line)
+        assert evt is not None
+        assert evt.thinking == []
+        assert evt.texts == ["Hi"]
 
     def test_result_success(self):
         b = _backend()

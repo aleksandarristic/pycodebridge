@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0093] Surface tool calls and thinking blocks during long Claude runs.
+  - Completed: 2026-06-11
+  - Notes: Extended `NormalizedEvent` with `tool_calls` and `thinking` fields. `ClaudeBackend.parse()` now extracts `tool_use` and `thinking` content blocks from `assistant` events. `on_jsonl` relays a `[ToolName] \`input\`` label for every tool call (always, subject to `relay_output`), and thinking text gated on `show_reasoning_details` (default on). A module-level `_format_tool_call_label` helper formats the most descriptive input field per tool. New tests in `tests/test_claude_backend.py` cover extraction of all three block types.
+
 - [TASK-0091] Command to clear all but the last pinned message in a channel.
   - Completed: 2026-06-11
   - Notes: Added `!c unpin` (in-channel) and `!c unpin` (DM admin) command. In-channel variant unpins all but the most recently pinned message in the current channel. DM admin variant iterates all guild text channels matching `channel_name_regex` and does the same for each. Guild channel access is wired via `Router.set_guild_text_channels_fn`, set by `BridgeClient.__init__`. Zero/one-pin channels are no-ops with a message. Targeted tests: `tests/test_unpin_command.py` (12 tests covering unit and integration paths for both surfaces).

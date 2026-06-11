@@ -41,6 +41,8 @@ class NormalizedEvent:
     type: str = ""
     session_id: str = ""
     texts: List[str] = field(default_factory=list)
+    tool_calls: List[Dict[str, Any]] = field(default_factory=list)
+    thinking: List[str] = field(default_factory=list)
     usage: Optional[Dict[str, Any]] = None
     error: Optional[Dict[str, Any]] = None
     raw: str = ""
