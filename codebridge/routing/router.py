@@ -2199,14 +2199,17 @@ class Router:
                 await self._budget_soft_notify_if_needed(event, sink)
                 self._mark_run_terminal(channel_id, session, "success", 0)
                 if relay_output:
-                    await self._send_run_completion_summary(
-                        sink,
-                        channel_id,
-                        session,
-                        started_at,
-                        tracker.events,
-                        tracker.last,
-                    )
+                    if tracker.events:
+                        await self._send_run_completion_summary(
+                            sink,
+                            channel_id,
+                            session,
+                            started_at,
+                            tracker.events,
+                            tracker.last,
+                        )
+                    else:
+                        await self._send_no_output_completion_notice(sink, channel_id, session, started_at)
                 self._session_log.append(
                     channel_id,
                     session or DEFAULT_SESSION,
@@ -2427,6 +2430,27 @@ class Router:
             if len(last_output) > _RUN_KEY_RESULT_MAX:
                 clipped += "..."
             parts.append(f"Key result: {clipped}")
+        await self.reply(sink, " ".join(parts))
+
+    async def _send_no_output_completion_notice(
+        self,
+        sink: ResponseSink,
+        channel_id: str,
+        session: str,
+        started_at: float,
+    ) -> None:
+        """Send a terminal notice when a successful run produced no assistant text."""
+        elapsed = int(max(1.0, time.monotonic() - started_at))
+        parts = [
+            f"Run completed for session '{session}' in {self._format_duration(elapsed)}, "
+            "but no assistant message was emitted."
+        ]
+        usage = self.get_usage(channel_id, session)
+        if usage and usage.total_tokens:
+            parts.append(
+                f"Tokens in/out/total: {usage.input_tokens}/{usage.output_tokens}/{usage.total_tokens}."
+            )
+        parts.append("Use `!c logs` for raw details.")
         await self.reply(sink, " ".join(parts))
 
     def _friendly_unsupported_model_error_from_event(
@@ -2722,6 +2746,9 @@ class Router:
             # parser intentionally returns None for. Only relay plain-text lines
             # (e.g. Codex progress output).
             if text and not text.startswith("{"):
+                if tracker is not None:
+                    tracker.events += 1
+                    tracker.last = text
                 if relay_output and not (run_state and run_state.is_terminal):
                     await self._emit_output(sink, channel_id, session, repo_name, entry, text, coalescer)
                 elif run_state and run_state.is_terminal:
@@ -2748,6 +2775,7 @@ class Router:
             current = self.get_usage(channel_id, session or DEFAULT_SESSION)
             current_total = current.total_tokens if current else 0
             run_total = max(0, current_total - budget_monitor.before_total)
+            self._budget_last_run_total.setdefault(channel_id, {})[session or DEFAULT_SESSION] = run_total
             await self._budget_run_notify_if_needed(
                 event,
                 sink,

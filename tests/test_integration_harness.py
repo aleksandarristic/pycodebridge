@@ -1729,7 +1729,7 @@ def test_integration_run_heartbeat_message(tmp_path, monkeypatch):
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
-    assert any("Still running in session 'default'" in t for t in texts)
+    assert any("working for" in t for t in texts)
 
 
 def test_integration_late_progress_is_suppressed_after_terminal_summary(tmp_path):
@@ -1754,6 +1754,39 @@ def test_integration_late_progress_is_suppressed_after_terminal_summary(tmp_path
     assert any("First output" in t for t in texts)
     assert not any("Late progress" in t for t in texts)
     assert texts[-1].startswith("Run complete for session 'default'")
+
+
+def test_run_codex_success_without_output_sends_terminal_notice(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    line = json.dumps(
+        {
+            "type": "result",
+            "usage": {"input_tokens": 2, "output_tokens": 0, "total_tokens": 2},
+        }
+    )
+    runner = _ImmediateExitRunner(jsonl_lines=[line], rc=0)
+    router, _ = _build_router(tmp_path, runner=runner)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.run_codex(
+            _discord_event("!c start", "codex-repo"),
+            sink,
+            "repo",
+            str(repo),
+            "default",
+            "",
+            "",
+            ["start"],
+        )
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("but no assistant message was emitted" in t for t in texts)
+    assert any("Use `!c logs` for raw details." in t for t in texts)
 
 
 def test_integration_budget_notice_precedes_terminal_summary(tmp_path):
@@ -3311,7 +3344,7 @@ def test_run_codex_final_result_kills_lingering_process(tmp_path, monkeypatch):
     assert active_after["proc"] is None
     texts = [msg for msg, _, _ in sink.sent]
     assert not any("working for" in text for text in texts)
-    assert any("Run complete for session 'default'" in text for text in texts)
+    assert any("but no assistant message was emitted" in text for text in texts)
 
 
 def test_claude_usage_limit_formatter_adds_central_european_reset_time(tmp_path):

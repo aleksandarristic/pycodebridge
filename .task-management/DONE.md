@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0089] Successful agent runs can finish with no user-visible terminal message.
+  - Completed: 2026-06-11
+  - Notes: Successful runs that relay zero assistant output now always send a terminal "no assistant message" notice with log guidance, independent of `run_completion_min_seconds`; regular short runs with output remain quiet as before. Targeted tests: `tests/test_integration_harness.py::test_run_codex_success_without_output_sends_terminal_notice`, `tests/test_integration_harness.py::test_integration_run_completion_summary_suppressed_for_short_run`, `tests/test_integration_harness.py::test_integration_late_progress_is_suppressed_after_terminal_summary`, `tests/test_integration_harness.py::test_integration_budget_notice_precedes_terminal_summary`.
+
 - [TASK-0088] Final stream result does not stop heartbeat when the CLI process lingers.
   - Completed: 2026-06-11
   - Notes: Router now treats backend `result` stream events as terminal lifecycle signals, marks the run relay terminal so heartbeat stops, and races process wait against a short final-result grace window. If the process lingers past the grace period, the bridge kills/cancels it and finishes through the normal success/failure path. Targeted tests: `tests/test_integration_harness.py::test_run_codex_final_result_kills_lingering_process`, `tests/test_integration_harness.py::test_run_codex_surfaces_claude_usage_limit_result_even_on_zero_exit`, `tests/test_integration_harness.py::test_run_codex_surfaces_claude_usage_limit_stderr`, `tests/test_claude_backend.py`.

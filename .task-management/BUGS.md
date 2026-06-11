@@ -10,16 +10,6 @@ Rules:
 
 ## Bug backlog
 
-### TASK-0089: Successful agent runs can finish with no user-visible terminal message
-
-**Symptom:** A Codex run can appear to think or make progress but never send a final answer. The next prompt can work normally, which suggests the prior run completed rather than remaining active.
-
-**Root cause:** `run_codex` sends a success completion summary only through `_send_run_completion_summary` (`router.py:2164-2181`), and `_send_run_completion_summary` returns early when elapsed time is below `run_completion_min_seconds` (`router.py:2359-2371`). If the run exits 0 with no relayed assistant text, or with only parse-ignored JSON events such as reasoning/tool/final-result events, the bridge can clear active state and emit no user-facing completion or no-output notice. `on_jsonl` also ignores recognized events with no `texts` after usage/activity updates (`router.py:2660-2685`), so a terminal `result` event with no assistant text does not itself produce a response.
-
-**Fix sketch:** Always emit a concise terminal notice when a successful run relayed zero assistant output, regardless of `run_completion_min_seconds`, for example "Run completed with no assistant message; use `!c logs` for details." Also audit recent Codex JSONL samples for final-answer schema changes and extend `CodexBackend.parse()` if final answer text now arrives under a different item/content type.
-
-**Affected files:** `codebridge/routing/router.py`, `codebridge/codex.py`, `tests/test_integration_harness.py`
-
 ### TASK-0086: Thread messages silently dropped when parent channel not in Discord cache
 
 **Symptom:** Bot does not respond to messages sent in a Discord thread after bot restart or in large guilds, with no error sent to the user.
