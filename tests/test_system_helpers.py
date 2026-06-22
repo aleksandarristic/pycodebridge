@@ -95,7 +95,7 @@ def test_handle_health_reports_expected_sections(tmp_path, monkeypatch):
     asyncio.run(run())
     text = "\n".join(router.replies)
     assert "Health:" in text
-    assert "Codex version: 0.123.0" in text
+    assert "Agent version: 0.123.0" in text
     assert "Queue: 1 running, 1 queued" in text
     assert "Runtime uid:gid:" in text
     assert "Env sanity: code_root=missing, state_dir=missing, log_dir=missing" in text

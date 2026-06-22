@@ -469,7 +469,7 @@ async def handle_answer(router: "Router", event: MessageEvent, sink: ResponseSin
     if not proc:
         await router.reply_forbidden(
             sink,
-            f"No active Codex process for session '{session}'. Start/resume a session first.",
+            f"No active agent process for session '{session}'. Start/resume a session first.",
         )
         return
     try:

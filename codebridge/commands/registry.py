@@ -375,7 +375,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec(
             "updates",
             "updates",
-            "check installed Codex CLI vs latest npm release",
+            "check installed agent CLI vs latest npm release",
             "General",
             _cmd_updates,
             AUTH_OPEN,
@@ -418,7 +418,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             AUTH_MIXED,
             aliases=("lk",),
         ),
-        CommandSpec("start", "start [session]", "start a new Codex session", "Sessions", _cmd_start, AUTH_UNLOCK, aliases=("run",)),
+        CommandSpec("start", "start [session]", "start a new session", "Sessions", _cmd_start, AUTH_UNLOCK, aliases=("run",)),
         CommandSpec("resume", "resume [session] <prompt>", "resume with prompt", "Sessions", _cmd_resume, AUTH_UNLOCK, aliases=("rs",)),
         CommandSpec(
             "choose",
@@ -436,7 +436,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec(
             "models",
             "models [session] [refresh|--refresh]",
-            "list available models (cache-first; refresh to re-query Codex)",
+            "list available models (cache-first; refresh to re-query agent)",
             "Sessions",
             _cmd_models,
             AUTH_OPEN,
@@ -504,11 +504,11 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             aliases=("int", "esc", "escape"),
         ),
         CommandSpec("kill", "kill [session]", "force kill running process", "Run control", _cmd_kill, AUTH_UNLOCK),
-        CommandSpec("/quit", "/quit [session]", "send /quit to Codex", "Run control", _cmd_quit, AUTH_UNLOCK),
+        CommandSpec("/quit", "/quit [session]", "send /quit to agent", "Run control", _cmd_quit, AUTH_UNLOCK),
         CommandSpec(
             "steer",
             "steer [session] -- <text> | steer <text>",
-            "send steering text to active Codex session",
+            "send steering text to active session",
             "Run control",
             _cmd_steer,
             AUTH_UNLOCK,
@@ -516,7 +516,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec(
             "answer",
             "answer [session] -- <text> | answer <text>",
-            "send input to active Codex session",
+            "send input to active session",
             "Run control",
             _cmd_answer,
             AUTH_UNLOCK,

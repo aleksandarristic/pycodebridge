@@ -3293,7 +3293,7 @@ def test_run_codex_wraps_duplicate_unsupported_model_jsonl_error(tmp_path):
 
     asyncio.run(run())
     output = "\n".join(msg for msg, _, _ in sink.sent)
-    assert output.count("Codex cannot use model 'gpt-5.3-codex' with this ChatGPT account.") == 1
+    assert output.count("Cannot use model 'gpt-5.3-codex' with this ChatGPT account.") == 1
     assert "Session 'default' is configured for unsupported model 'gpt-5.3-codex'." in output
     assert "`!model default <model-id>`" in output
     assert "`!reset default`" in output
@@ -3326,7 +3326,7 @@ def test_run_codex_unsupported_configured_default_points_to_config(tmp_path):
 
     asyncio.run(run())
     output = "\n".join(msg for msg, _, _ in sink.sent)
-    assert "Configured Codex default model is unsupported: 'gpt-5.3-codex'." in output
+    assert "Configured default model is unsupported: 'gpt-5.3-codex'." in output
     assert "Change `codex.model` in the bridge config" in output
     assert "`!model default <model-id>`" not in output
     assert "`!reset default`" not in output
@@ -3480,7 +3480,7 @@ def test_run_codex_wraps_gemini_model_not_found_stderr(tmp_path):
     assert "`!model <model-id>`" in output
     assert "`!model default`" in output
     assert "Last stderr:" not in output
-    assert "Codex exited with code" not in output
+    assert "Agent exited with code" not in output
 
 
 def test_run_codex_wraps_unsupported_model_stderr_error(tmp_path):
@@ -3507,7 +3507,7 @@ def test_run_codex_wraps_unsupported_model_stderr_error(tmp_path):
 
     asyncio.run(run())
     output = "\n".join(msg for msg, _, _ in sink.sent)
-    assert output.count("Codex cannot use model 'gpt-5.3-codex' with this ChatGPT account.") == 1
+    assert output.count("Cannot use model 'gpt-5.3-codex' with this ChatGPT account.") == 1
     assert "Last stderr:" not in output
     assert '"type": "error"' not in output
     assert '{"type":"error"' not in output
@@ -3542,7 +3542,7 @@ def test_run_codex_fails_fast_on_usage_error_without_compat_retry(tmp_path):
     asyncio.run(run())
     assert len(runner.calls) == 1
     assert runner.calls[0] == args
-    assert any("Codex exited with code 2." in msg for msg, _, _ in sink.sent)
+    assert any("Agent exited with code 2." in msg for msg, _, _ in sink.sent)
     assert any("Last stderr: error: unexpected argument '--bad-flag'" in msg for msg, _, _ in sink.sent)
     assert not any("retrying with compatibility args" in msg for msg, _, _ in sink.sent)
     event_names = [name for _, name, _ in router.logger.entries]

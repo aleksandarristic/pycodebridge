@@ -154,11 +154,11 @@ _DM_HELP_DETAILS: dict[str, tuple[str, str]] = {
     "repo": ("repo <repo> <prompt>", "run a one-off prompt against a repo"),
     "unbind": ("unbind", "clear bound repo"),
     "status": ("status", "show bound repo and current session"),
-    "answer": ("answer [session] -- <text> | answer <text>", "send input to an active Codex session"),
+    "answer": ("answer [session] -- <text> | answer <text>", "send input to an active session"),
     "approve": ("approve [session]", "send 'yes' to active session"),
     "deny": ("deny [session]", "send 'no' to active session"),
     "gh": ("gh <args>", "run GitHub CLI (bound repo cwd, or code_root if unbound)"),
-    "updates": ("updates", "check Codex CLI update status"),
+    "updates": ("updates", "check agent CLI update status"),
     "health": ("health", "show runtime diagnostics"),
     "options": ("options [show] | options set <name> <value> [local|global]", "show or set runtime options"),
     "unlock": ("unlock/ul [gh|all] [status|ttl]", "unlock command scopes for your account"),
@@ -266,7 +266,7 @@ def dm_binding_help_text() -> str:
         "use <repo> — alias for bind [unlock/default]\n"
         "repo <repo> <prompt> — run a one-off prompt against a repo [unlock/default]\n"
         "gh <args> — run GitHub CLI (bound repo cwd, or code_root if unbound) [unlock/gh]\n"
-        "updates — check Codex CLI update status [open]\n"
+        "updates — check agent CLI update status [open]\n"
         "options [show] | options set <name> <value> [local|global] — runtime options (set requires totp unless unlocked) [mixed]\n"
         "unlock/ul [gh|all] [status|ttl] — unlock command scopes for your account [totp; status=open]\n"
         "lock/lk [gh|all] — clear unlock scopes for your account [open]\n"

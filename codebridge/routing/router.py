@@ -1857,9 +1857,9 @@ class Router:
         active = await self.get_active(sink.channel_id, session)
         last = self.get_activity(sink.channel_id, session)
         if active is None:
-            await self.reply(sink, f"Codex is idle. Last output at {last or 'n/a'}.")
+            await self.reply(sink, f"Agent is idle. Last output at {last or 'n/a'}.")
             return
-        await self.reply(sink, f"Codex is running for session '{session}'.")
+        await self.reply(sink, f"Agent is running for session '{session}'.")
 
     async def send_status(self, event: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str) -> None:
         """Send status summary for the channel and sessions."""
@@ -2150,7 +2150,7 @@ class Router:
                     repo_name=repo_name,
                 )
                 self._audit_helper.close(entry)
-                await self.reply_forbidden(sink, f"Codex failed to start: {exc}")
+                await self.reply_forbidden(sink, f"Agent failed to start: {exc}")
                 return
 
             await self.set_active(channel_id, session, proc)
@@ -2285,7 +2285,7 @@ class Router:
                 if run_state.friendly_error:
                     detail = f"{run_state.friendly_error}\nUse `!c logs` for raw details."
                 else:
-                    detail = f"Codex exited with code {rc}."
+                    detail = f"Agent exited with code {rc}."
                     if stderr_tail:
                         detail += f" Last stderr: {stderr_tail[-1]}"
                     detail += " Use `!c logs` for details."
@@ -2684,15 +2684,15 @@ class Router:
         if configured_model and configured_model == unsupported_model and (
             not stored_model or stored_model == unsupported_model
         ):
-            model_line = f"Configured Codex default model is unsupported: '{unsupported_model}'."
+            model_line = f"Configured default model is unsupported: '{unsupported_model}'."
             action_line = (
                 "Change `codex.model` in the bridge config to a supported model, or set it to an empty string "
-                "to use the Codex CLI default, then restart/redeploy the bridge."
+                "to use the CLI default, then restart/redeploy the bridge."
             )
         elif current_model and current_model != unsupported_model:
             model_line = (
                 f"Session '{session_name}' is configured for model '{current_model}', "
-                f"but Codex rejected '{unsupported_model}'."
+                f"but the agent rejected '{unsupported_model}'."
             )
             action_line = (
                 f"Run `!c models` to list available models, then `!model {session_name} <model-id>` "
@@ -2705,7 +2705,7 @@ class Router:
                 f"to replace the stale override. To discard stale session state, run `!reset {session_name}`."
             )
         return (
-            f"Codex cannot use model '{unsupported_model}' with this ChatGPT account.\n"
+            f"Cannot use model '{unsupported_model}' with this ChatGPT account.\n"
             f"{model_line}\n"
             f"{action_line}"
         )

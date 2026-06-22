@@ -53,15 +53,15 @@ async def handle_updates(router: "Router", sink: ResponseSink, repo_path: str) -
     if current_err and latest_err:
         await router.reply(
             sink,
-            "Could not check updates. Failed to read local Codex version and npm latest version.",
+            "Could not check updates. Failed to read local agent version and npm latest version.",
         )
         return
 
     lines: list[str] = []
     if current:
-        lines.append(f"Installed Codex CLI: {current}")
+        lines.append(f"Installed agent CLI: {current}")
     else:
-        lines.append(f"Installed Codex CLI: unknown ({current_raw})")
+        lines.append(f"Installed agent CLI: unknown ({current_raw})")
     if latest:
         lines.append(f"Latest @openai/codex: {latest}")
     else:
@@ -75,7 +75,7 @@ async def handle_updates(router: "Router", sink: ResponseSink, repo_path: str) -
     elif latest_err:
         lines.append("Status: could not query npm latest version.")
     elif current_err:
-        lines.append("Status: could not determine installed Codex version.")
+        lines.append("Status: could not determine installed agent version.")
     else:
         lines.append("Status: version comparison unavailable.")
 
@@ -113,16 +113,16 @@ async def handle_health(router: "Router", sink: ResponseSink, repo_path: str) ->
 
     lines = [
         "Health:",
-        f"- Codex binary: {binary} ({'found' if resolved_binary else 'not found'})",
-        f"- Codex version: {current or 'unknown'}",
+        f"- Agent binary: {binary} ({'found' if resolved_binary else 'not found'})",
+        f"- Agent version: {current or 'unknown'}",
         f"- Queue: {running} running, {queued} queued across {channel_count} channel(s)",
         f"- Tracked sessions: {tracked_sessions} across {tracked_channels} channel(s)",
-        f"- Last codex error: {last_error}",
+        f"- Last agent error: {last_error}",
         f"- Runtime uid:gid: {uid}:{gid}",
         f"- Env sanity: code_root={code_root_status}, state_dir={state_dir_status}, log_dir={log_dir_status}",
     ]
     if current_err and not current:
-        lines.append("- Note: failed to query `codex --version`.")
+        lines.append("- Note: failed to query agent version.")
     await router.reply(sink, "\n".join(lines))
 
 
