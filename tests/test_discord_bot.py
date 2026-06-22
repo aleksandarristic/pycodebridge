@@ -158,7 +158,7 @@ def test_on_message_uses_attached_thread_sink_for_starter_messages(monkeypatch):
     router = _CapturingRouter()
     client = BridgeClient(router)
     monkeypatch.setattr(discord, "Thread", _FakeThread)
-    parent = _FakeChannel("chan-parent", "codex-repo")
+    parent = _FakeChannel("chan-parent", "code-repo")
     thread = _FakeThread("thread-1", "Tasks")
     message = type(
         "FakeMessage",
@@ -201,7 +201,7 @@ def test_on_message_fetches_missing_thread_parent_before_routing(monkeypatch):
     client = BridgeClient(router)
     monkeypatch.setattr(discord, "Thread", _FakeThread)
     guild = _FakeGuild(42)
-    parent = _FakeChannel("123", "codex-repo")
+    parent = _FakeChannel("123", "code-repo")
     guild.channels["123"] = parent
     thread = _FakeThread("thread-1", "topic-a", parent=None, parent_id="123", guild=guild)
     message = type(
@@ -224,4 +224,4 @@ def test_on_message_fetches_missing_thread_parent_before_routing(monkeypatch):
     assert len(router.events) == 1
     event = router.events[0]
     assert event.channel_id == "discord:123:thread-1"
-    assert event.channel_name == "codex-repo"
+    assert event.channel_name == "code-repo"

@@ -17,7 +17,7 @@ def test_render_config_text_includes_core_fields():
     cfg.git.credential_helper = "!gh auth git-credential"
     cfg.discord.prefix = "!c"
     cfg.discord.allow_plain_prompts = True
-    cfg.discord.channel_name_regex = "^codex-(.*)$"
+    cfg.discord.channel_name_regex = "^code-(.*)$"
     cfg.discord.allowed_user_ids = ["1", "2"]
     cfg.discord.dm_admin_enabled = True
     cfg.discord.dm_admin_user_ids = ["3"]
@@ -47,7 +47,7 @@ def test_render_config_text_includes_core_fields():
     assert "git_credential_helper_set: True" in text
     assert "prefix: !c" in text
     assert "allow_plain_prompts: True" in text
-    assert "channel regex: ^codex-(.*)$" in text
+    assert "channel regex: ^code-(.*)$" in text
     assert "allowed_user_ids: 2" in text
     assert "dm_admin_enabled: True" in text
     assert "dm_admin_user_ids: 1" in text

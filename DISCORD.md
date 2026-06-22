@@ -43,7 +43,7 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
 - Verify Message Content intent is enabled and saved in the Developer Portal.
 
 ## Channels and access
-- Create private text channels named `codex-<repo>` (e.g., `codex-myservice`), matching repos under your configured `code_root`.
+- Create private text channels named `code-<repo>` (e.g., `code-myservice`), matching repos under your configured `code_root`.
   Repo identifiers are normalized to lowercase, so prefer lowercase repo directory names.
 - Ensure the bot's role can View Channels and Send Messages in those channels.
 - The bot ignores messages in non-private Discord channels.
@@ -55,7 +55,7 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
 ## Configure the bridge
 1) Copy `config.example.yaml` to `config.yaml`.
 2) Set `discord.allowed_user_ids` to your user ID(s) and set `discord.guild_id` to your server ID for strict guild lock.
-3) Set `codex.code_root` to the absolute path that contains your git repos. Each `codex-<repo>` channel maps by lowercase repo id to `<code_root>/<repo>` with a `.git` directory.
+3) Set `codex.code_root` to the absolute path that contains your git repos. Each `code-<repo>` channel maps by lowercase repo id to `<code_root>/<repo>` with a `.git` directory.
    - Optional: set `codex.ask_for_approval` to one of `untrusted|on-failure|on-request|never` for explicit Codex permission behavior.
 4) Adjust `state.data_dir`/`state.log_dir` to writable locations (defaults under your home are fine).
 5) Set the bot token in `.env` (repo root):
@@ -93,7 +93,7 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
 From the repo root:
 `./.venv/bin/python -m cmd.bridge -config config.yaml`
 
-In a `codex-<repo>` channel: send `!c config` to verify config, then `!c start`. If you get no response, re-check Message Content intent, token in `.env`, channel naming, and that the repo exists under `code_root`.
+In a `code-<repo>` channel: send `!c config` to verify config, then `!c start`. If you get no response, re-check Message Content intent, token in `.env`, channel naming, and that the repo exists under `code_root`.
 
 ## Approval relay
 - When Codex outputs `Codex asks: ...`, reply in plain text and the bridge relays it to the active session stdin.
@@ -103,7 +103,7 @@ In a `codex-<repo>` channel: send `!c config` to verify config, then `!c start`.
   - `!c deny` (sends `no`)
 
 ## File uploads/downloads
-- Attach a file in a `codex-<repo>` channel and the bot will ask where to save it.
+- Attach a file in a `code-<repo>` channel and the bot will ask where to save it.
 - Use `!c download <path>` to download a file from the repo.
 
 ## Capabilities

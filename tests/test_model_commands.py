@@ -187,7 +187,7 @@ def test_start_resume_reports_model_and_model_change_is_queued(tmp_path, monkeyp
     monkeypatch.setattr(command_registry, "_read_models_cache", lambda: [])
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
 
         # Wait until the start job is actually running.
         for _ in range(200):
@@ -196,7 +196,7 @@ def test_start_resume_reports_model_and_model_change_is_queued(tmp_path, monkeyp
             await asyncio.sleep(0.01)
         assert await router.get_active("chan", "default") is not None
 
-        await router.handle_message(_discord_event("!model gpt-new", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!model gpt-new", "code-repo"), sink)
         assert any("Queued model change" in s and "gpt-new" in s for s in sink.sent)
         assert router.session_model("chan", "default") == "gpt-default"
 
@@ -211,7 +211,7 @@ def test_start_resume_reports_model_and_model_change_is_queued(tmp_path, monkeyp
 
         assert any("model gpt-new" in s.lower() for s in sink.sent)
 
-        await router.handle_message(_discord_event("!models", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!models", "code-repo"), sink)
         for _ in range(200):
             if any("Available models" in s for s in sink.sent):
                 break
@@ -231,7 +231,7 @@ def test_models_uses_cache_without_running_codex(tmp_path, monkeypatch):
     monkeypatch.setattr(command_registry, "_read_models_cache", lambda: ["gpt-5.5", "o3"])
 
     async def run():
-        await router.handle_message(_discord_event("!models", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!models", "code-repo"), sink)
         assert any("[cache]" in s for s in sink.sent)
         assert any("gpt-5.5" in s for s in sink.sent)
         assert runner.calls == []
@@ -249,7 +249,7 @@ def test_models_refresh_forces_codex_query(tmp_path, monkeypatch):
     monkeypatch.setattr(command_registry, "_read_models_cache", lambda: ["gpt-5.5"])
 
     async def run():
-        await router.handle_message(_discord_event("!models --refresh", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!models --refresh", "code-repo"), sink)
         for _ in range(200):
             if runner.calls:
                 break
@@ -277,7 +277,7 @@ def test_effort_command_sets_codex_xhigh(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!effort xhigh", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!effort xhigh", "code-repo"), sink)
         assert router.session_reasoning_effort("chan", "default") == "xhigh"
         assert any("set to xhigh" in s for s in sink.sent)
 
@@ -293,7 +293,7 @@ def test_effort_command_maps_codex_extra_high_to_xhigh(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!effort extra-high", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!effort extra-high", "code-repo"), sink)
         assert router.session_reasoning_effort("chan", "default") == "xhigh"
         assert any("set to xhigh" in s for s in sink.sent)
 
@@ -309,10 +309,10 @@ def test_effort_default_clears_stored_reasoning_override(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!effort xhigh", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!effort xhigh", "code-repo"), sink)
         assert router.session_reasoning_effort("chan", "default") == "xhigh"
 
-        await router.handle_message(_discord_event("!effort default", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!effort default", "code-repo"), sink)
         state = router.state.load()
         assert state.channels["chan"].sessions["default"].reasoning_effort == ""
         assert router.session_reasoning_effort("chan", "default") == ""
@@ -331,10 +331,10 @@ def test_effort_default_clears_claude_reasoning_override(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!effort xhigh", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!effort xhigh", "code-repo"), sink)
         assert router.session_reasoning_effort("chan", "default") == "xhigh"
 
-        await router.handle_message(_discord_event("!effort default", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!effort default", "code-repo"), sink)
         state = router.state.load()
         assert state.channels["chan"].sessions["default"].backend == "claude"
         assert state.channels["chan"].sessions["default"].reasoning_effort == ""
@@ -351,7 +351,7 @@ def test_model_command_maps_codex_extra_high_to_xhigh(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!model gpt-5.3-codex extra-high", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!model gpt-5.3-codex extra-high", "code-repo"), sink)
         assert router.session_model("chan", "default") == "gpt-5.3-codex"
         assert router.session_reasoning_effort("chan", "default") == "xhigh"
         assert any("set to gpt-5.3-codex reasoning xhigh" in s for s in sink.sent)
@@ -368,10 +368,10 @@ def test_model_default_clears_stored_model_override(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!model gpt-new", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!model gpt-new", "code-repo"), sink)
         assert router.session_model("chan", "default") == "gpt-new"
 
-        await router.handle_message(_discord_event("!model default", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!model default", "code-repo"), sink)
         state = router.state.load()
         assert state.channels["chan"].sessions["default"].model == ""
         assert router.session_model("chan", "default") == "gpt-default"
@@ -389,10 +389,10 @@ def test_model_optional_default_clears_reasoning_override(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!model gpt-5.3-codex xhigh", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!model gpt-5.3-codex xhigh", "code-repo"), sink)
         assert router.session_reasoning_effort("chan", "default") == "xhigh"
 
-        await router.handle_message(_discord_event("!model gpt-5.4-codex default", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!model gpt-5.4-codex default", "code-repo"), sink)
         state = router.state.load()
         sess = state.channels["chan"].sessions["default"]
         assert sess.model == "gpt-5.4-codex"

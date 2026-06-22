@@ -77,7 +77,7 @@ class _FakeGuild:
 
 
 class _FakeChannel:
-    def __init__(self, name: str = "codex-repo", pins_list: list | None = None) -> None:
+    def __init__(self, name: str = "code-repo", pins_list: list | None = None) -> None:
         self.name = name
         self.id = name
         self._pins = pins_list or []
@@ -96,7 +96,7 @@ class _FakeRouter:
         self._guild_text_channels_fn = guild_fn
         from codebridge import config as cfgmod
         self.cfg = cfgmod.Config()
-        self.cfg.discord.channel_name_regex = r"^codex-([A-Za-z0-9._-]+)$"
+        self.cfg.discord.channel_name_regex = r"^code-([A-Za-z0-9._-]+)$"
         self.cfg.discord._compiled_regex = None
 
     async def reply(self, sink: _FakeSink, text: str) -> None:
@@ -124,7 +124,7 @@ class _RouterWithRegex(_FakeRouter):
 
     def channel_regex(self):
         import re
-        return re.compile(r"^codex-([A-Za-z0-9._-]+)$")
+        return re.compile(r"^code-([A-Za-z0-9._-]+)$")
 
 
 def _make_event(channel=None) -> MessageEvent:
@@ -136,7 +136,7 @@ def _make_event(channel=None) -> MessageEvent:
         platform="discord",
         content="!c unpin",
         channel_id="chan",
-        channel_name="codex-repo",
+        channel_name="code-repo",
         author_id="user",
         author_is_bot=False,
         is_dm=False,
@@ -149,7 +149,7 @@ def _make_event_no_raw() -> MessageEvent:
         platform="discord",
         content="!c unpin",
         channel_id="chan",
-        channel_name="codex-repo",
+        channel_name="code-repo",
         author_id="user",
         author_is_bot=False,
         is_dm=False,
@@ -267,7 +267,7 @@ def test_unpin_all_no_matching_channels_replies_none_found():
             return [_FakeChannel(name="general", pins_list=[_FakePinnedMessage("1")])]
 
         router = _RouterWithRegex(guild_fn=_channels)
-        router.cfg.channel_regex = lambda: __import__("re").compile(r"^codex-([A-Za-z0-9._-]+)$")
+        router.cfg.channel_regex = lambda: __import__("re").compile(r"^code-([A-Za-z0-9._-]+)$")
         sink = _FakeSink()
         await core.handle_unpin_all_channels(router, sink)
         assert sink.messages
@@ -278,7 +278,7 @@ def test_unpin_all_no_matching_channels_replies_none_found():
 
 def test_unpin_all_single_pin_channels_are_skipped():
     async def run():
-        ch = _FakeChannel(name="codex-repo", pins_list=[_FakePinnedMessage("only")])
+        ch = _FakeChannel(name="code-repo", pins_list=[_FakePinnedMessage("only")])
 
         async def _channels():
             return [ch]
@@ -297,8 +297,8 @@ def test_unpin_all_removes_old_pins_across_channels():
     async def run():
         msgs_a = [_FakePinnedMessage(f"a{i}") for i in range(3)]
         msgs_b = [_FakePinnedMessage(f"b{i}") for i in range(2)]
-        ch_a = _FakeChannel(name="codex-api", pins_list=msgs_a)
-        ch_b = _FakeChannel(name="codex-web", pins_list=msgs_b)
+        ch_a = _FakeChannel(name="code-api", pins_list=msgs_a)
+        ch_b = _FakeChannel(name="code-web", pins_list=msgs_b)
         ch_ignored = _FakeChannel(name="general", pins_list=[_FakePinnedMessage("x")])
 
         async def _channels():
@@ -314,8 +314,8 @@ def test_unpin_all_removes_old_pins_across_channels():
         assert not msgs_b[1].unpinned
         assert sink.messages
         report = sink.messages[0]
-        assert "codex-api" in report
-        assert "codex-web" in report
+        assert "code-api" in report
+        assert "code-web" in report
         assert "general" not in report
 
     asyncio.run(run())
@@ -344,7 +344,7 @@ def test_integration_unpin_command_in_channel(tmp_path):
 
     router = _build_router(tmp_path)
     msgs = [_FakePinnedMessage(str(i)) for i in range(3)]
-    channel = _FakeChannel(name="codex-repo", pins_list=msgs)
+    channel = _FakeChannel(name="code-repo", pins_list=msgs)
     sink = _FakeSink()
 
     class _Msg:
@@ -356,7 +356,7 @@ def test_integration_unpin_command_in_channel(tmp_path):
         platform="discord",
         content="!c unpin",
         channel_id="chan",
-        channel_name="codex-repo",
+        channel_name="code-repo",
         author_id="user",
         author_is_bot=False,
         is_dm=False,
@@ -376,7 +376,7 @@ def test_integration_unpin_dm_all_channels(tmp_path):
     router.cfg.discord.dm_admin_enabled = True
     router.cfg.discord.dm_admin_user_ids = ["user"]
     msgs = [_FakePinnedMessage(str(i)) for i in range(3)]
-    channel = _FakeChannel(name="codex-repo", pins_list=msgs)
+    channel = _FakeChannel(name="code-repo", pins_list=msgs)
 
     async def _channels():
         return [channel]
@@ -398,6 +398,6 @@ def test_integration_unpin_dm_all_channels(tmp_path):
 
     asyncio.run(router.handle_message(event, sink))
     all_messages = " ".join(sink.messages)
-    assert "codex-repo" in all_messages
+    assert "code-repo" in all_messages
     assert msgs[0].unpinned and msgs[1].unpinned
     assert not msgs[2].unpinned

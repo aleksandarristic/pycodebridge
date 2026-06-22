@@ -13,7 +13,7 @@ def test_discord_event_contract_thread(monkeypatch):
     adapter = DiscordAdapter()
     monkeypatch.setattr(discord, "Thread", FakeThread)
 
-    channel = FakeThread("thread-1", "codex-thread")
+    channel = FakeThread("thread-1", "code-thread")
     message = type(
         "FakeMessage",
         (),
@@ -29,7 +29,7 @@ def test_discord_event_contract_thread(monkeypatch):
     event = adapter.event_from_message(message)
     assert event.platform == "discord"
     assert event.channel_id == "thread-1"
-    assert event.channel_name == "codex-thread"
+    assert event.channel_name == "code-thread"
     assert event.author_id == "user"
     assert event.guild_id == "guild"
     assert event.message_id == "msg"
@@ -40,7 +40,7 @@ def test_discord_event_contract_channel(monkeypatch):
     adapter = DiscordAdapter()
     monkeypatch.setattr(discord, "Thread", FakeThread)
 
-    channel = FakeChannel("chan", "codex-test")
+    channel = FakeChannel("chan", "code-test")
     message = type(
         "FakeMessage",
         (),

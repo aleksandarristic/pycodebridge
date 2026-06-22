@@ -3,7 +3,7 @@ discord:
   guild_id: "123456789012345678"
   allowed_user_ids: ["1234567890"]
   prefix: "!c"
-  channel_name_regex: "^codex-([A-Za-z0-9._-]+)$"
+  channel_name_regex: "^code-([A-Za-z0-9._-]+)$"
   allow_plain_prompts: false
   dm_admin_enabled: false
   dm_admin_user_ids: []

@@ -212,7 +212,7 @@ async def handle_clone_repo(
         router.logger.error("clonerepo.failed", extra={"channel_id": channel_id, "repo": repo_name, "url": clone_url, "error": str(err)})
         return
     await router.bootstrap_repo_git_config(repo_path)
-    await router.reply(sink, f"Clone complete: {clone_url} -> {repo_path}\nUse `#codex-{repo_name}` for prompts.")
+    await router.reply(sink, f"Clone complete: {clone_url} -> {repo_path}\nUse `#code-{repo_name}` for prompts.")
     router.logger.info("clonerepo.ok", extra={"channel_id": channel_id, "repo": repo_name, "url": clone_url, "path": repo_path})
 
 
@@ -242,7 +242,7 @@ async def handle_copy_repo(
         router.logger.error("copyrepo.git_init_failed", extra={"channel_id": channel_id, "repo": repo_name, "target": target_path, "error": str(err)})
         return
     await router.bootstrap_repo_git_config(target_path)
-    await router.reply(sink, f"Copied repo to {target_path}. Continue in #codex-{new_name}")
+    await router.reply(sink, f"Copied repo to {target_path}. Continue in #code-{new_name}")
     router.logger.info("copyrepo.ok", extra={"channel_id": channel_id, "repo": repo_name, "target": target_path})
 
 

@@ -41,7 +41,7 @@ class _FakeAsyncContext:
 
 def test_discord_adapter_event_mapping():
     adapter = DiscordAdapter()
-    channel = _FakeChannel("chan", "codex-test")
+    channel = _FakeChannel("chan", "code-test")
     message = type(
         "FakeMessage",
         (),
@@ -55,7 +55,7 @@ def test_discord_adapter_event_mapping():
     )()
     event = adapter.event_from_message(message)
     assert event.channel_id == "chan"
-    assert event.channel_name == "codex-test"
+    assert event.channel_name == "code-test"
     assert event.author_id == "user"
     assert event.guild_id == "guild"
     assert event.author_is_bot is False
@@ -63,7 +63,7 @@ def test_discord_adapter_event_mapping():
 
 def test_discord_response_sink_send_and_typing():
     adapter = DiscordAdapter()
-    channel = _FakeTypingChannel("chan", "codex-test")
+    channel = _FakeTypingChannel("chan", "code-test")
     sink = DiscordResponseSink(adapter, channel)
 
     async def run():
@@ -77,7 +77,7 @@ def test_discord_response_sink_send_and_typing():
 
 def test_discord_adapter_update_pinned_status_noop():
     adapter = DiscordAdapter()
-    channel = _FakeChannel("chan", "codex-test")
+    channel = _FakeChannel("chan", "code-test")
 
     async def run():
         await adapter.update_pinned_status(channel, "status text")
@@ -94,7 +94,7 @@ def test_discord_adapter_thread_mapping(monkeypatch):
             self.name = name
 
     monkeypatch.setattr(discord, "Thread", _DummyThread)
-    channel = _DummyThread("thread-1", "codex-thread")
+    channel = _DummyThread("thread-1", "code-thread")
     message = type(
         "FakeMessage",
         (),
@@ -118,7 +118,7 @@ def test_discord_adapter_uses_attached_thread_for_starter_messages(monkeypatch):
         pass
 
     monkeypatch.setattr(discord, "Thread", _DummyThread)
-    parent = _FakeChannel("chan-parent", "codex-repo")
+    parent = _FakeChannel("chan-parent", "code-repo")
     thread = _DummyThread("thread-1", "Tasks")
     message = type(
         "FakeMessage",
@@ -135,5 +135,5 @@ def test_discord_adapter_uses_attached_thread_for_starter_messages(monkeypatch):
 
     event = adapter.event_from_message(message)
     assert event.channel_id == "chan-parent"
-    assert event.channel_name == "codex-repo"
+    assert event.channel_name == "code-repo"
     assert event.platform_thread_id == "thread-1"

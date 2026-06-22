@@ -422,7 +422,7 @@ def _discord_event(
     """
     if platform_thread_id:
         parent_id = parent_channel_id or "parent-chan"
-        parent_name = parent_channel_name or "codex-repo"
+        parent_name = parent_channel_name or "code-repo"
         parent_channel = _FakeDiscordChannel(
             is_private=is_private,
             channel_id=parent_id,
@@ -483,13 +483,13 @@ def test_integration_start_stop(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         for _ in range(50):
             proc = await router.get_active("chan", "default")
             if proc is not None:
                 break
             await asyncio.sleep(0.01)
-        await router.handle_message(_discord_event("!c stop", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c stop", "code-repo"), sink)
 
     asyncio.run(run())
     assert runner.last_proc is not None
@@ -507,13 +507,13 @@ def test_integration_start_builds_exec_args_in_expected_order(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         for _ in range(50):
             proc = await router.get_active("chan", "default")
             if proc is not None:
                 break
             await asyncio.sleep(0.01)
-        await router.handle_message(_discord_event("!c stop", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c stop", "code-repo"), sink)
 
     asyncio.run(run())
 
@@ -552,7 +552,7 @@ def test_integration_discord_thread_uses_parent_repo_mapping_and_room_scope(tmp_
                 channel_id="thread-a",
                 platform_thread_id="thread-a",
                 parent_channel_id="chan-parent",
-                parent_channel_name="codex-repo",
+                parent_channel_name="code-repo",
             ),
             sink,
         )
@@ -568,7 +568,7 @@ def test_integration_discord_thread_uses_parent_repo_mapping_and_room_scope(tmp_
                 channel_id="thread-a",
                 platform_thread_id="thread-a",
                 parent_channel_id="chan-parent",
-                parent_channel_name="codex-repo",
+                parent_channel_name="code-repo",
             ),
             sink,
         )
@@ -601,7 +601,7 @@ def test_integration_discord_sibling_threads_are_isolated(tmp_path):
                 channel_id="thread-a",
                 platform_thread_id="thread-a",
                 parent_channel_id="chan-parent",
-                parent_channel_name="codex-repo",
+                parent_channel_name="code-repo",
             ),
             sink,
         )
@@ -612,7 +612,7 @@ def test_integration_discord_sibling_threads_are_isolated(tmp_path):
                 channel_id="thread-b",
                 platform_thread_id="thread-b",
                 parent_channel_id="chan-parent",
-                parent_channel_name="codex-repo",
+                parent_channel_name="code-repo",
             ),
             sink,
         )
@@ -630,7 +630,7 @@ def test_integration_discord_sibling_threads_are_isolated(tmp_path):
                 channel_id="thread-a",
                 platform_thread_id="thread-a",
                 parent_channel_id="chan-parent",
-                parent_channel_name="codex-repo",
+                parent_channel_name="code-repo",
             ),
             sink,
         )
@@ -648,7 +648,7 @@ def test_integration_discord_sibling_threads_are_isolated(tmp_path):
                 channel_id="thread-b",
                 platform_thread_id="thread-b",
                 parent_channel_id="chan-parent",
-                parent_channel_name="codex-repo",
+                parent_channel_name="code-repo",
             ),
             sink,
         )
@@ -675,7 +675,7 @@ def test_integration_discord_thread_session_name_falls_back_to_default_when_not_
                 channel_id="thread-a",
                 platform_thread_id="thread-a",
                 parent_channel_id="chan-parent",
-                parent_channel_name="codex-repo",
+                parent_channel_name="code-repo",
             ),
             sink,
         )
@@ -693,7 +693,7 @@ def test_integration_discord_thread_session_name_falls_back_to_default_when_not_
                 channel_id="thread-a",
                 platform_thread_id="thread-a",
                 parent_channel_id="chan-parent",
-                parent_channel_name="codex-repo",
+                parent_channel_name="code-repo",
             ),
             sink,
         )
@@ -713,7 +713,7 @@ def test_integration_discord_parent_channel_remains_backward_compatible_with_thr
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo", channel_id=parent_channel_id), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo", channel_id=parent_channel_id), sink)
         await router.handle_message(
             _discord_event(
                 "!c start",
@@ -721,7 +721,7 @@ def test_integration_discord_parent_channel_remains_backward_compatible_with_thr
                 channel_id="thread-a",
                 platform_thread_id="thread-a",
                 parent_channel_id=parent_channel_id,
-                parent_channel_name="codex-repo",
+                parent_channel_name="code-repo",
             ),
             sink,
         )
@@ -732,7 +732,7 @@ def test_integration_discord_parent_channel_remains_backward_compatible_with_thr
                 break
             await asyncio.sleep(0.01)
 
-        await router.handle_message(_discord_event("!c stop", "codex-repo", channel_id=parent_channel_id), sink)
+        await router.handle_message(_discord_event("!c stop", "code-repo", channel_id=parent_channel_id), sink)
         for _ in range(100):
             if await router.get_active(parent_channel_id, "default") is None:
                 break
@@ -747,7 +747,7 @@ def test_integration_discord_parent_channel_remains_backward_compatible_with_thr
                 channel_id="thread-a",
                 platform_thread_id="thread-a",
                 parent_channel_id=parent_channel_id,
-                parent_channel_name="codex-repo",
+                parent_channel_name="code-repo",
             ),
             sink,
         )
@@ -778,7 +778,7 @@ def test_integration_discord_thread_stop_rekeys_legacy_thread_scope(tmp_path):
                 channel_id="thread-a",
                 platform_thread_id="thread-a",
                 parent_channel_id="chan-parent",
-                parent_channel_name="codex-repo",
+                parent_channel_name="code-repo",
             ),
             sink,
         )
@@ -809,7 +809,7 @@ def test_integration_discord_thread_mention_without_command_is_ignored(tmp_path)
                 channel_id="thread-a",
                 platform_thread_id="thread-a",
                 parent_channel_id="chan-parent",
-                parent_channel_name="codex-repo",
+                parent_channel_name="code-repo",
             ),
             sink,
         )
@@ -835,7 +835,7 @@ def test_integration_discord_thread_mention_with_prefix_runs_command(tmp_path):
                 channel_id="thread-a",
                 platform_thread_id="thread-a",
                 parent_channel_id="chan-parent",
-                parent_channel_name="codex-repo",
+                parent_channel_name="code-repo",
             ),
             sink,
         )
@@ -854,13 +854,13 @@ def test_integration_bang_stop_runs_stop_command(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         for _ in range(50):
             proc = await router.get_active("chan", "default")
             if proc is not None:
                 break
             await asyncio.sleep(0.01)
-        await router.handle_message(_discord_event("!stop", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!stop", "code-repo"), sink)
 
     asyncio.run(run())
     assert runner.last_proc is not None
@@ -877,13 +877,13 @@ def test_integration_bang_interrupt_uses_esc_only(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         for _ in range(50):
             proc = await router.get_active("chan", "default")
             if proc is not None:
                 break
             await asyncio.sleep(0.01)
-        await router.handle_message(_discord_event("!interrupt", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!interrupt", "code-repo"), sink)
 
     asyncio.run(run())
     assert runner.last_proc is not None
@@ -903,13 +903,13 @@ def test_integration_interrupt_aliases_dispatch(tmp_path):
         sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
         async def run():
-            await router.handle_message(_discord_event("!c start", f"codex-repo-{trigger[1:]}"), sink)
+            await router.handle_message(_discord_event("!c start", f"code-repo-{trigger[1:]}"), sink)
             for _ in range(50):
                 proc = await router.get_active("chan", "default")
                 if proc is not None:
                     break
                 await asyncio.sleep(0.01)
-            await router.handle_message(_discord_event(trigger, f"codex-repo-{trigger[1:]}"), sink)
+            await router.handle_message(_discord_event(trigger, f"code-repo-{trigger[1:]}"), sink)
 
         asyncio.run(run())
         assert runner.last_proc is not None
@@ -930,7 +930,7 @@ def test_integration_ignores_public_discord_repo_channel(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo", is_private=False), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo", is_private=False), sink)
 
     asyncio.run(run())
     assert runner.calls == []
@@ -945,12 +945,12 @@ def test_transport_user_allowed_discord_denies_when_allowlist_empty(tmp_path):
         platform="discord",
         content="!c status",
         channel_id="chan",
-        channel_name="codex-repo",
+        channel_name="code-repo",
         author_id="intruder",
         author_is_bot=False,
         is_dm=False,
         guild_id="guild",
-        raw_event=_FakeDiscordMessage(_FakeDiscordChannel(is_private=True, channel_id="chan", channel_name="codex-repo")),
+        raw_event=_FakeDiscordMessage(_FakeDiscordChannel(is_private=True, channel_id="chan", channel_name="code-repo")),
     )
 
     assert router._transport_user_allowed(event) is False
@@ -969,7 +969,7 @@ def test_integration_start_with_case_variant_repo_dir(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-probablyfine"), sink)
+        await router.handle_message(_discord_event("!c start", "code-probablyfine"), sink)
         for _ in range(200):
             state = router.state.load()
             ch = state.channels.get("chan")
@@ -994,13 +994,13 @@ def test_integration_kill(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         for _ in range(50):
             proc = await router.get_active("chan", "default")
             if proc is not None:
                 break
             await asyncio.sleep(0.01)
-        await router.handle_message(_discord_event("!c kill", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c kill", "code-repo"), sink)
 
     asyncio.run(run())
     assert runner.last_proc is not None
@@ -1016,7 +1016,7 @@ def test_integration_reset_session_clears_context_and_allows_fresh_start(tmp_pat
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         first_proc = None
         for _ in range(100):
             first_proc = await router.get_active("chan", "default")
@@ -1025,7 +1025,7 @@ def test_integration_reset_session_clears_context_and_allows_fresh_start(tmp_pat
             await asyncio.sleep(0.01)
         assert first_proc is not None
 
-        await router.handle_message(_discord_event("!c reset", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c reset", "code-repo"), sink)
         for _ in range(100):
             if await router.get_active("chan", "default") is None:
                 break
@@ -1037,7 +1037,7 @@ def test_integration_reset_session_clears_context_and_allows_fresh_start(tmp_pat
         assert ch is not None
         assert "default" not in ch.sessions
 
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         for _ in range(200):
             if len(runner.calls) >= 2:
                 break
@@ -1058,7 +1058,7 @@ def test_integration_bang_reset_alias_clears_context_and_allows_fresh_start(tmp_
 
     async def run():
         for _ in range(3):
-            await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+            await router.handle_message(_discord_event("!c start", "code-repo"), sink)
             proc = None
             for _ in range(100):
                 proc = await router.get_active("chan", "default")
@@ -1066,7 +1066,7 @@ def test_integration_bang_reset_alias_clears_context_and_allows_fresh_start(tmp_
                     break
                 await asyncio.sleep(0.01)
             assert proc is not None
-            await router.handle_message(_discord_event("!reset", "codex-repo"), sink)
+            await router.handle_message(_discord_event("!reset", "code-repo"), sink)
             for _ in range(100):
                 if await router.get_active("chan", "default") is None:
                     break
@@ -1091,7 +1091,7 @@ def test_integration_single_session_scope_rejects_named_channel_session(tmp_path
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start custom", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start custom", "code-repo"), sink)
 
     asyncio.run(run())
     assert len(runner.calls) == 0
@@ -1114,7 +1114,7 @@ def test_integration_single_session_scope_rejects_named_thread_session(tmp_path)
                 channel_id="thread-a",
                 platform_thread_id="thread-a",
                 parent_channel_id="chan-parent",
-                parent_channel_name="codex-repo",
+                parent_channel_name="code-repo",
             ),
             sink,
         )
@@ -1152,8 +1152,8 @@ def test_integration_purge_removes_session_artifacts(tmp_path):
     archive_file.write_text("archived", encoding="utf-8")
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c purge", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c purge", "code-repo"), sink)
 
     asyncio.run(run())
     state = router.state.load()
@@ -1175,7 +1175,7 @@ def test_integration_purge_stale_ttl_removes_old_scope_session(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
 
     asyncio.run(run())
 
@@ -1196,7 +1196,7 @@ def test_integration_purge_stale_ttl_removes_old_scope_session(tmp_path):
     session_log.write_text('{"event":"x"}\n', encoding="utf-8")
 
     async def prune():
-        await router.handle_message(_discord_event("!c purge stale 1h", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c purge stale 1h", "code-repo"), sink)
 
     asyncio.run(prune())
     state = router.state.load()
@@ -1220,7 +1220,7 @@ def test_api_reset_session_hook_supports_purge(tmp_path):
     session_log.write_text('{"event":"x"}\n', encoding="utf-8")
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         result = await router.api_reset_session("chan", "default", purge=True)
         assert result["session"] == "default"
         assert result["purged_artifacts"] >= 1
@@ -1247,7 +1247,7 @@ def test_integration_bang_reset_alias_works_in_discord_thread_scope(tmp_path):
                 channel_id="thread-a",
                 platform_thread_id="thread-a",
                 parent_channel_id="chan-parent",
-                parent_channel_name="codex-repo",
+                parent_channel_name="code-repo",
             ),
             sink,
         )
@@ -1266,7 +1266,7 @@ def test_integration_bang_reset_alias_works_in_discord_thread_scope(tmp_path):
                 channel_id="thread-a",
                 platform_thread_id="thread-a",
                 parent_channel_id="chan-parent",
-                parent_channel_name="codex-repo",
+                parent_channel_name="code-repo",
             ),
             sink,
         )
@@ -1295,8 +1295,8 @@ def test_integration_resume_and_download(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c resume hello", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c download note.txt", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c resume hello", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c download note.txt", "code-repo"), sink)
 
     asyncio.run(run())
     assert any(args and args[0] == "start" for args in runner.calls)
@@ -1334,7 +1334,7 @@ def test_integration_workflow_command_expands_prompt_and_respects_session(tmp_pa
                 "release",
                 channel_id="thread-chan",
                 platform_thread_id="thread-1",
-                parent_channel_name="codex-repo",
+                parent_channel_name="code-repo",
             ),
             sink,
         )
@@ -1363,7 +1363,7 @@ def test_integration_updates_command_dispatches(tmp_path):
     router.handle_updates = MethodType(_fake_handle_updates, router)
 
     async def run():
-        await router.handle_message(_discord_event("!c updates", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c updates", "code-repo"), sink)
 
     asyncio.run(run())
     assert called == [str(repo)]
@@ -1379,7 +1379,7 @@ def test_integration_workflow_list_shows_available_macros(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c workflow list", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c workflow list", "code-repo"), sink)
 
     asyncio.run(run())
     assert runner.calls == []
@@ -1398,13 +1398,13 @@ def test_integration_answer_command_relays_to_active_session(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         for _ in range(50):
             proc = await router.get_active("chan", "default")
             if proc is not None:
                 break
             await asyncio.sleep(0.01)
-        await router.handle_message(_discord_event("!c answer yes", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c answer yes", "code-repo"), sink)
 
     asyncio.run(run())
     assert runner.last_proc is not None
@@ -1421,13 +1421,13 @@ def test_integration_steer_command_relays_to_active_session(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         for _ in range(50):
             proc = await router.get_active("chan", "default")
             if proc is not None:
                 break
             await asyncio.sleep(0.01)
-        await router.handle_message(_discord_event("!c steer focus on failing tests", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c steer focus on failing tests", "code-repo"), sink)
 
     asyncio.run(run())
     assert runner.last_proc is not None
@@ -1444,13 +1444,13 @@ def test_integration_bang_steer_relays_to_active_session(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         for _ in range(50):
             proc = await router.get_active("chan", "default")
             if proc is not None:
                 break
             await asyncio.sleep(0.01)
-        await router.handle_message(_discord_event("!steer keep current plan, reduce scope", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!steer keep current plan, reduce scope", "code-repo"), sink)
 
     asyncio.run(run())
     assert runner.last_proc is not None
@@ -1467,13 +1467,13 @@ def test_integration_bang_s_shortcut_relays_to_active_session(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         for _ in range(50):
             proc = await router.get_active("chan", "default")
             if proc is not None:
                 break
             await asyncio.sleep(0.01)
-        await router.handle_message(_discord_event("!s tighten scope", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!s tighten scope", "code-repo"), sink)
 
     asyncio.run(run())
     assert runner.last_proc is not None
@@ -1490,14 +1490,14 @@ def test_integration_bang_s_shortcut_with_non_space_whitespace_relays(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         for _ in range(50):
             proc = await router.get_active("chan", "default")
             if proc is not None:
                 break
             await asyncio.sleep(0.01)
-        await router.handle_message(_discord_event("!s\ttrim scope", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!s\nkeep only tests", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!s\ttrim scope", "code-repo"), sink)
+        await router.handle_message(_discord_event("!s\nkeep only tests", "code-repo"), sink)
 
     asyncio.run(run())
     assert runner.last_proc is not None
@@ -1515,8 +1515,8 @@ def test_integration_bare_s_and_a_shortcuts_show_validation_errors(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!s", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!a", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!s", "code-repo"), sink)
+        await router.handle_message(_discord_event("!a", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -1533,7 +1533,7 @@ def test_integration_steer_fails_loudly_when_no_active_session(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!s tighten scope", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!s tighten scope", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -1551,7 +1551,7 @@ def test_integration_steer_fails_loudly_when_multiple_active_sessions(tmp_path):
     async def run():
         await router.set_active("chan", "default", _FakeProc())
         await router.set_active("chan", "alpha", _FakeProc())
-        await router.handle_message(_discord_event("!s tighten scope", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!s tighten scope", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -1569,7 +1569,7 @@ def test_integration_plain_message_auto_steers_single_active_session(tmp_path):
 
     async def run():
         await router.set_active("chan", "default", proc)
-        await router.handle_message(_discord_event("focus on the failing tests", "codex-repo"), sink)
+        await router.handle_message(_discord_event("focus on the failing tests", "code-repo"), sink)
 
     asyncio.run(run())
     assert "focus on the failing tests\n" in proc.writes
@@ -1588,7 +1588,7 @@ def test_integration_plain_message_with_multiple_active_sessions_is_rejected(tmp
     async def run():
         await router.set_active("chan", "default", _FakeProc())
         await router.set_active("chan", "alpha", _FakeProc())
-        await router.handle_message(_discord_event("focus on the failing tests", "codex-repo"), sink)
+        await router.handle_message(_discord_event("focus on the failing tests", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -1606,7 +1606,7 @@ def test_integration_plain_message_with_no_active_session_falls_through_to_resum
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("start fresh on the API", "codex-repo"), sink)
+        await router.handle_message(_discord_event("start fresh on the API", "code-repo"), sink)
         await asyncio.sleep(0)
 
     asyncio.run(run())
@@ -1622,14 +1622,14 @@ def test_integration_session_targeted_steer_and_answer_shortcuts(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         for _ in range(50):
             proc = await router.get_active("chan", "default")
             if proc is not None:
                 break
             await asyncio.sleep(0.01)
-        await router.handle_message(_discord_event("!s:default keep edits minimal", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!a:default yes proceed", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!s:default keep edits minimal", "code-repo"), sink)
+        await router.handle_message(_discord_event("!a:default yes proceed", "code-repo"), sink)
 
     asyncio.run(run())
     assert runner.last_proc is not None
@@ -1646,8 +1646,8 @@ def test_integration_cfg_and_opts_shortcuts(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!cfg", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!opts", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!cfg", "code-repo"), sink)
+        await router.handle_message(_discord_event("!opts", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -1664,7 +1664,7 @@ def test_integration_auto_relays_plain_reply_when_codex_waits_for_input(tmp_path
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         for _ in range(50):
             proc = await router.get_active("chan", "default")
             if proc is not None:
@@ -1679,7 +1679,7 @@ def test_integration_auto_relays_plain_reply_when_codex_waits_for_input(tmp_path
             '{"type":"item.completed","item":{"type":"agent_message","text":"Proceed?"}}',
             True,
         )
-        await router.handle_message(_discord_event("yes", "codex-repo"), sink)
+        await router.handle_message(_discord_event("yes", "code-repo"), sink)
 
     asyncio.run(run())
     assert runner.last_proc is not None
@@ -1696,13 +1696,13 @@ def test_integration_wait_command_reports_pending_input(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         for _ in range(50):
             proc = await router.get_active("chan", "default")
             if proc is not None:
                 break
             await asyncio.sleep(0.01)
-        await router.handle_message(_discord_event("!c wait", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c wait", "code-repo"), sink)
         await router.on_jsonl(
             sink,
             "chan",
@@ -1712,7 +1712,7 @@ def test_integration_wait_command_reports_pending_input(tmp_path):
             '{"type":"item.completed","item":{"type":"agent_message","text":"Proceed?"}}',
             True,
         )
-        await router.handle_message(_discord_event("!c wait", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c wait", "code-repo"), sink)
 
     asyncio.run(run())
     assert any("No sessions are waiting for input." in msg for msg, _, _ in sink.sent)
@@ -1731,14 +1731,14 @@ def test_integration_run_completion_summary_for_long_run(tmp_path):
     router._set_runtime_option("local", "chan", "run_completion_min_seconds", 1)
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         for _ in range(50):
             proc = await router.get_active("chan", "default")
             if proc is not None:
                 break
             await asyncio.sleep(0.01)
         await asyncio.sleep(1.05)
-        await router.handle_message(_discord_event("!c stop", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c stop", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -1755,13 +1755,13 @@ def test_integration_run_completion_summary_suppressed_for_short_run(tmp_path):
     router._set_runtime_option("local", "chan", "run_completion_min_seconds", 10)
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         for _ in range(50):
             proc = await router.get_active("chan", "default")
             if proc is not None:
                 break
             await asyncio.sleep(0.01)
-        await router.handle_message(_discord_event("!c stop", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c stop", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -1778,9 +1778,9 @@ def test_integration_run_heartbeat_message(tmp_path, monkeypatch):
     router._set_runtime_option("local", "chan", "run_heartbeat_seconds", 1)
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         await asyncio.sleep(1.12)
-        await router.handle_message(_discord_event("!c kill", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c kill", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -1801,7 +1801,7 @@ def test_integration_late_progress_is_suppressed_after_terminal_summary(tmp_path
     router._runtime_options_channels["chan"] = {"run_completion_min_seconds": 0}
 
     async def run():
-        await router.run_codex(_discord_event("!c start", "codex-repo"), sink, "repo", str(repo), "default", "", "", ["start"])
+        await router.run_codex(_discord_event("!c start", "code-repo"), sink, "repo", str(repo), "default", "", "", ["start"])
         await asyncio.sleep(0.05)
 
     asyncio.run(run())
@@ -1828,7 +1828,7 @@ def test_run_codex_success_without_output_sends_terminal_notice(tmp_path):
 
     async def run():
         await router.run_codex(
-            _discord_event("!c start", "codex-repo"),
+            _discord_event("!c start", "code-repo"),
             sink,
             "repo",
             str(repo),
@@ -1858,7 +1858,7 @@ def test_integration_budget_notice_precedes_terminal_summary(tmp_path):
     router._budget_thresholds_channel["chan"] = (1, 0)
 
     async def run():
-        await router.run_codex(_discord_event("!c start", "codex-repo"), sink, "repo", str(repo), "default", "", "", ["start"])
+        await router.run_codex(_discord_event("!c start", "code-repo"), sink, "repo", str(repo), "default", "", "", ["start"])
         await asyncio.sleep(0.05)
 
     asyncio.run(run())
@@ -1880,11 +1880,11 @@ def test_integration_options_show_and_set_runtime(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c options", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c options set run_heartbeat_seconds 90", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c options set run_completion_min_seconds 480", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c options set show_reasoning_details false", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c options", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c options", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c options set run_heartbeat_seconds 90", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c options set run_completion_min_seconds 480", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c options set show_reasoning_details false", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c options", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -1906,10 +1906,10 @@ def test_integration_options_set_requires_totp_when_enabled(tmp_path, monkeypatc
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c options set run_heartbeat_seconds 90", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c options set run_heartbeat_seconds 90", "code-repo"), sink)
         code = _totp_code(secret)
         await router.handle_message(
-            _discord_event(f"!c options set run_heartbeat_seconds 90 --totp {code}", "codex-repo"),
+            _discord_event(f"!c options set run_heartbeat_seconds 90 --totp {code}", "code-repo"),
             sink,
         )
 
@@ -1930,8 +1930,8 @@ def test_integration_options_set_allowed_when_unlocked(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)}", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c options set run_heartbeat_seconds 90", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)}", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c options set run_heartbeat_seconds 90", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -1949,7 +1949,7 @@ def test_integration_options_persist_across_router_restart(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run_set():
-        await router.handle_message(_discord_event("!c options set run_completion_min_seconds 480", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c options set run_completion_min_seconds 480", "code-repo"), sink)
 
     asyncio.run(run_set())
 
@@ -1957,7 +1957,7 @@ def test_integration_options_persist_across_router_restart(tmp_path):
     sink2 = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run_show():
-        await router2.handle_message(_discord_event("!c options", "codex-repo"), sink2)
+        await router2.handle_message(_discord_event("!c options", "code-repo"), sink2)
 
     asyncio.run(run_show())
     texts = [msg for msg, _, _ in sink2.sent]
@@ -1974,7 +1974,7 @@ def test_integration_options_dm_global_scope_applies_to_channels(tmp_path):
 
     async def run():
         await router.handle_message(_discord_dm_event("!c options set show_reasoning_details false global"), sink)
-        await router.handle_message(_discord_event("!c options", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c options", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -1991,7 +1991,7 @@ def test_integration_options_channel_rejects_scope_token(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c options set run_heartbeat_seconds 120 global", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c options set run_heartbeat_seconds 120 global", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -2007,7 +2007,7 @@ def test_integration_cfg_set_returns_hint(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!cfg set wrong_key value", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!cfg set wrong_key value", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -2040,8 +2040,8 @@ def test_integration_session_prune_removes_idle_sessions(tmp_path):
     router.state.update(_seed)
 
     async def run():
-        await router.handle_message(_discord_event("!c session prune 1h", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c session status", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c session prune 1h", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c session status", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -2059,15 +2059,15 @@ def test_integration_session_archive_and_restore(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         for _ in range(50):
             proc = await router.get_active("chan", "default")
             if proc is not None:
                 break
             await asyncio.sleep(0.01)
-        await router.handle_message(_discord_event("!c session archive default", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c session restore default", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c stop", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c session archive default", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c session restore default", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c stop", "code-repo"), sink)
         await asyncio.sleep(0.05)
 
     asyncio.run(run())
@@ -2101,7 +2101,7 @@ def test_integration_resume_expired_session_asks_user(tmp_path):
     router.state.update(_seed)
 
     async def run():
-        await router.handle_message(_discord_event("!c resume default continue work", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c resume default continue work", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -2146,8 +2146,8 @@ def test_integration_resume_expired_session_compact_choice_uses_original_prompt(
     router.state.update(_seed)
 
     async def run():
-        await router.handle_message(_discord_event("!c resume default focus only tests", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!compact", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c resume default focus only tests", "code-repo"), sink)
+        await router.handle_message(_discord_event("!compact", "code-repo"), sink)
 
     asyncio.run(run())
     assert "Session summary from the previous thread" in captured_prompt["value"]
@@ -2178,8 +2178,8 @@ def test_integration_start_conflict_bang_new_shortcut_starts_fresh(tmp_path):
     router.state.update(_seed)
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!new", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
+        await router.handle_message(_discord_event("!new", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -2211,8 +2211,8 @@ def test_integration_start_conflict_bang_cont_shortcut_continues(tmp_path):
     router.state.update(_seed)
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!cont", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
+        await router.handle_message(_discord_event("!cont", "code-repo"), sink)
 
     asyncio.run(run())
     assert any(args == ["resume", "thread-old"] for args in runner.calls)
@@ -2249,8 +2249,8 @@ def test_integration_start_conflict_bang_compact_summarizes_and_starts_fresh(tmp
     router.state.update(_seed)
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!compact", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
+        await router.handle_message(_discord_event("!compact", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -2270,12 +2270,12 @@ def test_integration_budget_status_and_set(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c budget status", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c budget set channel 100 200", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c budget set user 50 80", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c budget set session 30 60", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c budget set run 10 20", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c budget status", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c budget status", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c budget set channel 100 200", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c budget set user 50 80", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c budget set session 30 60", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c budget set run 10 20", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c budget status", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -2298,9 +2298,9 @@ def test_integration_budget_hard_limit_blocks_new_runs(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c budget set channel 0 10", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c budget set channel 0 10", "code-repo"), sink)
         router._budget_usage_channel["chan"] = 10
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -2317,11 +2317,11 @@ def test_integration_budget_session_hard_limit_blocks_new_runs(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c budget set session 0 10", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c budget set session 0 10", "code-repo"), sink)
         from codebridge.routing.helpers import UsageStats
 
         router._usage.setdefault("chan", {})["default"] = UsageStats(total_tokens=10)
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -2349,9 +2349,9 @@ def test_integration_budget_run_and_session_notices(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c budget set run 10 15", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c budget set session 15 20", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c budget set run 10 15", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c budget set session 15 20", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -2397,9 +2397,9 @@ def test_integration_audit_show_find_and_bundle(tmp_path):
     router.audit = _FakeAudit()
 
     async def run():
-        await router.handle_message(_discord_event("!c audit show 000001", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c audit find start", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c audit bundle 000001", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c audit show 000001", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c audit find start", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c audit bundle 000001", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -2440,29 +2440,29 @@ def test_integration_misc_shortcuts_dispatch(tmp_path):
     router.handle_branch = MethodType(_fake_handle_branch, router)
 
     async def run():
-        await router.handle_message(_discord_event("!help", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!st", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!u", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!health", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!diag", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!branch", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!w", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!unlock status", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!ul status", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!lock status", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!ps", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!log", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!retry", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!help", "code-repo"), sink)
+        await router.handle_message(_discord_event("!st", "code-repo"), sink)
+        await router.handle_message(_discord_event("!u", "code-repo"), sink)
+        await router.handle_message(_discord_event("!health", "code-repo"), sink)
+        await router.handle_message(_discord_event("!diag", "code-repo"), sink)
+        await router.handle_message(_discord_event("!branch", "code-repo"), sink)
+        await router.handle_message(_discord_event("!w", "code-repo"), sink)
+        await router.handle_message(_discord_event("!unlock status", "code-repo"), sink)
+        await router.handle_message(_discord_event("!ul status", "code-repo"), sink)
+        await router.handle_message(_discord_event("!lock status", "code-repo"), sink)
+        await router.handle_message(_discord_event("!ps", "code-repo"), sink)
+        await router.handle_message(_discord_event("!log", "code-repo"), sink)
+        await router.handle_message(_discord_event("!retry", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
         for _ in range(50):
             proc = await router.get_active("chan", "default")
             if proc is not None:
                 break
             await asyncio.sleep(0.01)
-        await router.handle_message(_discord_event("!y", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!n", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!a keep going", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!pause", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!y", "code-repo"), sink)
+        await router.handle_message(_discord_event("!n", "code-repo"), sink)
+        await router.handle_message(_discord_event("!a keep going", "code-repo"), sink)
+        await router.handle_message(_discord_event("!pause", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -2495,7 +2495,7 @@ def test_integration_help_command_details(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c help git", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c help git", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -2514,7 +2514,7 @@ def test_integration_repo_help_is_chunked_for_discord_limit(tmp_path):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!help", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!help", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -2532,7 +2532,7 @@ def test_integration_repo_help_chunks_stay_within_limit_with_lock_prefix(tmp_pat
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!help", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!help", "code-repo"), sink)
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
@@ -2549,7 +2549,7 @@ def test_integration_contextual_sink_chunks_raw_send_globally(tmp_path):
     router, _ = _build_router(tmp_path)
     router.cfg.discord.max_discord_message_chars = 80
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    event = _discord_event("noop", "codex-repo")
+    event = _discord_event("noop", "code-repo")
     wrapped = build_contextual_sink(event, sink, router.cfg.discord.max_discord_message_chars)
 
     async def run():
@@ -2640,12 +2640,12 @@ def test_totp_required_for_state_changing_and_gh(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c gh pr status", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c gh pr status", "code-repo"), sink)
         start_code = _totp_code(secret)
-        await router.handle_message(_discord_event(f"!c start --totp {start_code}", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c start --totp {start_code}", "code-repo"), sink)
         gh_code = _totp_code(secret, step_offset=1)
-        await router.handle_message(_discord_event(f"!c gh --totp {gh_code} pr status", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c gh --totp {gh_code} pr status", "code-repo"), sink)
 
     asyncio.run(run())
     assert any("TOTP required for 'start'" in msg for msg, _, _ in sink.sent)
@@ -2690,8 +2690,8 @@ def test_totp_unlock_allows_plain_resume_for_ttl(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 2h", "codex-repo"), sink)
-        await router.handle_message(_discord_event("hi there", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 2h", "code-repo"), sink)
+        await router.handle_message(_discord_event("hi there", "code-repo"), sink)
 
     asyncio.run(run())
     assert any("TOTP unlock active for 2h" in msg for msg, _, _ in sink.sent)
@@ -2710,8 +2710,8 @@ def test_totp_unlock_still_requires_totp_for_high_risk(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)}", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c gh pr status", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)}", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c gh pr status", "code-repo"), sink)
 
     asyncio.run(run())
     assert any("TOTP unlock active for 1h" in msg for msg, _, _ in sink.sent)
@@ -2727,7 +2727,7 @@ def test_totp_command_group_toggles_control_enforcement(tmp_path, monkeypatch):
     monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
 
     router, _ = _build_router(tmp_path, totp_enabled=True)
-    event = _discord_event("!c status", "codex-repo")
+    event = _discord_event("!c status", "code-repo")
 
     assert router._totp_required_for_command(event, "gh", "pr status") is True
     router.cfg.discord.totp_enforce_gh = False
@@ -2754,7 +2754,7 @@ def test_totp_defaults_follow_command_spec_auth(tmp_path, monkeypatch):
     monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
 
     router, _ = _build_router(tmp_path, totp_enabled=True)
-    event = _discord_event("!c status", "codex-repo")
+    event = _discord_event("!c status", "code-repo")
 
     # `start` is AUTH_UNLOCK by default.
     assert router._totp_required_for_command(event, "start", "") is True
@@ -2778,12 +2778,12 @@ def test_totp_unlock_status_and_lock(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c unlock status", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c lock status", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c status", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c lock", "codex-repo"), sink)
-        await router.handle_message(_discord_event("hello", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c unlock status", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c lock status", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c status", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c lock", "code-repo"), sink)
+        await router.handle_message(_discord_event("hello", "code-repo"), sink)
 
     asyncio.run(run())
     assert any("TOTP default unlock: active for" in msg for msg, _, _ in sink.sent)
@@ -2805,10 +2805,10 @@ def test_totp_lock_extend_updates_remaining_time(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c lock extend 30m", "codex-repo"), sink)
-        await router.handle_message(_discord_event(f"!c lock extend 30m --totp {_totp_code(secret, step_offset=1)}", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c lock status", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c lock extend 30m", "code-repo"), sink)
+        await router.handle_message(_discord_event(f"!c lock extend 30m --totp {_totp_code(secret, step_offset=1)}", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c lock status", "code-repo"), sink)
 
     asyncio.run(run())
     assert any("TOTP required for 'lock'" in msg for msg, _, _ in sink.sent)
@@ -2828,8 +2828,8 @@ def test_totp_extend_requires_active_unlock_window(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event(f"!c lock extend 30m --totp {_totp_code(secret)}", "codex-repo"), sink)
-        await router.handle_message(_discord_event(f"!c unlock extend 30m --totp {_totp_code(secret, step_offset=1)}", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c lock extend 30m --totp {_totp_code(secret)}", "code-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock extend 30m --totp {_totp_code(secret, step_offset=1)}", "code-repo"), sink)
 
     asyncio.run(run())
     assert any("No active unlock window to extend" in msg for msg, _, _ in sink.sent)
@@ -2847,9 +2847,9 @@ def test_totp_unlock_extend_alias_works(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "codex-repo"), sink)
-        await router.handle_message(_discord_event(f"!c unlock extend 15m --totp {_totp_code(secret, step_offset=1)}", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c lock status", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "code-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock extend 15m --totp {_totp_code(secret, step_offset=1)}", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c lock status", "code-repo"), sink)
 
     asyncio.run(run())
     assert any("unlock extended by 15m" in msg for msg, _, _ in sink.sent)
@@ -2868,9 +2868,9 @@ def test_totp_unlock_gh_is_separate_scope(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event(f"!c unlock gh {_totp_code(secret)} 1h", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c gh pr status", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock gh {_totp_code(secret)} 1h", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c gh pr status", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
 
     asyncio.run(run())
     assert any("TOTP gh unlock active for 1h" in msg for msg, _, _ in sink.sent)
@@ -2890,9 +2890,9 @@ def test_totp_unlock_all_covers_default_and_gh(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event(f"!c unlock all {_totp_code(secret)} 1h", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c start", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c gh pr status", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock all {_totp_code(secret)} 1h", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c gh pr status", "code-repo"), sink)
 
     asyncio.run(run())
     assert any("default + gh" in msg for msg, _, _ in sink.sent)
@@ -2913,10 +2913,10 @@ def test_totp_unlock_is_global_for_user_across_channels(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "codex-repo", channel_id="chan-a"), sink)
-        await router.handle_message(_discord_event("hello", "codex-repo", channel_id="chan-b"), sink)
-        await router.handle_message(_discord_event("!c lock", "codex-repo", channel_id="chan-b"), sink)
-        await router.handle_message(_discord_event("!c start", "codex-repo", channel_id="chan-a"), sink)
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "code-repo", channel_id="chan-a"), sink)
+        await router.handle_message(_discord_event("hello", "code-repo", channel_id="chan-b"), sink)
+        await router.handle_message(_discord_event("!c lock", "code-repo", channel_id="chan-b"), sink)
+        await router.handle_message(_discord_event("!c start", "code-repo", channel_id="chan-a"), sink)
 
     asyncio.run(run())
     assert any(args and args[0] == "start" for args in runner.calls)
@@ -2936,9 +2936,9 @@ def test_totp_replies_include_lock_emoji_prefix(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c status", "codex-repo"), sink)
-        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)}", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c status", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c status", "code-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)}", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c status", "code-repo"), sink)
 
     asyncio.run(run())
     messages = [msg for msg, _, _ in sink.sent]
@@ -2958,7 +2958,7 @@ def test_totp_git_status_requires_totp_when_locked(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c git status", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c git status", "code-repo"), sink)
 
     asyncio.run(run())
     assert any("TOTP required for 'git'" in msg for msg, _, _ in sink.sent)
@@ -2976,7 +2976,7 @@ def test_totp_bang_git_status_requires_totp_when_locked(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!git status", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!git status", "code-repo"), sink)
 
     asyncio.run(run())
     assert any("TOTP required for 'git'" in msg for msg, _, _ in sink.sent)
@@ -2994,8 +2994,8 @@ def test_totp_git_push_allowed_without_totp_when_unlocked(tmp_path, monkeypatch)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c git push", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c git push", "code-repo"), sink)
 
     asyncio.run(run())
     assert not any("TOTP required for 'git'" in msg for msg, _, _ in sink.sent)
@@ -3014,9 +3014,9 @@ def test_totp_git_remote_set_url_still_requires_totp_when_unlocked(tmp_path, mon
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "code-repo"), sink)
         await router.handle_message(
-            _discord_event("!c git remote set-url origin https://github.com/acme/repo.git", "codex-repo"),
+            _discord_event("!c git remote set-url origin https://github.com/acme/repo.git", "code-repo"),
             sink,
         )
 
@@ -3036,9 +3036,9 @@ def test_totp_bang_git_remote_set_url_still_requires_totp_when_unlocked(tmp_path
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c unlock {_totp_code(secret)} 1h", "code-repo"), sink)
         await router.handle_message(
-            _discord_event("!git remote set-url origin https://github.com/acme/repo.git", "codex-repo"),
+            _discord_event("!git remote set-url origin https://github.com/acme/repo.git", "code-repo"),
             sink,
         )
 
@@ -3058,7 +3058,7 @@ def test_totp_bang_gh_requires_gh_scope_or_totp(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!gh pr status", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!gh pr status", "code-repo"), sink)
 
     asyncio.run(run())
     assert any("TOTP required for 'gh'" in msg for msg, _, _ in sink.sent)
@@ -3083,7 +3083,7 @@ def test_totp_updates_read_only_without_totp(tmp_path, monkeypatch):
     router.handle_updates = MethodType(_fake_handle_updates, router)
 
     async def run():
-        await router.handle_message(_discord_event("!c updates", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c updates", "code-repo"), sink)
 
     asyncio.run(run())
     assert called == [str(repo)]
@@ -3109,20 +3109,20 @@ def test_totp_required_for_config_tests_download_logs_and_upload(tmp_path, monke
         platform="discord",
         content="",
         channel_id="chan",
-        channel_name="codex-repo",
+        channel_name="code-repo",
         author_id="user",
         author_is_bot=False,
         is_dm=False,
         guild_id="guild",
         attachments=[Attachment(filename="note.txt", size=2, content_type="text/plain", save=save_noop)],
-        raw_event=_FakeDiscordMessage(_FakeDiscordChannel(is_private=True, channel_id="chan", channel_name="codex-repo")),
+        raw_event=_FakeDiscordMessage(_FakeDiscordChannel(is_private=True, channel_id="chan", channel_name="code-repo")),
     )
 
     async def run():
-        await router.handle_message(_discord_event("!c config", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c tests", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c download note.txt", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c logs", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c config", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c tests", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c download note.txt", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c logs", "code-repo"), sink)
         await router.handle_message(upload_event, sink)
 
     asyncio.run(run())
@@ -3152,11 +3152,11 @@ def test_totp_rate_limit_lock_and_cooldown(tmp_path, monkeypatch):
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
 
     async def run():
-        await router.handle_message(_discord_event("!c start --totp 000000", "codex-repo"), sink)
-        await router.handle_message(_discord_event("!c start --totp 000000", "codex-repo"), sink)
-        await router.handle_message(_discord_event(f"!c start --totp {_totp_code(secret)}", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c start --totp 000000", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c start --totp 000000", "code-repo"), sink)
+        await router.handle_message(_discord_event(f"!c start --totp {_totp_code(secret)}", "code-repo"), sink)
         now[0] += 61
-        await router.handle_message(_discord_event(f"!c start --totp {_totp_code(secret)}", "codex-repo"), sink)
+        await router.handle_message(_discord_event(f"!c start --totp {_totp_code(secret)}", "code-repo"), sink)
 
     asyncio.run(run())
     assert any("Invalid TOTP code." in msg for msg, _, _ in sink.sent)
@@ -3277,7 +3277,7 @@ def test_run_codex_wraps_duplicate_unsupported_model_jsonl_error(tmp_path):
     runner = _ImmediateExitRunner(jsonl_lines=[line, line], rc=1)
     router, _ = _build_router(tmp_path, runner=runner)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    event = _discord_event("!c resume fix", "codex-repo")
+    event = _discord_event("!c resume fix", "code-repo")
 
     async def run():
         await router.run_codex(
@@ -3310,7 +3310,7 @@ def test_run_codex_unsupported_configured_default_points_to_config(tmp_path):
     router, _ = _build_router(tmp_path, runner=runner)
     router.cfg.codex.model = "gpt-5.3-codex"
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    event = _discord_event("!c resume fix", "codex-repo")
+    event = _discord_event("!c resume fix", "code-repo")
 
     async def run():
         await router.run_codex(
@@ -3340,7 +3340,7 @@ def test_run_codex_surfaces_claude_usage_limit_result_even_on_zero_exit(tmp_path
     runner = _ClaudeImmediateExitRunner(jsonl_lines=[_claude_usage_limit_result_line(message)], rc=0)
     router, _ = _build_router(tmp_path, runner=runner)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    event = _discord_event("!c resume fix", "codex-repo")
+    event = _discord_event("!c resume fix", "code-repo")
 
     async def run():
         await router.run_codex(
@@ -3376,7 +3376,7 @@ def test_run_codex_final_result_kills_lingering_process(tmp_path, monkeypatch):
     }
     monkeypatch.setattr(router_mod, "_FINAL_RESULT_EXIT_GRACE_SECONDS", 0.01)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    event = _discord_event("!c resume fix", "codex-repo")
+    event = _discord_event("!c resume fix", "code-repo")
     active_after = {}
 
     async def run():
@@ -3425,7 +3425,7 @@ def test_run_codex_surfaces_claude_usage_limit_stderr(tmp_path):
     runner = _ClaudeImmediateExitRunner(stderr_lines=[message], rc=1)
     router, _ = _build_router(tmp_path, runner=runner)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    event = _discord_event("!c resume fix", "codex-repo")
+    event = _discord_event("!c resume fix", "code-repo")
 
     async def run():
         await router.run_codex(
@@ -3457,7 +3457,7 @@ def test_run_codex_wraps_gemini_model_not_found_stderr(tmp_path):
     router, _ = _build_router(tmp_path, runner=runner)
     router.set_session_model("chan", "default", "repo", str(repo), "gpt-5.3-codex", "")
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    event = _discord_event("!c resume fix", "codex-repo")
+    event = _discord_event("!c resume fix", "code-repo")
 
     async def run():
         await router.run_codex(
@@ -3491,7 +3491,7 @@ def test_run_codex_wraps_unsupported_model_stderr_error(tmp_path):
     runner = _ImmediateExitRunner(stderr_lines=[line, line], rc=1)
     router, _ = _build_router(tmp_path, runner=runner)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    event = _discord_event("!c resume fix", "codex-repo")
+    event = _discord_event("!c resume fix", "code-repo")
 
     async def run():
         await router.run_codex(
@@ -3533,7 +3533,7 @@ def test_run_codex_fails_fast_on_usage_error_without_compat_retry(tmp_path):
     runner = _UsageErrorRunner()
     router, _ = _build_router(tmp_path, runner=runner)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
-    event = _discord_event("!c start", "codex-repo")
+    event = _discord_event("!c start", "code-repo")
     args = ["exec", "--json", "--cd", str(repo), "--bad-flag", "hello"]
 
     async def run():

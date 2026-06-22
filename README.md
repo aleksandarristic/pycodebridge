@@ -1,9 +1,9 @@
 # Codex CLI Bridge (Python)
 
-Bridge transport channels (`codex-<repo>`) to Codex CLI sessions in local repos under `code_root`. One channel maps to one Codex session with queueing, multi-session support, and run control.
+Bridge transport channels (`code-<repo>`) to Codex CLI sessions in local repos under `code_root`. One channel maps to one Codex session with queueing, multi-session support, and run control.
 
 ## Features
-- Map `#codex-<repo>` to `<code_root>/<repo>` (must exist, be inside root, and contain `.git`).
+- Map `#code-<repo>` to `<code_root>/<repo>` (must exist, be inside root, and contain `.git`).
   Repo identifiers are canonicalized to lowercase.
 - Stream Codex JSONL output to transports; strip control codes; flag prompts needing user input.
 - Per-channel queue, multi-session support (max 3 per channel), run control (stop/interrupt/kill/quit).
@@ -68,7 +68,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `guild_id` (required for Discord adapter) — restrict to a single server ID. Bot rejects other guilds and auto-leaves them on startup/join.
 - `allowed_user_ids` (required, non-empty) — allowlist for channel commands; users outside this list are rejected.
 - `prefix` (default `!c`) — command prefix.
-- `channel_name_regex` (default `^codex-([A-Za-z0-9._-]+)$`) — maps channel to repo name.
+- `channel_name_regex` (default `^code-([A-Za-z0-9._-]+)$`) — maps channel to repo name.
 - Discord repo channels must be private (`@everyone` cannot view); messages in non-private Discord channels are ignored.
 - `allow_plain_prompts` (default `false`) — treat non-prefixed messages as prompts in matching channels.
 - `dm_admin_enabled` (default `false`) — enable DM admin commands.
@@ -161,7 +161,7 @@ network_access = true
 ## Commands
 Command inventory and taxonomy baseline: `docs/COMMAND_SURFACE.md`
 
-Prefix default is `!c`. Channels should be named `codex-<repo>`.
+Prefix default is `!c`. Channels should be named `code-<repo>`.
 In mapped repo channels/threads, every registered command and alias also works as top-level `!<command>` / `!<alias>` (for example `!models`, `!model`, `!status`, `!cfg`, `!logs`).
 Session scope model: one logical session per channel scope and one per thread scope. Channel scope uses `default`; thread scope uses the normalized thread name.
 When `discord.totp.enabled: true`, use `!c unlock <totp> [ttl]` to unlock default commands for your account (`30m`, `1h`, `2h`; default `1h`).
@@ -412,7 +412,7 @@ Backward-compatible top-level module shims are retained (for example `codebridge
 
 ## Troubleshooting
 - No response: confirm Message Content intent is enabled and saved, and your user ID is allowlisted.
-- Repo error: ensure channel name matches `codex-<repo>` and `<code_root>/<repo>/.git` exists. Repo names are normalized to lowercase.
+- Repo error: ensure channel name matches `code-<repo>` and `<code_root>/<repo>/.git` exists. Repo names are normalized to lowercase.
 - DM admin: enable `discord.dm_admin_enabled` and ensure `allowed_user_ids` includes you; optionally set `dm_admin_user_ids` for a separate admin allowlist.
 - Security logs (`state.log_dir/bridge.log`): look for `security.totp_invalid`, `security.totp_replay`, `security.totp_locked`, `security.totp_unlock`, `security.totp_success`.
 - Session timeline logs (first place to check): `state.log_dir/session_jsonl/active/<channel>/repo-<repo>__session-<session>.jsonl`.

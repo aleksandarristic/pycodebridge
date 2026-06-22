@@ -10,7 +10,7 @@ import yaml
 from .util.coerce import parse_bool
 
 DEFAULT_PREFIX = "!c"
-DEFAULT_CHANNEL_REGEX = r"^codex-([A-Za-z0-9._-]+)$"
+DEFAULT_CHANNEL_REGEX = r"^code-([A-Za-z0-9._-]+)$"
 DEFAULT_MAX_DISCORD_CHARS = 1800
 DEFAULT_SANDBOX = "workspace-write"
 DEFAULT_LOG_LEVEL = "info"

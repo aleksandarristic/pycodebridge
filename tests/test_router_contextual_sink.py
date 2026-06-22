@@ -90,7 +90,7 @@ def test_contextual_sink_uses_reply_to_when_supported():
         platform="discord",
         content="hi",
         channel_id="chan",
-        channel_name="codex-repo",
+        channel_name="code-repo",
         author_id="user",
         author_is_bot=False,
         is_dm=False,
@@ -113,7 +113,7 @@ def test_contextual_sink_overrides_channel_scope_for_thread_rooms():
         platform="discord",
         content="hi",
         channel_id="discord:parent:thread-1",
-        channel_name="codex-repo",
+        channel_name="code-repo",
         author_id="user",
         author_is_bot=False,
         is_dm=False,
@@ -126,7 +126,7 @@ def test_contextual_sink_overrides_channel_scope_for_thread_rooms():
 
 
 def test_normalize_event_context_uses_parent_channel_metadata_for_threads():
-    parent = _FakeDiscordChannel(is_private=True, channel_id="chan-parent", channel_name="codex-repo")
+    parent = _FakeDiscordChannel(is_private=True, channel_id="chan-parent", channel_name="code-repo")
     thread = _FakeDiscordChannel(
         is_private=True,
         channel_id="thread-1",
@@ -151,11 +151,11 @@ def test_normalize_event_context_uses_parent_channel_metadata_for_threads():
 
     normalized = normalize_event_context(event)
     assert normalized.channel_id == "discord:chan-parent:thread-1"
-    assert normalized.channel_name == "codex-repo"
+    assert normalized.channel_name == "code-repo"
 
 
 def test_normalize_event_context_uses_guild_cache_when_thread_parent_missing():
-    parent = _FakeDiscordChannel(is_private=True, channel_id="123", channel_name="codex-repo")
+    parent = _FakeDiscordChannel(is_private=True, channel_id="123", channel_name="code-repo")
     guild = _FakeDiscordGuild(channels={"123": parent})
     thread = _FakeDiscordChannel(
         is_private=True,
@@ -182,11 +182,11 @@ def test_normalize_event_context_uses_guild_cache_when_thread_parent_missing():
 
     normalized = normalize_event_context(event)
     assert normalized.channel_id == "discord:123:thread-1"
-    assert normalized.channel_name == "codex-repo"
+    assert normalized.channel_name == "code-repo"
 
 
 def test_normalize_event_context_uses_attached_thread_parent_for_starter_messages():
-    parent = _FakeDiscordChannel(is_private=True, channel_id="chan-parent", channel_name="codex-repo")
+    parent = _FakeDiscordChannel(is_private=True, channel_id="chan-parent", channel_name="code-repo")
     thread = _FakeDiscordChannel(
         is_private=True,
         channel_id="thread-1",
@@ -201,7 +201,7 @@ def test_normalize_event_context_uses_attached_thread_parent_for_starter_message
         platform="discord",
         content="Hi",
         channel_id="chan-parent",
-        channel_name="codex-repo",
+        channel_name="code-repo",
         author_id="user",
         author_is_bot=False,
         is_dm=False,
@@ -213,4 +213,4 @@ def test_normalize_event_context_uses_attached_thread_parent_for_starter_message
 
     normalized = normalize_event_context(event)
     assert normalized.channel_id == "discord:chan-parent:thread-1"
-    assert normalized.channel_name == "codex-repo"
+    assert normalized.channel_name == "code-repo"

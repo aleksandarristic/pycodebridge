@@ -42,6 +42,7 @@ _DM_COMMAND_ALIASES = {
     "delete": "deleterepo",
     "ren": "renamerepo",
     "rename": "renamerepo",
+    "rc": "renamechannels",
     "opts": "options",
 }
 
@@ -60,6 +61,7 @@ _DM_SHORTCUT_COMMANDS = {
     "help",
     "lock",
     "options",
+    "renamechannels",
     "renamerepo",
     "repo",
     "repos",
@@ -98,6 +100,8 @@ _DM_SHORTCUT_ALIASES = (
     ("!renamerepo", "renamerepo"),
     ("!rename", "renamerepo"),
     ("!ren", "renamerepo"),
+    ("!renamechannels", "renamechannels"),
+    ("!rc", "renamechannels"),
     ("!reset", "reset"),
     ("!unpin", "unpin"),
     ("!lk", "lock"),
@@ -135,6 +139,7 @@ _DM_ADMIN_HELP_OVERVIEW_ORDER = (
     "config",
     "reset",
     "unpin",
+    "renamechannels",
     "create",
     "clone",
     "copy",
@@ -162,7 +167,8 @@ _DM_HELP_DETAILS: dict[str, tuple[str, str]] = {
     "sessions": ("sessions", "list sessions across channels"),
     "config": ("config", "show effective config"),
     "reset": ("reset all", "request reset-all confirmation"),
-    "unpin": ("unpin", "remove all but the last pin from every codex channel"),
+    "unpin": ("unpin", "remove all but the last pin from every code channel"),
+    "renamechannels": ("renamechannels/rc <old-prefix> <new-prefix> [--preview]", "rename Discord channels by prefix"),
     "create": ("create/new <name>", "create repo"),
     "clone": ("clone <name> <url>", "clone repo"),
     "copy": ("copy/cp <from> <to>", "copy repo"),
@@ -355,7 +361,7 @@ async def dm_create_repo(
         router.seed_agents_template(repo_path)
     except Exception as exc:
         return exc
-    await dm_reply(router, sink, entry, f"Created repo at {repo_path}. Continue in #codex-{repo_name}")
+    await dm_reply(router, sink, entry, f"Created repo at {repo_path}. Continue in #code-{repo_name}")
     router.logger.info("dm.bind.createrepo", extra={"platform": event.platform, "user_id": event.author_id, "repo": repo_name})
     router.logger.info("dm.createrepo.ok", extra={"user_id": event.author_id, "repo": repo_name, "path": repo_path})
     return None
@@ -385,7 +391,7 @@ async def dm_clone_repo(
     if err:
         return err
     await router.bootstrap_repo_git_config(repo_path)
-    await dm_reply(router, sink, entry, f"Clone complete: {clone_url} -> {repo_path}. Use `#codex-{repo_name}` for prompts.")
+    await dm_reply(router, sink, entry, f"Clone complete: {clone_url} -> {repo_path}. Use `#code-{repo_name}` for prompts.")
     router.logger.info("dm.bind.clonerepo", extra={"platform": event.platform, "user_id": event.author_id, "repo": repo_name})
     router.logger.info("dm.clonerepo.ok", extra={"user_id": event.author_id, "repo": repo_name, "url": clone_url, "path": repo_path})
     return None
@@ -417,7 +423,7 @@ async def dm_copy_repo(
     if err:
         return err
     await router.bootstrap_repo_git_config(dst_path)
-    await dm_reply(router, sink, entry, f"Copied repo to {dst_path}. Continue in #codex-{to_name}")
+    await dm_reply(router, sink, entry, f"Copied repo to {dst_path}. Continue in #code-{to_name}")
     router.logger.info("dm.bind.copyrepo", extra={"platform": event.platform, "user_id": event.author_id, "repo": to_name})
     router.logger.info("dm.copyrepo.ok", extra={"user_id": event.author_id, "repo": from_name, "target": dst_path})
     return None
@@ -474,10 +480,54 @@ async def dm_rename_repo(
     except Exception as exc:
         return exc
     router.state.update(lambda fs: rename_state_repo(fs, from_name, src_path, to_name, dst_path))
-    await dm_reply(router, sink, entry, f"Renamed repo {from_name} to {to_name}. Continue in #codex-{to_name}")
+    await dm_reply(router, sink, entry, f"Renamed repo {from_name} to {to_name}. Continue in #code-{to_name}")
     router.logger.info("dm.bind.renamerepo", extra={"platform": event.platform, "user_id": event.author_id, "repo": to_name})
     router.logger.info("dm.renamerepo.ok", extra={"user_id": event.author_id, "repo": from_name, "target": dst_path})
     return None
+
+
+async def dm_rename_channels(
+    router: "Router",
+    event: MessageEvent,
+    sink: ResponseSink,
+    old_prefix: str,
+    new_prefix: str,
+    preview: bool,
+    entry: Optional[Entry],
+) -> None:
+    """Rename all guild text channels from old_prefix to new_prefix."""
+    fn = getattr(router, "_guild_text_channels_fn", None)
+    if not callable(fn):
+        await dm_reply(router, sink, entry, forbidden_message("renamechannels is not available (no guild channel access wired up)."))
+        return
+    try:
+        channels = await fn()
+    except Exception as exc:
+        await dm_reply(router, sink, entry, forbidden_message(f"Could not list guild channels: {exc}"))
+        return
+    matches = [ch for ch in channels if str(getattr(ch, "name", "")).startswith(old_prefix)]
+    if not matches:
+        await dm_reply(router, sink, entry, f"No channels found starting with `{old_prefix}`.")
+        return
+    lines = []
+    for ch in matches:
+        old_name = str(ch.name)
+        new_name = new_prefix + old_name[len(old_prefix):]
+        if preview:
+            lines.append(f"{old_name} → {new_name}")
+            continue
+        try:
+            await ch.edit(name=new_name)
+            lines.append(f"Renamed: {old_name} → {new_name}")
+        except Exception as exc:
+            lines.append(f"Failed {old_name}: {exc}")
+    label = "Preview" if preview else "Done"
+    await dm_reply(router, sink, entry, f"{label} ({len(matches)} channels):\n" + "\n".join(lines))
+    if not preview:
+        router.logger.info(
+            "dm.admin.renamechannels",
+            extra={"platform": event.platform, "user_id": event.author_id, "old_prefix": old_prefix, "new_prefix": new_prefix, "count": len(matches)},
+        )
 
 
 def _is_dm_admin(router: "Router", event: MessageEvent) -> bool:
@@ -595,6 +645,7 @@ async def _dispatch_prefixed_dm_command(
         "config",
         "reset",
         "unpin",
+        "renamechannels",
         "create",
         "clone",
         "copy",
@@ -680,6 +731,15 @@ async def _dispatch_prefixed_dm_command(
             return
         if cmd == "unpin":
             await router.handle_unpin_all_channels(sink)
+            return
+        if cmd == "renamechannels":
+            parts = rest.split()
+            preview = "--preview" in parts
+            filtered = [p for p in parts if p != "--preview"]
+            if len(filtered) < 2:
+                await send_forbidden("Usage: !c renamechannels <old-prefix> <new-prefix> [--preview]")
+                return
+            await dm_rename_channels(router, event, sink, filtered[0], filtered[1], preview, entry)
             return
         if cmd == "create":
             name = rest.strip()

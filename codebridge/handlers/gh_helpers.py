@@ -41,7 +41,7 @@ def _gh_clone_completion_hint(fields: list[str]) -> str:
     """Return a clone completion hint for gh clone-style commands."""
     repo_name = _infer_cloned_repo_name(fields)
     if repo_name:
-        return f"Clone complete. Use `#codex-{repo_name}` for prompts."
+        return f"Clone complete. Use `#code-{repo_name}` for prompts."
     return ""
 
 

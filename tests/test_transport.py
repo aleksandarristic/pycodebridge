@@ -8,7 +8,7 @@ def test_message_event_fields():
         platform="discord",
         content="hello",
         channel_id="chan",
-        channel_name="codex-test",
+        channel_name="code-test",
         author_id="user",
         author_is_bot=False,
         is_dm=False,

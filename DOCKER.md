@@ -35,7 +35,7 @@ HOST_UID=$(id -u)
 HOST_GID=$(id -g)
 ```
 
-`CODE_ROOT_HOST` must contain git repos matched by channel names (`codex-<repo>`).
+`CODE_ROOT_HOST` must contain git repos matched by channel names (`code-<repo>`).
 
 If `STATE_DIR_HOST` is omitted, `run_docker.sh` defaults it to `./.docker-state`.
 If `CODEX_AUTH_HOST` is omitted in Compose, it defaults to `./.docker-codex-auth`.

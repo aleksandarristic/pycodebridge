@@ -229,7 +229,7 @@ def test_router_backend_for_builds_new_instance_on_explicit_override(tmp_path):
 # !agent command tests
 # ---------------------------------------------------------------------------
 
-def _discord_event(content: str, channel_name: str = "codex-repo") -> MessageEvent:
+def _discord_event(content: str, channel_name: str = "code-repo") -> MessageEvent:
     channel = SimpleNamespace(
         guild=SimpleNamespace(default_role=object()),
         type="text",
@@ -323,7 +323,7 @@ def test_cmd_agent_with_session_name(tmp_path):
 
     async def run():
         router.coordinator.update_state("chan", "work", "repo", str(tmp_path / "repo"), "thread-2", "gpt-x", "high")
-        await router.handle_message(_discord_event("!c agent work codex", "codex-repo"), sink)
+        await router.handle_message(_discord_event("!c agent work codex", "code-repo"), sink)
         await asyncio.sleep(0)
         state = router.state.load()
         assert state.channels["chan"].sessions["work"].backend == "codex"
