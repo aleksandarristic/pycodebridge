@@ -1,12 +1,15 @@
-# Codex CLI Bridge (Python)
+# Agentic Coding Bridge (Python)
 
-Bridge transport channels (`code-<repo>`) to Codex CLI sessions in local repos under `code_root`. One channel maps to one Codex session with queueing, multi-session support, and run control.
+Bridge transport channels (`code-<repo>`) to agentic coding sessions in local repos under `code_root`. One channel maps to one agent session with queueing, multi-session support, and run control.
+
+Default backend: Codex. Additional supported backends: Claude Code and Gemini CLI, selectable per session.
 
 ## Features
 - Map `#code-<repo>` to `<code_root>/<repo>` (must exist, be inside root, and contain `.git`).
   Repo identifiers are canonicalized to lowercase.
-- Stream Codex JSONL output to transports; strip control codes; flag prompts needing user input.
+- Stream agent JSONL output to transports; strip control codes; flag prompts needing user input.
 - Per-channel queue, multi-session support (max 3 per channel), run control (stop/interrupt/kill/quit).
+- Per-session backend selection across supported agentic coding CLIs.
 - Optional DM admin mode for owner-only repo management (Discord).
 - Transport-agnostic router (`MessageEvent` + `ResponseSink`).
 
@@ -20,7 +23,8 @@ Adapters declare capabilities for threads, replies, uploads, downloads, and typi
 ## Setup
 Prereqs:
 - Python 3.14+ (3.13/3.12 fallback)
-- Codex CLI installed and signed in (binary on PATH or set `codex.binary`).
+- Default backend CLI installed and signed in (binary on PATH or set `codex.binary`).
+- Optional: Claude Code CLI or Gemini CLI installed and authenticated for `claude` / `gemini` sessions.
 - Discord bot token with Message Content intent enabled (current adapter).
 
 Quick start:
@@ -36,18 +40,18 @@ Quick start:
 2) Set mounts (shell export or `.env` in repo root):
    - `CODE_ROOT_HOST=/absolute/path/to/repos`
    - `STATE_DIR_HOST=/absolute/path/to/pycodebridge-state`
-   - `CODEX_AUTH_HOST=/absolute/path/to/codex-auth-dir` (optional; defaults to `./.docker-codex-auth`)
+   - `CODEX_AUTH_HOST=/absolute/path/to/default-backend-auth-dir` (optional; defaults to `./.docker-codex-auth`)
    - `GH_CONFIG_HOST=/absolute/path/to/gh-config-dir` (optional; defaults to `./.docker-gh-config` in Compose)
    - `HOST_UID=$(id -u)` and `HOST_GID=$(id -g)` (required for Compose)
-   - To reuse existing host Codex login in Compose, set `CODEX_AUTH_HOST=$HOME/.codex`
+   - To reuse an existing default-backend login in Compose, set `CODEX_AUTH_HOST=$HOME/.codex`
    - If `STATE_DIR_HOST` is omitted, default is `./.docker-state`
 3) Preflight only: `./run_docker.sh --check`
 4) Run container: `./run_docker.sh`
-5) First-time Codex auth in Docker (if not already authenticated in mounted auth dir):
+5) First-time default-backend auth in Docker (if not already authenticated in mounted auth dir):
    - `docker exec -it pycodebridge codex login --device-auth`
 6) Headless with Compose: `docker compose up -d --build`
 7) Full Docker details: `DOCKER.md`
-   - For Docker/Compose, prefer `codex.sandbox: danger-full-access`. `workspace-write` can fail inside containers when Codex's inner sandbox path relies on `bwrap`/user namespaces.
+   - For Docker/Compose, prefer `codex.sandbox: danger-full-access`. `workspace-write` can fail inside containers when the default backend's inner sandbox path relies on `bwrap`/user namespaces.
 8) One-shot update + redeploy:
    - Preflight only: `./update.sh --check`
    - Update current branch and redeploy: `./update.sh`
@@ -86,27 +90,43 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `max_discord_message_chars` (default `1800`) — outbound chunk size.
 
 ### `codex`
-- `binary` (default `codex`) — path/name of Codex CLI.
+- `binary` (default `codex`) — path/name of the default backend CLI.
 - `code_root` (required) — directory containing git repos.
-- `sandbox` (default `workspace-write`) — Codex sandbox mode.
-- `ask_for_approval` (default empty) — optional Codex approval policy (`untrusted|on-failure|on-request|never`).
+- `sandbox` (default `workspace-write`) — default backend sandbox mode.
+- `ask_for_approval` (default empty) — optional default backend approval policy (`untrusted|on-failure|on-request|never`).
 - `network_access` (default `false`) — when `true` and sandbox is `workspace-write`, add `-c sandbox_workspace_write.network_access=true`.
 - `json` (default `true`) — JSONL streaming output (required).
 - `start_prompt` (default template) — prompt used for new sessions.
 - `model` (default empty) — default model; override per session with `!c model`.
-- `model_reasoning_effort` (default `minimal`) — default reasoning effort to keep token spend low; valid Codex values are `minimal`/`low`/`medium`/`high`/`xhigh`, or override per session with `!c model [session] <id|default> [reasoning|default]` / `!c effort [session] <level|default>`. Use `default` to clear a session override. Empty = Codex's built-in default.
-- `env` (default `{}`) — extra environment variables for Codex.
+- `model_reasoning_effort` (default `minimal`) — default reasoning effort to keep token spend low; valid default-backend values are `minimal`/`low`/`medium`/`high`/`xhigh`, or override per session with `!c model [session] <id|default> [reasoning|default]` / `!c effort [session] <level|default>`. Use `default` to clear a session override. Empty = the backend's built-in default.
+- `env` (default `{}`) — extra environment variables for the default backend.
 
-Important: if Codex cannot run `git push`, make sure network is enabled for the sandbox level you selected in the host Codex config (`~/.codex/config.toml`). For `workspace-write`, include:
+Important: if the default backend cannot run `git push`, make sure network is enabled for the sandbox level you selected in the host backend config (`~/.codex/config.toml`). For `workspace-write`, include:
 
 ```toml
 [sandbox_workspace_write]
 network_access = true
 ```
 
+### `claude`
+- `binary` (default `claude`) — path/name of Claude Code CLI.
+- `permission_mode` (default `default`) — Claude permission mode; `dangerously-skip-permissions` is passed through when configured.
+- `model` (default empty) — default Claude model for Claude sessions.
+- `effort` (default empty) — default Claude effort level; override per session with `!c effort`.
+- `env` (default `{}`) — extra environment variables for Claude Code.
+
+### `gemini`
+- `binary` (default `gemini`) — path/name of Gemini CLI.
+- `approval_mode` (default `yolo`) — Gemini approval mode (`default|auto_edit|yolo|plan`).
+- `model` (default empty) — default Gemini model for Gemini sessions.
+- `env` (default `{}`) — extra environment variables for Gemini CLI.
+
+### `agent`
+- `default_backend` (default `codex`) — default backend for new sessions (`codex|claude|gemini`). Override per session with `!c agent`.
+
 ### `state`
 - `data_dir` (required) — directory for state.json and locks.
-- `log_dir` (required) — directory for runtime logs (`bridge.log`, `codex_errors.log`, unified `session_jsonl/` logs) and audit artifacts.
+- `log_dir` (required) — directory for runtime logs (`bridge.log`, legacy `codex_errors.log`, unified `session_jsonl/` logs) and audit artifacts.
 - `lock_timeout_seconds` (default `600`) — stale lock timeout.
 - `conflict_ttl_seconds` (default `60`) — conflict prompt TTL.
 - `session_idle_ttl_seconds` (default `14400`) — sessions idle longer than this require explicit `continue`, `compact`, or `new` before resuming. Set `0` to disable expiry.
@@ -118,10 +138,12 @@ network_access = true
 - `health_path` (default `/healthz`) — health endpoint path.
 - `run_heartbeat_seconds` (default `120`) — interval for "still running" status messages.
 - `run_completion_min_seconds` (default `300`) — minimum run duration before posting completion summary.
-- `show_reasoning_details` (default `true`) — include reasoning level text in status/pinned output.
+- `show_reasoning_details` (default `true`) — include reasoning level text in status/pinned output and relay backend thinking blocks when available.
+- `show_tool_calls` (default `true`) — relay backend tool-call labels when available.
+- `output_flush_seconds` (default `0.4`) — idle window for batching streamed output into fewer transport sends; set `0` to disable coalescing.
 
 ### `audit`
-- `redact` (default `false`) — redact secrets from audit logs, session JSONL logs, and Codex error logs before writing.
+- `redact` (default `false`) — redact secrets from audit logs, session JSONL logs, and agent error logs before writing.
 - `redact_patterns` (default `[]`) — optional extra regex patterns to redact in addition to the built-in secret patterns.
 
 ### `transport`
@@ -141,6 +163,11 @@ network_access = true
 - `require_confirmation_for_dangerous_ops` (default `true`) — require explicit confirmation token for dangerous git helper operations.
 - `dangerous_confirmation_token` (default `--confirm-dangerous`) — confirmation token required when dangerous git helper operations are enabled.
 
+### `files`
+- `max_upload_mb` (default `200`) — maximum size for a single uploaded file.
+- `max_upload_total_mb` (default `200`) — maximum total size for one upload batch.
+- `max_upload_count` (default `20`) — maximum number of files in one upload batch.
+
 ### `repo_bootstrap`
 - `agents_template` (default empty) — optional AGENTS.md template for `!c create`.
 - `spec_prompt` (default template) — prompt used by `!c spec`.
@@ -149,13 +176,13 @@ network_access = true
 - Routine coding/support tasks:
   - Model: `gpt-5.4`
   - Reasoning: `medium`
-  - Keep `codex.start_prompt` minimal and repo-focused.
+  - Keep the default start prompt minimal and repo-focused.
 - Complex refactors/investigations:
   - Model: `gpt-5.5`
   - Reasoning: `high`
   - Use a richer `repo_bootstrap.spec_prompt` only when needed.
 - Lightweight profile pattern:
-  - Keep `codex.start_prompt` as a short default.
+  - Keep the default start prompt short.
   - Store longer, task-specific prompts in repo docs (for example `instructions/`) and reference them from commands/workflows instead of embedding large static text in every new session.
 
 ## Commands
@@ -182,7 +209,9 @@ TOTP not required (open in channel):
 - `!c budget [status]`
 - `!c peek [session]`
 - `!c updates`
+- `!c agents`
 - `!c models [session] [refresh|--refresh]`
+- `!c efforts [session]`
 - `!c branch`
 - `!c show` (alias: `showrepo`)
 - `!c changes` (alias: `showchanges`)
@@ -216,6 +245,7 @@ TOTP required unless the chat is unlocked:
 - `!new` (shortcut for `!c choose new` when a conflict prompt is pending)
 - `!compact` / `!cpt` (shortcut for `!c choose compact` when a conflict prompt is pending)
 - `!c use <session>` (alias `select`)
+- `!c agent [session] <codex|claude|gemini> [model] [effort]`
 - `!c model [session] <id|default> [reasoning|default]`
 - `!c effort [session] <level|default>`
 - `!c thread [session] <id>`
@@ -252,11 +282,13 @@ TOTP required unless the chat is unlocked:
 - `!c download <path>`
 - `!c logs [session] [n]`
 - Shortcut: `!log [n]` (maps to `!c logs [n]`)
+- `!c unpin`
 - `!c git <status|log|branches|branch|show|diff|remote|fetch|pull|add|commit|push|merge>`
 - Shortcut: `!git ...` (maps to `!c git ...`)
 - Any other prompt-style `!c ...` command that is not in the read-only list
 
-`!c reset [session]` clears scoped session context/runtime. The next `start`/`resume` in that scope starts fresh.
+- `!c reset [session]` clears scoped session context/runtime. The next `start`/`resume` in that scope starts fresh.
+- `!c agent`, `!c model`, and `!c effort` with no args show the current effective backend/model/effort for the active session.
 - Plain prompts in mapped channels when `allow_plain_prompts: true`
 
 Auth tags used by `!c help`:
@@ -289,7 +321,8 @@ Sessions:
   - `choose` accepts `continue|new|compact` (`resume|replace|summary` still supported as aliases).
   - Shortcut: `!continue` / `!cont` maps to `choose continue` while a conflict is pending.
   - Shortcut: `!new` maps to `choose new`; `!compact` / `!cpt` maps to `choose compact` (while a conflict is pending).
-- `use` (alias: `select`), `model` (alias: `mdl`), `models` (alias: `mdls`), `thread` (alias: `tid`), `reset`, `workflow` (alias: `wf`), `spec` (alias: `plan`) (`models` is `[open]`, others `[unlock/default]`)
+- `use` (alias: `select`), `agent`, `model` (alias: `mdl`), `effort` (alias: `eff`), `thread` (alias: `tid`), `reset`, `workflow` (alias: `wf`), `spec` (alias: `plan`) `[unlock/default]`
+- `agents`, `models` (alias: `mdls`), `efforts` `[open]`
   - `workflow` expands built-in repo macros: `inspect`, `fix`, `review`, `ship`.
   - Example: `!c workflow inspect auth flow`
   - Example: `!c workflow fix failing tests`
@@ -316,6 +349,7 @@ Run control:
 Repo helpers:
 - `show` (aliases: `showrepo`, `tree`), `changes` (alias: `showchanges`), `branch` `[open]`
 - `tests` (alias: `test`), `download` (alias: `dl`) `[unlock/default]`
+- `unpin` `[unlock/default]` — remove all but the most recent pin from the current channel.
 - `git` `[unlock/default]`
   - Dangerous `git` helper operations (force push, branch delete) require opt-in and explicit confirmation token.
 - `gh` `[unlock/gh]` (examples: `!c gh repo sync` or `!gh repo sync`)
@@ -330,8 +364,8 @@ Queue:
   - `logs` includes per-entry `started` and `ended` timestamps.
 
 Passthrough:
-- Any other `!c` text is sent as a prompt to Codex.
-- When Codex emits a question/approval prompt (`Codex asks: ...`), a plain reply in the same channel/DM is relayed to the active session input automatically (or use `!c answer ...` explicitly).
+- Any other `!c` text is sent as a prompt to the selected agent backend.
+- When the agent emits a question/approval prompt, a plain reply in the same channel/DM is relayed to the active session input automatically (or use `!c answer ...` explicitly).
 
 ## DM admin commands (optional)
 Enable with `discord.dm_admin_enabled: true`. `!c` command forms always work in DMs (Discord only), and top-level `!<command>` forms are also supported for DM commands (for example `!repos`, `!bind <repo>`, `!reset all`).
@@ -343,6 +377,7 @@ Repo names passed to DM commands are normalized to lowercase (for example, `Prob
 - `!c status`
 - `!c config`
 - `!c updates`
+- `!c unpin` (clear old pins across matching repo channels)
 - `!c create/new <name>` (legacy: `createrepo`)
 - `!c clone <name> <url>` (legacy: `clonerepo`)
 - `!c copy/cp <from> <to>` (legacy: `copyrepo`)
@@ -386,7 +421,7 @@ TOTP is not required in DMs for:
 - `!c unlock [gh|all] status`
 - `!c lock [gh|all]`
 
-When a repo is bound in DMs, a message without `!c` is treated as a prompt unless Codex is currently awaiting input (then it is relayed to the active session stdin).
+When a repo is bound in DMs, a message without `!c` is treated as a prompt unless the selected agent is currently awaiting input (then it is relayed to the active session stdin).
 Attachments in channels or bound DMs will prompt for a destination path before saving. Attachment filenames are normalized to a basename before write; upload batches are bounded by `files.max_upload_mb`, `files.max_upload_total_mb`, and `files.max_upload_count`, then saved via repo-local temporary files with symlink-safe finalization.
 
 ## Package layout
@@ -407,7 +442,7 @@ Backward-compatible top-level module shims are retained (for example `codebridge
 - `state.data_dir/state.json.lock` — file lock used for atomic state mutations.
 - `state.log_dir/session_jsonl/active/<channel>/repo-<repo>__session-<session>.jsonl` — primary per-session timeline log stream.
 - `state.log_dir/session_jsonl/archive/<channel>/repo-<repo>__session-<session>-<timestamp>.tgz` — mandatory archive for active logs older than 30 days (kept indefinitely).
-- `state.log_dir/<channel>/repo-<repo>__session-<session>/thread-<thread>/...` — detailed per-request audit artifacts (`*.request.json`, `*.codex.jsonl`, `*.discord_out.txt`, `*.codex.stderr.txt`).
+- `state.log_dir/<channel>/repo-<repo>__session-<session>/thread-<thread>/...` — detailed per-request audit artifacts (`*.request.json`, legacy `*.codex.jsonl`, `*.discord_out.txt`, legacy `*.codex.stderr.txt`).
 - `state.log_dir/session_archives/<channel>/repo-<repo>__session-<session>/<archive-id>.txt` — optional session summary archives for lifecycle restore flows.
 
 ## Troubleshooting
@@ -419,7 +454,7 @@ Backward-compatible top-level module shims are retained (for example `codebridge
   - Active session logs are retained for 30 days.
   - Logs older than 30 days are mandatorily archived to `state.log_dir/session_jsonl/archive/...` as `.tgz`.
   - Archived logs are kept indefinitely.
-- Codex execution errors are also written as JSON lines to `state.log_dir/codex_errors.log` (contains args, return code, stderr tail, and retry notes).
+- Agent execution errors are also written as JSON lines to legacy `state.log_dir/codex_errors.log` (contains args, return code, stderr tail, and retry notes).
 
 ## Docs
 - Architecture diagram (Mermaid): `docs/architecture.mmd`
