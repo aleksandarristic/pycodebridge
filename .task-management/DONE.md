@@ -12,6 +12,10 @@ Format:
 
 ## Completed tasks
 
+- [TASK-0092] Rename channel prefix from codex- to code-.
+  - Completed: 2026-06-22
+  - Notes: DEFAULT_CHANNEL_REGEX → ^code-. All user-facing strings, docs (README, DISCORD.md, DOCKER.md), and example configs updated. Tests updated: channel names, hardcoded regex patterns, assertion strings. Added !c renamechannels/rc <old-prefix> <new-prefix> [--preview] DM admin command for live migration.
+
 - [TASK-0093] Surface tool calls and thinking blocks during long Claude runs.
   - Completed: 2026-06-11
   - Notes: Extended `NormalizedEvent` with `tool_calls` and `thinking` fields. `ClaudeBackend.parse()` now extracts `tool_use` and `thinking` content blocks from `assistant` events. `on_jsonl` relays a `[ToolName] \`input\`` label for every tool call (always, subject to `relay_output`), and thinking text gated on `show_reasoning_details` (default on). A module-level `_format_tool_call_label` helper formats the most descriptive input field per tool. New tests in `tests/test_claude_backend.py` cover extraction of all three block types.
