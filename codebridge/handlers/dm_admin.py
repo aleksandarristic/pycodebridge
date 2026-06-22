@@ -42,7 +42,6 @@ _DM_COMMAND_ALIASES = {
     "delete": "deleterepo",
     "ren": "renamerepo",
     "rename": "renamerepo",
-    "rc": "renamechannels",
     "opts": "options",
 }
 
@@ -61,7 +60,6 @@ _DM_SHORTCUT_COMMANDS = {
     "help",
     "lock",
     "options",
-    "renamechannels",
     "renamerepo",
     "repo",
     "repos",
@@ -100,8 +98,6 @@ _DM_SHORTCUT_ALIASES = (
     ("!renamerepo", "renamerepo"),
     ("!rename", "renamerepo"),
     ("!ren", "renamerepo"),
-    ("!renamechannels", "renamechannels"),
-    ("!rc", "renamechannels"),
     ("!reset", "reset"),
     ("!unpin", "unpin"),
     ("!lk", "lock"),
@@ -139,7 +135,6 @@ _DM_ADMIN_HELP_OVERVIEW_ORDER = (
     "config",
     "reset",
     "unpin",
-    "renamechannels",
     "create",
     "clone",
     "copy",
@@ -168,7 +163,6 @@ _DM_HELP_DETAILS: dict[str, tuple[str, str]] = {
     "config": ("config", "show effective config"),
     "reset": ("reset all", "request reset-all confirmation"),
     "unpin": ("unpin", "remove all but the last pin from every code channel"),
-    "renamechannels": ("renamechannels/rc <old-prefix> <new-prefix> [--preview]", "rename Discord channels by prefix"),
     "create": ("create/new <name>", "create repo"),
     "clone": ("clone <name> <url>", "clone repo"),
     "copy": ("copy/cp <from> <to>", "copy repo"),
@@ -486,50 +480,6 @@ async def dm_rename_repo(
     return None
 
 
-async def dm_rename_channels(
-    router: "Router",
-    event: MessageEvent,
-    sink: ResponseSink,
-    old_prefix: str,
-    new_prefix: str,
-    preview: bool,
-    entry: Optional[Entry],
-) -> None:
-    """Rename all guild text channels from old_prefix to new_prefix."""
-    fn = getattr(router, "_guild_text_channels_fn", None)
-    if not callable(fn):
-        await dm_reply(router, sink, entry, forbidden_message("renamechannels is not available (no guild channel access wired up)."))
-        return
-    try:
-        channels = await fn()
-    except Exception as exc:
-        await dm_reply(router, sink, entry, forbidden_message(f"Could not list guild channels: {exc}"))
-        return
-    matches = [ch for ch in channels if str(getattr(ch, "name", "")).startswith(old_prefix)]
-    if not matches:
-        await dm_reply(router, sink, entry, f"No channels found starting with `{old_prefix}`.")
-        return
-    lines = []
-    for ch in matches:
-        old_name = str(ch.name)
-        new_name = new_prefix + old_name[len(old_prefix):]
-        if preview:
-            lines.append(f"{old_name} → {new_name}")
-            continue
-        try:
-            await ch.edit(name=new_name)
-            lines.append(f"Renamed: {old_name} → {new_name}")
-        except Exception as exc:
-            lines.append(f"Failed {old_name}: {exc}")
-    label = "Preview" if preview else "Done"
-    await dm_reply(router, sink, entry, f"{label} ({len(matches)} channels):\n" + "\n".join(lines))
-    if not preview:
-        router.logger.info(
-            "dm.admin.renamechannels",
-            extra={"platform": event.platform, "user_id": event.author_id, "old_prefix": old_prefix, "new_prefix": new_prefix, "count": len(matches)},
-        )
-
-
 def _is_dm_admin(router: "Router", event: MessageEvent) -> bool:
     return event.platform == "discord" and router.cfg.discord.dm_admin_enabled and router._dm_admin_allowed(event.author_id)
 
@@ -645,8 +595,7 @@ async def _dispatch_prefixed_dm_command(
         "config",
         "reset",
         "unpin",
-        "renamechannels",
-        "create",
+            "create",
         "clone",
         "copy",
         "deleterepo",
@@ -731,15 +680,6 @@ async def _dispatch_prefixed_dm_command(
             return
         if cmd == "unpin":
             await router.handle_unpin_all_channels(sink)
-            return
-        if cmd == "renamechannels":
-            parts = rest.split()
-            preview = "--preview" in parts
-            filtered = [p for p in parts if p != "--preview"]
-            if len(filtered) < 2:
-                await send_forbidden("Usage: !c renamechannels <old-prefix> <new-prefix> [--preview]")
-                return
-            await dm_rename_channels(router, event, sink, filtered[0], filtered[1], preview, entry)
             return
         if cmd == "create":
             name = rest.strip()

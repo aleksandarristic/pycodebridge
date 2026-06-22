@@ -96,6 +96,7 @@ class RuntimeConfig:
     run_heartbeat_seconds: int = 120
     run_completion_min_seconds: int = 300
     show_reasoning_details: bool = True
+    show_tool_calls: bool = True
     output_flush_seconds: float = 0.4
 
 
@@ -341,6 +342,10 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
         runtime.get("show_reasoning_details", cfg.runtime.show_reasoning_details),
         "runtime.show_reasoning_details",
     )
+    cfg.runtime.show_tool_calls = _coerce_bool(
+        runtime.get("show_tool_calls", cfg.runtime.show_tool_calls),
+        "runtime.show_tool_calls",
+    )
     cfg.runtime.output_flush_seconds = max(
         0.0, float(runtime.get("output_flush_seconds", cfg.runtime.output_flush_seconds))
     )
@@ -465,6 +470,7 @@ def _apply_defaults(cfg: Config) -> None:
     if cfg.runtime.run_completion_min_seconds <= 0:
         cfg.runtime.run_completion_min_seconds = 300
     cfg.runtime.show_reasoning_details = _coerce_bool(cfg.runtime.show_reasoning_details, "runtime.show_reasoning_details")
+    cfg.runtime.show_tool_calls = _coerce_bool(cfg.runtime.show_tool_calls, "runtime.show_tool_calls")
     cfg.audit.redact = _coerce_bool(cfg.audit.redact, "audit.redact")
     if cfg.files.max_upload_mb <= 0:
         cfg.files.max_upload_mb = DEFAULT_MAX_UPLOAD_MB

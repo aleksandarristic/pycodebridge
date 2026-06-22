@@ -87,7 +87,7 @@ _RUN_HEARTBEAT_SECONDS = 120
 _RUN_COMPLETION_MIN_SECONDS = 300
 _RUN_KEY_RESULT_MAX = 180
 _FINAL_RESULT_EXIT_GRACE_SECONDS = 2.0
-_RUNTIME_OPTION_KEYS = ("run_heartbeat_seconds", "run_completion_min_seconds", "show_reasoning_details")
+_RUNTIME_OPTION_KEYS = ("run_heartbeat_seconds", "run_completion_min_seconds", "show_reasoning_details", "show_tool_calls")
 _TOP_LEVEL_SHORTCUT_ALIASES = (("!reset", "reset"),)
 _CODEX_UNSUPPORTED_CHATGPT_MODEL_RE = re.compile(
     r"The ['\"]([^'\"]+)['\"] model is not supported when using Codex with a ChatGPT account",
@@ -317,6 +317,7 @@ class Router:
                 1, min(86400, int(getattr(self.cfg.runtime, "run_completion_min_seconds", _RUN_COMPLETION_MIN_SECONDS)))
             ),
             "show_reasoning_details": bool(getattr(self.cfg.runtime, "show_reasoning_details", True)),
+            "show_tool_calls": bool(getattr(self.cfg.runtime, "show_tool_calls", True)),
         }
         self._runtime_options_global: Dict[str, Any] = {}
         self._runtime_options_channels: Dict[str, Dict[str, Any]] = {}
@@ -941,6 +942,10 @@ class Router:
             "reasoning_details": "show_reasoning_details",
             "show_reasoning": "show_reasoning_details",
             "runtime.show_reasoning_details": "show_reasoning_details",
+            "show_tool_calls": "show_tool_calls",
+            "tool_calls": "show_tool_calls",
+            "show_tools": "show_tool_calls",
+            "runtime.show_tool_calls": "show_tool_calls",
         }
         canonical = key_aliases.get(key)
         if not canonical:
@@ -2845,13 +2850,14 @@ class Router:
                 await self._emit_output(
                     sink, channel_id, session, repo_name, entry, text, coalescer, flush=awaiting
                 )
-        for call in evt.tool_calls:
-            label = _format_tool_call_label(call.get("name", "tool"), call.get("input") or {})
-            if tracker is not None:
-                tracker.events += 1
-                tracker.last = label
-            if relay_output:
-                await self._emit_output(sink, channel_id, session, repo_name, entry, label, coalescer)
+        if bool(self._runtime_option_value(channel_id, "show_tool_calls")):
+            for call in evt.tool_calls:
+                label = _format_tool_call_label(call.get("name", "tool"), call.get("input") or {})
+                if tracker is not None:
+                    tracker.events += 1
+                    tracker.last = label
+                if relay_output:
+                    await self._emit_output(sink, channel_id, session, repo_name, entry, label, coalescer)
         if bool(self._runtime_option_value(channel_id, "show_reasoning_details")):
             for thought in evt.thinking:
                 text = thought.strip()
@@ -3167,7 +3173,8 @@ class Router:
                 f"Allowed keys: {', '.join(_RUNTIME_OPTION_KEYS)}\n"
                 "Examples:\n"
                 "- !c options set run_heartbeat_seconds 120 local\n"
-                "- !c options set show_reasoning_details false global"
+                "- !c options set show_reasoning_details false global\n"
+                "- !c options set show_tool_calls false global"
             )
         return (
             "Usage: !c options [show] | !c options set <key> <value>\n"
@@ -3256,6 +3263,7 @@ class Router:
             f"- local.run_heartbeat_seconds: {effective['run_heartbeat_seconds']}",
             f"- local.run_completion_min_seconds: {effective['run_completion_min_seconds']}",
             f"- local.show_reasoning_details: {effective['show_reasoning_details']}",
+            f"- local.show_tool_calls: {effective['show_tool_calls']}",
         ]
         if is_dm:
             lines.extend(
@@ -3263,6 +3271,7 @@ class Router:
                     f"- global.run_heartbeat_seconds: {self._runtime_options_global.get('run_heartbeat_seconds', '<unset>')}",
                     f"- global.run_completion_min_seconds: {self._runtime_options_global.get('run_completion_min_seconds', '<unset>')}",
                     f"- global.show_reasoning_details: {self._runtime_options_global.get('show_reasoning_details', '<unset>')}",
+                    f"- global.show_tool_calls: {self._runtime_options_global.get('show_tool_calls', '<unset>')}",
                     "DM set usage: !c options set <key> <value> [local|global]",
                 ]
             )
