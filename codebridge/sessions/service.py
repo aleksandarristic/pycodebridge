@@ -405,6 +405,21 @@ class SessionService:
         """Set sticky session selection for a user."""
         self._state.update(lambda fs: set_sticky(fs, channel_id, user_id, _normalize_session_default(session)))
 
+    def update_worktree_path(self, channel_id: str, session: str, path: str) -> None:
+        """Persist the active worktree path for a session (empty string to clear)."""
+        session = _normalize_session_default(session)
+
+        def mutator(fs):
+            from .state import ChannelState, SessionState
+            ch = fs.channels.setdefault(channel_id, ChannelState())
+            ss = ch.sessions.get(session)
+            if ss is None:
+                ss = SessionState(repo_name="", repo_path="", thread_id="")
+                ch.sessions[session] = ss
+            ss.worktree_path = path
+
+        self._state.update(mutator)
+
 
 def _normalize_session_default(session: str) -> str:
     raw = (session or "").strip()

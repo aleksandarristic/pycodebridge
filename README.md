@@ -437,6 +437,29 @@ Core modules are now grouped by responsibility:
 
 Backward-compatible top-level module shims are retained (for example `codebridge/router.py`) and re-export from the new package layout.
 
+## Concurrent session isolation (worktrees)
+
+Without isolation, two sessions on the same repo share one working directory and can
+clobber each other's in-progress changes. Enable `worktrees` to give each session its
+own `git worktree` on a dedicated branch.
+
+- **How it works** — on session start, `git worktree add -b session/<key>/<ts> <path>` creates an isolated checkout. The agent subprocess runs there. On exit the branch and directory are removed (or kept, depending on `cleanup_on_end`).
+- **Branch names** — `session/<channel-slug>/<yyyymmdd-hhmmss>`, visible in `git branch -a`.
+- **Worktree paths** — siblings of the repo by default (`myapp-wt-<key>/`), or under `base_dir` if set.
+- **Cleanup modes**
+  - `remove` (default) — delete the worktree on exit; clean and ephemeral.
+  - `keep` — leave the branch and directory for manual inspection.
+  - `pr` — (future) push branch and open a draft PR, then remove.
+- **Startup pruning** — stale worktrees left by crashed sessions are pruned automatically via `git worktree prune` on each startup.
+- **Concurrency cap** — `max_per_repo` (default `8`) refuses new sessions when too many worktrees already exist for a repo.
+
+Enable in config:
+```yaml
+worktrees:
+  enabled: true
+  cleanup_on_end: remove  # remove | keep | pr
+```
+
 ## State And Artifact Map
 - `state.data_dir/state.json` — canonical persisted channel/session metadata, DM bindings, and runtime options.
 - `state.data_dir/state.json.lock` — file lock used for atomic state mutations.

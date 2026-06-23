@@ -86,3 +86,23 @@ files:
 repo_bootstrap:
   agents_template: ""
   spec_prompt: ""  # optional prompt profile override for `!c spec`
+
+worktrees:
+  # Give each session its own git worktree so concurrent sessions on the same
+  # repo cannot interfere with each other's uncommitted changes.
+  enabled: false
+
+  # Directory where worktree copies are created.
+  # Leave empty to create them as siblings of the repo directory
+  # (e.g. /home/you/Code/myapp-wt-<session-key>/).
+  base_dir: ""
+
+  # Refuse to create a new session if this many worktrees already exist for
+  # the repo. Protects against runaway session accumulation.
+  max_per_repo: 8
+
+  # What to do with the worktree when the session run ends.
+  #   remove — delete the worktree directory (default, clean operation)
+  #   keep   — leave the branch and directory for manual inspection or PR
+  #   pr     — (future) push branch and open a draft PR, then remove
+  cleanup_on_end: remove
