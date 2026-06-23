@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0106] Failed dispatch close preserves the active task branch for retry.
+  - Completed: 2026-06-23
+  - Notes: Changed `TaskCloser.close()` to clear task state and clean worker branches only after PR creation or merge succeeds. Updated regression coverage so failed close attempts keep the task branch and skip cleanup.
+
 - [TASK-0105] Dispatch worker changes are merged into the task branch closed by `!c done`.
   - Completed: 2026-06-23
   - Notes: Merged successful worker branches back into the persisted task branch after worker runs and before dispatch completion, reporting merge conflicts as failed agent results. Added unit coverage for merge calls/failures and a real-git regression proving worker commits are present on the task branch closed by `!c done`.

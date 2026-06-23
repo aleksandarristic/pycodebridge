@@ -43,14 +43,13 @@ class TaskCloser:
         if not task_branch:
             raise TaskCloseError("No active task branch. Start a dispatch with @agent first.")
 
-        try:
-            if mode == "merge":
-                await self._merge(repo_path, task_branch, sink)
-            else:
-                await self._open_pr(repo_path, task_branch, sink)
-        finally:
-            await self._cleanup_worker_branches(repo_path, task_branch)
-            self._coordinator.clear_task_branch(channel_id, session)
+        if mode == "merge":
+            await self._merge(repo_path, task_branch, sink)
+        else:
+            await self._open_pr(repo_path, task_branch, sink)
+
+        await self._cleanup_worker_branches(repo_path, task_branch)
+        self._coordinator.clear_task_branch(channel_id, session)
 
     # ------------------------------------------------------------------
 

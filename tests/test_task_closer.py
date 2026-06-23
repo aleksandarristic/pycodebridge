@@ -128,16 +128,17 @@ def test_close_merge_mode_calls_merge(monkeypatch):
     assert calls[0][0] == "merge"
 
 
-def test_close_clears_task_branch_even_on_error(monkeypatch):
+def test_close_preserves_task_branch_on_error(monkeypatch):
     coord = FakeCoordinator(task_branch="task/myrepo/20260623-140000")
     closer = TaskCloser(_make_cfg(), coord)
     sink = FakeSink()
+    cleaned = []
 
     async def fake_open_pr(self, repo_path, task_branch, sink):
         raise TaskCloseError("push failed")
 
     async def fake_cleanup(self, repo_path, task_branch):
-        pass
+        cleaned.append(task_branch)
 
     monkeypatch.setattr(TaskCloser, "_open_pr", fake_open_pr)
     monkeypatch.setattr(TaskCloser, "_cleanup_worker_branches", fake_cleanup)
@@ -145,8 +146,8 @@ def test_close_clears_task_branch_even_on_error(monkeypatch):
     with pytest.raises(TaskCloseError):
         run(closer.close("chan1", "default", "/repo", "pr", sink))
 
-    # branch must be cleared even after error
-    assert coord.get_task_branch("chan1", "default") == ""
+    assert coord.get_task_branch("chan1", "default") == "task/myrepo/20260623-140000"
+    assert cleaned == []
 
 
 def test_cleanup_called_after_close(monkeypatch):

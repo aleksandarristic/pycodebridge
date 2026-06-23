@@ -10,16 +10,6 @@ Rules:
 
 ## Bug backlog
 
-- [TASK-0106] Failed dispatch close clears the active task branch and prevents retry.
-  - Reported: 2026-06-23
-  - Context: `TaskCloser.close()` clears `task_branch` in a `finally` block even when `_open_pr()` or `_merge()` raises `TaskCloseError`, such as a push failure, missing `gh` auth, merge conflict, or remote rejection.
-  - Impact: A transient close failure loses the session's active task branch pointer, so users cannot retry `!c done` without manually recovering state or starting a new dispatch.
-  - Investigate: `codebridge/dispatch/closer.py`, router handling for `!c done`, and tests currently expecting branch clearing on close errors.
-  - Acceptance criteria:
-    - Active task branch state is preserved when PR creation or merge fails.
-    - Worker branch cleanup only runs when it is safe for retry semantics.
-    - Regression coverage verifies a failed close leaves the task branch available and a successful close clears it.
-
 - [TASK-0107] Worktree cleanup leaves stale Git worktree entries when `worktrees.base_dir` is outside the repo parent.
   - Reported: 2026-06-23
   - Context: `WorktreeManager.remove()` tries to rediscover the owning repo by scanning siblings of the worktree path. When `base_dir` points to an external directory, the original repo is not a sibling, so cleanup deletes the directory with `shutil.rmtree()` without running `git worktree remove`.
