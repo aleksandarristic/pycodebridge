@@ -47,6 +47,7 @@ from ..services import git_bootstrap
 from ..services.worktree import WorktreeError, WorktreeManager
 from ..dispatch.parser import parse_dispatch
 from ..dispatch.orchestrator import Orchestrator
+from ..dispatch.closer import TaskCloser, TaskCloseError, parse_close_mode
 from ..commands import help as help_renderer
 from .helpers import (
     DEFAULT_SESSION,
@@ -273,7 +274,7 @@ def _git_commit_hash() -> str:
 
 class Router:
     """Main command router for Discord messages."""
-    def __init__(self, cfg: cfgmod.Config, state: Store, audit: AuditLogger, runner: AgentBackend, coordinator: SessionCoordinator, logger, wt_manager: Optional[WorktreeManager] = None, orchestrator: Optional[Orchestrator] = None):
+    def __init__(self, cfg: cfgmod.Config, state: Store, audit: AuditLogger, runner: AgentBackend, coordinator: SessionCoordinator, logger, wt_manager: Optional[WorktreeManager] = None, orchestrator: Optional[Orchestrator] = None, task_closer: Optional[TaskCloser] = None):
         self.cfg = cfg
         self.state = state
         self.audit = audit
@@ -281,6 +282,7 @@ class Router:
         self.logger = logger
         self._wt_manager = wt_manager
         self._orchestrator = orchestrator
+        self._task_closer = task_closer
         self._usage: Dict[str, Dict[str, UsageStats]] = {}
         self.coordinator = coordinator
         self._command_registry, self._command_specs = command_registry.build_registry()
@@ -594,6 +596,18 @@ class Router:
 
         repo_path = await self._repo_path_or_forbidden(sink, repo_name)
         if repo_path is None:
+            return
+
+        if canonical_cmd == "done":
+            if self._task_closer is not None:
+                session = self.current_session_for_event(event)
+                mode = parse_close_mode(rest, self.cfg.dispatch.close_mode)
+                try:
+                    await self._task_closer.close(event.channel_id, session, repo_path, mode, sink)
+                except TaskCloseError as exc:
+                    await self.reply_forbidden(sink, str(exc))
+            else:
+                await self.reply_forbidden(sink, "Dispatch not enabled. Set worktrees.enabled: true in config.")
             return
 
         quit_session = parse_session_quit_alias(fields)

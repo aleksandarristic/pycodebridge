@@ -17,6 +17,7 @@ from codebridge.platform.discord_bot import build_client
 from codebridge.services.health import start_health_server
 from codebridge.services.worktree import WorktreeManager
 from codebridge.dispatch.orchestrator import Orchestrator
+from codebridge.dispatch.closer import TaskCloser
 from codebridge.routing.router import Router
 from codebridge.sessions.coordinator import SessionCoordinator
 from codebridge.sessions.state import Store
@@ -80,9 +81,11 @@ async def main() -> None:
                 if entry.is_dir() and os.path.isdir(os.path.join(entry.path, ".git")):
                     await wt_manager.prune_stale(entry.path)
     orchestrator: Orchestrator | None = None
+    task_closer: TaskCloser | None = None
     if wt_manager is not None:
         orchestrator = Orchestrator(cfg, wt_manager, coordinator)
-    router = Router(cfg, state_store, audit_logger, runner, coordinator, logger, wt_manager=wt_manager, orchestrator=orchestrator)
+        task_closer = TaskCloser(cfg, coordinator)
+    router = Router(cfg, state_store, audit_logger, runner, coordinator, logger, wt_manager=wt_manager, orchestrator=orchestrator, task_closer=task_closer)
     await router.bootstrap_git_config()
     health_server = None
     if (cfg.runtime.health_bind or "").strip():
