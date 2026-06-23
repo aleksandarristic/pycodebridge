@@ -317,6 +317,12 @@ class _FakeSink:
         self.files.append((path, filename, thread_id, reply_to_id))
 
 
+class _FailingSendSink(_FakeSink):
+    async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
+        _ = (content, thread_id, reply_to_id)
+        raise RuntimeError("Separator is not found, and chunk exceed the limit")
+
+
 class _FakeAsyncContext:
     async def __aenter__(self):
         return None
@@ -3299,6 +3305,30 @@ def test_run_codex_wraps_duplicate_unsupported_model_jsonl_error(tmp_path):
     assert "`!reset default`" in output
     assert '"type": "error"' not in output
     assert '{"type":"error"' not in output
+
+
+def test_relay_output_send_failure_does_not_abort_run(tmp_path):
+    router, _ = _build_router(tmp_path)
+    sink = _FailingSendSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router._relay_output_text(
+            sink,
+            "chan",
+            "default",
+            "repo",
+            None,
+            "x" * 200,
+        )
+
+    asyncio.run(run())
+
+    assert any(
+        level == "warning"
+        and name == "discord.output_send_failed"
+        and extra["error"] == "Separator is not found, and chunk exceed the limit"
+        for level, name, extra in router.logger.entries
+    )
 
 
 def test_run_codex_unsupported_configured_default_points_to_config(tmp_path):

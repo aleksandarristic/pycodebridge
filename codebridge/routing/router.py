@@ -3097,7 +3097,25 @@ class Router:
                 {"chunk": chunk},
                 repo_name=repo_name,
             )
-            await sink.send(chunk)
+            try:
+                await sink.send(chunk)
+            except Exception as exc:
+                self.logger.warning(
+                    "discord.output_send_failed",
+                    extra={
+                        "channel_id": channel_id,
+                        "repo": repo_name,
+                        "session": session or DEFAULT_SESSION,
+                        "error": str(exc),
+                    },
+                )
+                self._session_log.append(
+                    channel_id,
+                    session or DEFAULT_SESSION,
+                    "discord.output_failed",
+                    {"error": str(exc), "chunk_len": len(chunk)},
+                    repo_name=repo_name,
+                )
 
     def _prune_awaiting_input(self, channel_id: str) -> dict[str, float]:
         sessions = self._awaiting_input.get(channel_id, {})
