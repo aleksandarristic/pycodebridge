@@ -8,7 +8,7 @@ from typing import List, Optional
 
 KNOWN_AGENTS: frozenset[str] = frozenset({"codex", "claude", "gemini"})
 
-_MENTION_RE = re.compile(r"@([A-Za-z]+)")
+_MENTION_RE = re.compile(r"(?<![A-Za-z0-9._-])@([A-Za-z]+)\b(?![A-Za-z0-9._-])")
 _WHITESPACE_RE = re.compile(r"\s+")
 
 

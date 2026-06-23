@@ -71,6 +71,24 @@ def test_unknown_at_mention_left_in_prompt():
     assert "do it" in spec.prompt
 
 
+def test_agent_substrings_inside_emails_do_not_dispatch():
+    assert parse_dispatch("email user@codex.com about auth") is None
+    assert parse_dispatch("send this to ops@gemini.dev") is None
+
+
+def test_agent_substrings_inside_words_do_not_dispatch():
+    assert parse_dispatch("use foo@codex for the config key") is None
+    assert parse_dispatch("set name=@claude-review in config") is None
+    assert parse_dispatch("look at @gemini-cli behavior") is None
+
+
+def test_agent_mentions_allow_punctuation_boundaries():
+    spec = parse_dispatch("(@codex), please implement auth")
+    assert spec is not None
+    assert spec.agents == ["codex"]
+    assert spec.prompt == "(), please implement auth"
+
+
 def test_duplicate_agent_deduplicated():
     spec = parse_dispatch("@codex @codex implement")
     assert spec is not None

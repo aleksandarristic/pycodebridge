@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0110] Dispatch parser ignores `@agent` substrings inside emails and words.
+  - Completed: 2026-06-23
+  - Notes: Tightened dispatch mention parsing to require standalone mention boundaries, preserving emails, identifiers, and hyphenated tokens that contain known agent names. Added parser regression coverage for email, word-boundary, hyphenated, and punctuation cases.
+
 - [TASK-0109] Repeated dispatches create fresh worker branches.
   - Completed: 2026-06-23
   - Notes: Added unique run IDs to worker branch names so repeated dispatches for the same agent fork from the current task branch instead of reusing stale worker state. Updated dispatch docs/examples and added regression coverage for repeated same-agent dispatch.

@@ -10,16 +10,6 @@ Rules:
 
 ## Bug backlog
 
-- [TASK-0110] Dispatch parser treats `@agent` substrings inside emails or words as agent mentions.
-  - Reported: 2026-06-23
-  - Context: `parse_dispatch()` uses `_MENTION_RE = re.compile(r"@([A-Za-z]+)")`, so strings such as `user@codex.com`, `foo@gemini`, or code/config text containing `@claude` can be parsed as dispatch requests. `_strip_known_mentions()` then removes the substring from the prompt.
-  - Impact: Normal prompts can be accidentally routed to dispatch, and prompt text can be corrupted by mention stripping even when the user did not intend to invoke an agent.
-  - Investigate: `codebridge/dispatch/parser.py`, router dispatch interception in command/plain-prompt flows, and parser tests for mention boundaries.
-  - Acceptance criteria:
-    - Agent mentions are recognized only as standalone Discord-style command tokens, not inside emails, identifiers, or arbitrary words.
-    - Prompt stripping preserves non-dispatch text containing `@codex`, `@claude`, or `@gemini` substrings.
-    - Regression coverage includes email-address and word-boundary cases.
-
 - [TASK-0090] Gemini streamed Discord output chunks can arrive out of order.
   - Reported: 2026-06-11
   - Context: In a Discord channel using `!agent gemini`, the assistant response was delivered as chunks in the wrong order:
