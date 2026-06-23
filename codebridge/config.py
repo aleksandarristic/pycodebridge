@@ -29,6 +29,17 @@ DEFAULT_WORKTREE_BASE_DIR = ""
 DEFAULT_WORKTREE_MAX_PER_REPO = 8
 DEFAULT_WORKTREE_CLEANUP_ON_END = "remove"
 
+DEFAULT_DISPATCH_OUTPUT_MODE = "both"   # per_agent | aggregate | both
+DEFAULT_DISPATCH_CLOSE_MODE = "pr"      # pr | merge
+DEFAULT_DISPATCH_PLAN_PROMPT = (
+    "You are the orchestrator for a multi-agent coding session.\n"
+    "Analyse the user request below and produce a concise implementation plan.\n"
+    "The plan will be passed as context to the other agents that will implement it.\n"
+    "Keep the plan clear and actionable.\n\n"
+    "User request: {{USER_REQUEST}}\n\n"
+    "Agents that will implement the plan: {{AGENTS}}\n"
+)
+
 DEFAULT_START_PROMPT = (
     "Discord bridge session for {{REPO_NAME}}. Work only in this repo and keep replies concise.\n"
 )
@@ -178,6 +189,14 @@ class WorktreeConfig:
 
 
 @dataclass
+class DispatchConfig:
+    """Multi-agent dispatch configuration."""
+    output_mode: str = DEFAULT_DISPATCH_OUTPUT_MODE   # per_agent | aggregate | both
+    close_mode: str = DEFAULT_DISPATCH_CLOSE_MODE     # pr | merge
+    plan_prompt: str = DEFAULT_DISPATCH_PLAN_PROMPT   # template for orchestrator planning step
+
+
+@dataclass
 class AgentConfig:
     """Agent backend configuration."""
     default_backend: str = "codex"
@@ -199,6 +218,7 @@ class Config:
     files: FilesConfig = field(default_factory=FilesConfig)
     repo_bootstrap: RepoBootstrapConfig = field(default_factory=RepoBootstrapConfig)
     worktrees: WorktreeConfig = field(default_factory=WorktreeConfig)
+    dispatch: DispatchConfig = field(default_factory=DispatchConfig)
 
     def discord_token(self) -> str:
         """Return the Discord token from the configured env var."""
@@ -433,6 +453,17 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
         worktrees.get("cleanup_on_end", cfg.worktrees.cleanup_on_end) or DEFAULT_WORKTREE_CLEANUP_ON_END
     )
 
+    dispatch = raw.get("dispatch", {}) or {}
+    cfg.dispatch.output_mode = str(
+        dispatch.get("output_mode", cfg.dispatch.output_mode) or DEFAULT_DISPATCH_OUTPUT_MODE
+    )
+    cfg.dispatch.close_mode = str(
+        dispatch.get("close_mode", cfg.dispatch.close_mode) or DEFAULT_DISPATCH_CLOSE_MODE
+    )
+    cfg.dispatch.plan_prompt = str(
+        dispatch.get("plan_prompt", cfg.dispatch.plan_prompt) or DEFAULT_DISPATCH_PLAN_PROMPT
+    )
+
 
 def _apply_defaults(cfg: Config) -> None:
     """Fill missing values with defaults."""
@@ -516,6 +547,12 @@ def _apply_defaults(cfg: Config) -> None:
     cfg.worktrees.enabled = _coerce_bool(cfg.worktrees.enabled, "worktrees.enabled")
     if not cfg.worktrees.cleanup_on_end:
         cfg.worktrees.cleanup_on_end = DEFAULT_WORKTREE_CLEANUP_ON_END
+    if not cfg.dispatch.output_mode:
+        cfg.dispatch.output_mode = DEFAULT_DISPATCH_OUTPUT_MODE
+    if not cfg.dispatch.close_mode:
+        cfg.dispatch.close_mode = DEFAULT_DISPATCH_CLOSE_MODE
+    if not cfg.dispatch.plan_prompt:
+        cfg.dispatch.plan_prompt = DEFAULT_DISPATCH_PLAN_PROMPT
 
 
 def _expand_paths(cfg: Config) -> None:
@@ -557,6 +594,15 @@ def _validate(cfg: Config) -> None:
     cfg.worktrees.cleanup_on_end = cleanup
     if cfg.worktrees.max_per_repo < 1 or cfg.worktrees.max_per_repo > 64:
         raise ValueError("worktrees.max_per_repo must be between 1 and 64")
+
+    output_mode = (cfg.dispatch.output_mode or "").strip().lower()
+    if output_mode not in {"per_agent", "aggregate", "both"}:
+        raise ValueError("dispatch.output_mode must be per_agent|aggregate|both")
+    cfg.dispatch.output_mode = output_mode
+    close_mode = (cfg.dispatch.close_mode or "").strip().lower()
+    if close_mode not in {"pr", "merge"}:
+        raise ValueError("dispatch.close_mode must be pr|merge")
+    cfg.dispatch.close_mode = close_mode
 
     level = cfg.runtime.log_level.lower()
     if level not in {"debug", "info", "warn", "warning", "error"}:
