@@ -82,7 +82,7 @@ class WorktreeManager:
     async def prune_stale(self, repo_path: str) -> None:
         """Run git worktree prune to clean up dead worktree refs. Best-effort."""
         try:
-            await _git(repo_path, ["worktree", "prune"])
+            await _git(repo_path, ["worktree", "prune", "--expire", "now"])
         except WorktreeError as exc:
             _log.warning("worktree.prune_failed", extra={"repo": repo_path, "error": str(exc)})
 
