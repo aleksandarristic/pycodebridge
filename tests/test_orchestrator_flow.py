@@ -24,18 +24,6 @@ def run(coro):
     return asyncio.run(coro)
 
 
-@pytest.fixture(autouse=True)
-def no_real_orchestrator_git(monkeypatch, request):
-    if request.node.name == "test_successful_worker_commit_is_merged_to_task_branch":
-        return
-    from codebridge.dispatch import orchestrator as orch_mod
-
-    async def fake_git(repo_path, args):
-        return None
-
-    monkeypatch.setattr(orch_mod, "_git", fake_git)
-
-
 # ---------------------------------------------------------------------------
 # Fakes
 # ---------------------------------------------------------------------------
@@ -293,20 +281,13 @@ def test_worktree_create_failure_returns_gracefully(monkeypatch):
 
 def test_worker_branches_forked_from_task_branch(monkeypatch):
     from codebridge.agents import base as base_mod
-    from codebridge.dispatch import orchestrator as orch_mod
 
     async def fake_run(self_b, opts):
         if opts.on_exit:
             await opts.on_exit(None, 0)
         return _FakeProcess()
 
-    merge_calls = []
-
-    async def fake_git(repo_path, args):
-        merge_calls.append((repo_path, args))
-
     monkeypatch.setattr(base_mod.AgentBackend, "run", fake_run)
-    monkeypatch.setattr(orch_mod, "_git", fake_git)
 
     wt = FakeWorktreeManager()
     coord = FakeCoordinator()
@@ -326,45 +307,9 @@ def test_worker_branches_forked_from_task_branch(monkeypatch):
     task_branch = coord.get_task_branch("chan1", "default")
     worker_creates = [c for c in wt.created if c.get("base_branch") == task_branch]
     assert len(worker_creates) >= 1
-    assert [args[0] for _, args in merge_calls] == ["merge", "merge"]
-    assert all(args[2] in {f"{task_branch}-codex", f"{task_branch}-gemini"} for _, args in merge_calls)
 
 
-def test_worker_merge_failure_marks_agent_failed(monkeypatch):
-    from codebridge.agents import base as base_mod
-    from codebridge.dispatch import orchestrator as orch_mod
-
-    async def fake_run(self_b, opts):
-        if opts.on_exit:
-            await opts.on_exit(None, 0)
-        return _FakeProcess()
-
-    async def fake_git(repo_path, args):
-        raise orch_mod.OrchestratorError("merge conflict")
-
-    monkeypatch.setattr(base_mod.AgentBackend, "run", fake_run)
-    monkeypatch.setattr(orch_mod, "_git", fake_git)
-
-    wt = FakeWorktreeManager()
-    coord = FakeCoordinator()
-    cfg = _make_cfg()
-    orch = Orchestrator(cfg, wt, coord)
-    sink = FakeSink()
-
-    spec = DispatchSpec(
-        agents=["codex"],
-        prompt="build feature",
-        is_orchestrated=False,
-        is_fanout=False,
-        raw="@codex build feature",
-    )
-    run(orch.run(spec, "chan1", "default", "/repo", "myrepo", sink))
-
-    assert any("❌ ⚙ @codex failed: failed to merge" in msg for msg in sink.messages)
-    assert any("**Dispatch complete** — 0/1 agent(s) succeeded" in msg for msg in sink.messages)
-
-
-def test_successful_worker_commit_is_merged_to_task_branch(monkeypatch, tmp_path):
+def test_successful_worker_commit_stays_on_worker_branch_until_promotion(monkeypatch, tmp_path):
     from codebridge.agents import base as base_mod
     from codebridge.services.worktree import WorktreeManager
 
@@ -419,10 +364,17 @@ def test_successful_worker_commit_is_merged_to_task_branch(monkeypatch, tmp_path
     run(orch.run(spec, "chan1", "default", str(repo), "myrepo", sink))
 
     task_branch = coord.get_task_branch("chan1", "default")
-    tree = subprocess.run(
+    task_tree = subprocess.run(
         ["git", "-C", str(repo), "ls-tree", "-r", "--name-only", task_branch],
         check=True,
         capture_output=True,
         text=True,
     ).stdout
-    assert "worker.txt" in tree.splitlines()
+    worker_tree = subprocess.run(
+        ["git", "-C", str(repo), "ls-tree", "-r", "--name-only", f"{task_branch}-codex"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert "worker.txt" not in task_tree.splitlines()
+    assert "worker.txt" in worker_tree.splitlines()

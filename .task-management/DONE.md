@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0111] Dispatch preserves worker branch handoff instead of auto-merging.
+  - Completed: 2026-06-23
+  - Notes: Removed automatic successful-worker merges into the task branch and restored the handoff model where worker branches remain separate until explicit promotion. Updated orchestrator regression coverage to verify committed worker changes stay on the worker branch while the task branch remains unchanged.
+
 - [TASK-0107] Worktree cleanup unregisters external `base_dir` worktrees.
   - Completed: 2026-06-23
   - Notes: Resolved linked worktree owners from the worktree `.git` file before falling back to sibling repo discovery, so external `worktrees.base_dir` cleanup runs `git worktree remove` against the correct repo. Added regression coverage proving external worktree removal clears `count_for_repo()` immediately and leaves no prunable entry.

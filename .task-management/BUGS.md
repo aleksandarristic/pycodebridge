@@ -20,16 +20,6 @@ Rules:
     - `files_changed` reflects committed and uncommitted worker changes.
     - Regression coverage proves an agent that writes a file without committing still leaves a useful review artifact or returns an actionable failure.
 
-- [TASK-0111] Dispatch auto-merges worker branches and bypasses the handoff selection workflow.
-  - Reported: 2026-06-23
-  - Context: The dispatch task specs and examples describe worker branches as handoff artifacts for human comparison and manual promotion, but `Orchestrator.run()` now calls `_integrate_worker_results()` and merges every successful worker branch back into the task branch automatically.
-  - Impact: Fan-out dispatch no longer preserves independent alternatives for explicit selection; multiple successful agents can be merged into the task branch without review, conflict policy, or an operator choosing the preferred result.
-  - Investigate: `codebridge/dispatch/orchestrator.py` automatic integration added in `TASK-0105`, dispatch docs/examples, and whether close should require explicit promotion before deleting worker branches.
-  - Acceptance criteria:
-    - Worker branches are not merged into the task branch unless the operator explicitly promotes a result or the dispatch mode clearly requests automatic integration.
-    - Fan-out handoff keeps alternatives separate until selection.
-    - Regression coverage proves a fan-out dispatch leaves the task branch unchanged until an explicit promotion/close workflow accepts a worker branch.
-
 - [TASK-0109] Repeated dispatches reuse stale per-agent worker branches.
   - Reported: 2026-06-23
   - Context: Worker branches are named `f"{task_branch}-{agent}"`. On a second dispatch in the same task/session, `WorktreeManager._worktree_add()` sees that branch already exists and checks it out instead of creating a fresh branch from the current task branch.
