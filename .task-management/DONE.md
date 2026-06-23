@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0105] Dispatch worker changes are merged into the task branch closed by `!c done`.
+  - Completed: 2026-06-23
+  - Notes: Merged successful worker branches back into the persisted task branch after worker runs and before dispatch completion, reporting merge conflicts as failed agent results. Added unit coverage for merge calls/failures and a real-git regression proving worker commits are present on the task branch closed by `!c done`.
+
 - [TASK-0104] Dispatch documentation and worked examples.
   - Completed: 2026-06-23
   - Notes: docs/dispatch.md reference, three examples under docs/examples/, README Multi-agent dispatch section.

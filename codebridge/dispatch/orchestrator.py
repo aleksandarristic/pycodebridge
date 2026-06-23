@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import re
@@ -104,6 +105,9 @@ class Orchestrator:
                 result = await self._run_worker(agent, repo_path, task_branch, worker_prompt, output_handler)
                 results.append(result)
 
+        await self._integrate_worker_results(repo_path, task_branch, results)
+        for result in results:
+            await output_handler.on_agent_done(result)
         await output_handler.on_all_done(results)
 
     # ------------------------------------------------------------------
@@ -136,7 +140,7 @@ class Orchestrator:
             await sink.send(f"Dispatch error: {exc}")
             return None, task_branch
 
-        result = await self._run_backend("claude", repo_path, task_branch, plan_prompt, branch_is_base=True)
+        result = await self._run_backend("claude", repo_path, task_branch, plan_prompt, handler, branch_is_base=True)
         await handler.on_agent_done(result)
 
         if not result.success:
@@ -171,10 +175,45 @@ class Orchestrator:
         """Run a single worker agent on a fork of the task branch."""
         await handler.on_agent_start(agent)
         result = await self._run_backend(
-            agent, repo_path, task_branch, prompt, branch_is_base=False
+            agent, repo_path, task_branch, prompt, handler, branch_is_base=False
         )
-        await handler.on_agent_done(result)
         return result
+
+    async def _integrate_worker_results(
+        self,
+        repo_path: str,
+        task_branch: str,
+        results: List[AgentResult],
+    ) -> None:
+        """Merge successful worker branches back into the task branch sequentially."""
+        for result in results:
+            if not result.success or not result.branch or result.branch == task_branch:
+                continue
+            try:
+                await self._merge_worker_branch(repo_path, task_branch, result.branch)
+            except OrchestratorError as exc:
+                result.success = False
+                result.error = f"failed to merge {result.branch} into {task_branch}: {exc}"
+
+    async def _merge_worker_branch(self, repo_path: str, task_branch: str, worker_branch: str) -> None:
+        """Merge a completed worker branch into the persistent task branch."""
+        try:
+            wt_path = await self._wt_manager.create(
+                repo_path,
+                f"{_branch_to_slug(task_branch)}-integrate",
+                branch_name=task_branch,
+            )
+        except WorktreeError as exc:
+            raise OrchestratorError(str(exc)) from exc
+
+        try:
+            await _git(wt_path, ["merge", "--no-ff", worker_branch, "-m", f"Merge {worker_branch}"])
+        except OrchestratorError:
+            with contextlib.suppress(OrchestratorError):
+                await _git(wt_path, ["merge", "--abort"])
+            raise
+        finally:
+            await self._wt_manager.remove(wt_path)
 
     async def _run_backend(
         self,
@@ -182,6 +221,7 @@ class Orchestrator:
         repo_path: str,
         base_or_task_branch: str,
         prompt: str,
+        handler: DispatchOutputHandler,
         branch_is_base: bool,
     ) -> AgentResult:
         """
@@ -256,12 +296,13 @@ class Orchestrator:
             return AgentResult(
                 agent=agent,
                 success=success,
+                branch=worker_branch,
                 files_changed=files_changed,
                 summary=summary,
             )
         except Exception as exc:
             _log.warning("orchestrator.agent_failed", extra={"agent": agent, "error": str(exc)})
-            return AgentResult(agent=agent, success=False, error=str(exc))
+            return AgentResult(agent=agent, success=False, branch=worker_branch, error=str(exc))
         finally:
             await self._wt_manager.remove(wt_path)
 
@@ -295,3 +336,16 @@ async def _count_changed_files(wt_path: str, base_branch: str) -> int:
         return len(lines)
     except Exception:
         return 0
+
+
+async def _git(repo_path: str, args: List[str]) -> None:
+    """Run a git command and raise OrchestratorError on failure."""
+    proc = await asyncio.create_subprocess_exec(
+        "git", "-C", repo_path, *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr_bytes = await proc.communicate()
+    if proc.returncode != 0:
+        stderr = (stderr_bytes or b"").decode("utf-8", errors="replace").strip()
+        raise OrchestratorError(f"git {' '.join(args)} failed: {stderr}")

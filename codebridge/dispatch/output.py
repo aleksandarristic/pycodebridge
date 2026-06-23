@@ -19,6 +19,7 @@ class AgentResult:
     """Result of a single agent run."""
     agent: str
     success: bool
+    branch: str = ""
     files_changed: int = 0
     summary: str = ""
     error: str = ""

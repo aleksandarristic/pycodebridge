@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import subprocess
 from dataclasses import dataclass, field
 from typing import List, Optional
 from unittest.mock import MagicMock
@@ -20,6 +22,18 @@ from codebridge.services.worktree import WorktreeError
 
 def run(coro):
     return asyncio.run(coro)
+
+
+@pytest.fixture(autouse=True)
+def no_real_orchestrator_git(monkeypatch, request):
+    if request.node.name == "test_successful_worker_commit_is_merged_to_task_branch":
+        return
+    from codebridge.dispatch import orchestrator as orch_mod
+
+    async def fake_git(repo_path, args):
+        return None
+
+    monkeypatch.setattr(orch_mod, "_git", fake_git)
 
 
 # ---------------------------------------------------------------------------
@@ -279,13 +293,20 @@ def test_worktree_create_failure_returns_gracefully(monkeypatch):
 
 def test_worker_branches_forked_from_task_branch(monkeypatch):
     from codebridge.agents import base as base_mod
+    from codebridge.dispatch import orchestrator as orch_mod
 
     async def fake_run(self_b, opts):
         if opts.on_exit:
             await opts.on_exit(None, 0)
         return _FakeProcess()
 
+    merge_calls = []
+
+    async def fake_git(repo_path, args):
+        merge_calls.append((repo_path, args))
+
     monkeypatch.setattr(base_mod.AgentBackend, "run", fake_run)
+    monkeypatch.setattr(orch_mod, "_git", fake_git)
 
     wt = FakeWorktreeManager()
     coord = FakeCoordinator()
@@ -305,3 +326,103 @@ def test_worker_branches_forked_from_task_branch(monkeypatch):
     task_branch = coord.get_task_branch("chan1", "default")
     worker_creates = [c for c in wt.created if c.get("base_branch") == task_branch]
     assert len(worker_creates) >= 1
+    assert [args[0] for _, args in merge_calls] == ["merge", "merge"]
+    assert all(args[2] in {f"{task_branch}-codex", f"{task_branch}-gemini"} for _, args in merge_calls)
+
+
+def test_worker_merge_failure_marks_agent_failed(monkeypatch):
+    from codebridge.agents import base as base_mod
+    from codebridge.dispatch import orchestrator as orch_mod
+
+    async def fake_run(self_b, opts):
+        if opts.on_exit:
+            await opts.on_exit(None, 0)
+        return _FakeProcess()
+
+    async def fake_git(repo_path, args):
+        raise orch_mod.OrchestratorError("merge conflict")
+
+    monkeypatch.setattr(base_mod.AgentBackend, "run", fake_run)
+    monkeypatch.setattr(orch_mod, "_git", fake_git)
+
+    wt = FakeWorktreeManager()
+    coord = FakeCoordinator()
+    cfg = _make_cfg()
+    orch = Orchestrator(cfg, wt, coord)
+    sink = FakeSink()
+
+    spec = DispatchSpec(
+        agents=["codex"],
+        prompt="build feature",
+        is_orchestrated=False,
+        is_fanout=False,
+        raw="@codex build feature",
+    )
+    run(orch.run(spec, "chan1", "default", "/repo", "myrepo", sink))
+
+    assert any("❌ ⚙ @codex failed: failed to merge" in msg for msg in sink.messages)
+    assert any("**Dispatch complete** — 0/1 agent(s) succeeded" in msg for msg in sink.messages)
+
+
+def test_successful_worker_commit_is_merged_to_task_branch(monkeypatch, tmp_path):
+    from codebridge.agents import base as base_mod
+    from codebridge.services.worktree import WorktreeManager
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "t"], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "t@t"], check=True, capture_output=True)
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "t",
+        "GIT_AUTHOR_EMAIL": "t@t",
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@t",
+    }
+    subprocess.run(
+        ["git", "-C", str(repo), "commit", "--allow-empty", "-m", "init"],
+        check=True,
+        capture_output=True,
+        env=env,
+    )
+
+    async def fake_run(self_b, opts):
+        with open(os.path.join(opts.repo_path, "worker.txt"), "w", encoding="utf-8") as f:
+            f.write("worker change\n")
+        subprocess.run(["git", "-C", opts.repo_path, "add", "worker.txt"], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", opts.repo_path, "commit", "-m", "worker change"],
+            check=True,
+            capture_output=True,
+            env=env,
+        )
+        if opts.on_exit:
+            await opts.on_exit(None, 0)
+        return _FakeProcess()
+
+    monkeypatch.setattr(base_mod.AgentBackend, "run", fake_run)
+
+    wt = WorktreeManager(base_dir="", max_per_repo=8, cleanup_on_end="remove")
+    coord = FakeCoordinator()
+    cfg = _make_cfg(output_mode="aggregate")
+    orch = Orchestrator(cfg, wt, coord)
+    sink = FakeSink()
+
+    spec = DispatchSpec(
+        agents=["codex"],
+        prompt="build feature",
+        is_orchestrated=False,
+        is_fanout=False,
+        raw="@codex build feature",
+    )
+    run(orch.run(spec, "chan1", "default", str(repo), "myrepo", sink))
+
+    task_branch = coord.get_task_branch("chan1", "default")
+    tree = subprocess.run(
+        ["git", "-C", str(repo), "ls-tree", "-r", "--name-only", task_branch],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert "worker.txt" in tree.splitlines()
