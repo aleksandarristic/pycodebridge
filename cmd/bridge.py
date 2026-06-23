@@ -15,6 +15,7 @@ from codebridge.observability.audit import Logger as AuditLogger
 from codebridge.agents import build_backend
 from codebridge.platform.discord_bot import build_client
 from codebridge.services.health import start_health_server
+from codebridge.services.worktree import WorktreeManager
 from codebridge.routing.router import Router
 from codebridge.sessions.coordinator import SessionCoordinator
 from codebridge.sessions.state import Store
@@ -65,7 +66,19 @@ async def main() -> None:
     audit_logger = AuditLogger(cfg.state.log_dir, redactor=redactor)
     runner = build_backend(cfg)
     coordinator = SessionCoordinator(state_store, cfg)
-    router = Router(cfg, state_store, audit_logger, runner, coordinator, logger)
+    wt_manager: WorktreeManager | None = None
+    if cfg.worktrees.enabled:
+        wt_manager = WorktreeManager(
+            base_dir=cfg.worktrees.base_dir,
+            max_per_repo=cfg.worktrees.max_per_repo,
+            cleanup_on_end=cfg.worktrees.cleanup_on_end,
+        )
+        code_root = cfg.codex.code_root
+        if code_root and os.path.isdir(code_root):
+            for entry in os.scandir(code_root):
+                if entry.is_dir() and os.path.isdir(os.path.join(entry.path, ".git")):
+                    await wt_manager.prune_stale(entry.path)
+    router = Router(cfg, state_store, audit_logger, runner, coordinator, logger, wt_manager=wt_manager)
     await router.bootstrap_git_config()
     health_server = None
     if (cfg.runtime.health_bind or "").strip():

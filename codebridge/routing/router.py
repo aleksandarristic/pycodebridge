@@ -44,6 +44,7 @@ from ..util.prompt import needs_user_input
 from ..util.session_artifacts import safe_segment, session_artifact_label
 from ..security.totp import TotpAttemptLimiter, verify_totp
 from ..services import git_bootstrap
+from ..services.worktree import WorktreeError, WorktreeManager
 from ..commands import help as help_renderer
 from .helpers import (
     DEFAULT_SESSION,
@@ -270,12 +271,13 @@ def _git_commit_hash() -> str:
 
 class Router:
     """Main command router for Discord messages."""
-    def __init__(self, cfg: cfgmod.Config, state: Store, audit: AuditLogger, runner: AgentBackend, coordinator: SessionCoordinator, logger):
+    def __init__(self, cfg: cfgmod.Config, state: Store, audit: AuditLogger, runner: AgentBackend, coordinator: SessionCoordinator, logger, wt_manager: Optional[WorktreeManager] = None):
         self.cfg = cfg
         self.state = state
         self.audit = audit
         self.runner = runner
         self.logger = logger
+        self._wt_manager = wt_manager
         self._usage: Dict[str, Dict[str, UsageStats]] = {}
         self.coordinator = coordinator
         self._command_registry, self._command_specs = command_registry.build_registry()
@@ -2113,13 +2115,28 @@ class Router:
             if friendly_error and not run_state.friendly_error:
                 run_state.friendly_error = friendly_error
 
+        active_worktree_path: str = ""
+
         async with self.typing_context(sink):
             args_to_run = list(original_args)
             stderr_tail.clear()
+
+            effective_repo_path = repo_path
+            if self._wt_manager is not None:
+                session_key = f"{channel_id}-{session or DEFAULT_SESSION}"
+                try:
+                    active_worktree_path = await self._wt_manager.create(repo_path, session_key)
+                    effective_repo_path = active_worktree_path
+                    self.coordinator.update_worktree_path(channel_id, session, active_worktree_path)
+                except WorktreeError as exc:
+                    self._audit_helper.close(entry)
+                    await self.reply_forbidden(sink, f"Cannot start session: {exc}")
+                    return
+
             try:
                 proc = await _backend.run(
                     Options(
-                        repo_path=repo_path,
+                        repo_path=effective_repo_path,
                         args=args_to_run,
                         env=self.cfg.codex.env,
                         on_jsonl=lambda line, evt=None, _b=_backend: self.on_jsonl(
@@ -2132,7 +2149,10 @@ class Router:
                         ),
                         on_output=on_output,
                         on_stderr=_on_stderr,
-                        on_exit=lambda err, rc: self.on_exit(channel_id, session, repo_name, err, rc),
+                        on_exit=lambda err, rc: self.on_exit(
+                            channel_id, session, repo_name, err, rc,
+                            worktree_path=active_worktree_path,
+                        ),
                     )
                 )
             except Exception as exc:
@@ -2909,9 +2929,13 @@ class Router:
         )
         self.update_state(channel_id, session, repo_name, repo_path, thread_id, model, reasoning_effort)
 
-    async def on_exit(self, channel_id: str, session: str, repo_name: str, err: Optional[BaseException], rc: int) -> None:
+    async def on_exit(self, channel_id: str, session: str, repo_name: str, err: Optional[BaseException], rc: int, worktree_path: str = "") -> None:
         """Handle Codex process exit events."""
         await self.clear_active(channel_id, session)
+        if worktree_path and self._wt_manager is not None:
+            if self._wt_manager.cleanup_on_end == "remove":
+                await self._wt_manager.remove(worktree_path)
+            self.coordinator.update_worktree_path(channel_id, session, "")
         self.clear_awaiting_input(channel_id, session)
         if err:
             self.logger.error("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "error": str(err)})

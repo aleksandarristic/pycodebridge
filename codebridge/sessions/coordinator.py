@@ -137,3 +137,6 @@ class SessionCoordinator:
 
     def set_sticky(self, channel_id: str, user_id: str, session: str) -> None:
         self._sessions.set_sticky(channel_id, user_id, session)
+
+    def update_worktree_path(self, channel_id: str, session: str, path: str) -> None:
+        self._sessions.update_worktree_path(channel_id, session, path)
