@@ -10,16 +10,6 @@ Rules:
 
 ## Bug backlog
 
-- [TASK-0109] Repeated dispatches reuse stale per-agent worker branches.
-  - Reported: 2026-06-23
-  - Context: Worker branches are named `f"{task_branch}-{agent}"`. On a second dispatch in the same task/session, `WorktreeManager._worktree_add()` sees that branch already exists and checks it out instead of creating a fresh branch from the current task branch.
-  - Impact: Later dispatches can run from stale worker branch state rather than the latest task branch, mixing previous worker history into new runs and violating the documented "fresh per dispatch" branch lifecycle.
-  - Investigate: `codebridge/dispatch/orchestrator.py` worker branch naming, `codebridge/services/worktree.py` existing-branch fallback, and dispatch docs/examples that describe per-dispatch worker branches.
-  - Acceptance criteria:
-    - Each dispatch creates a unique worker branch, or existing worker branches are safely reset/recreated from the current task branch before use.
-    - Repeated `@codex` dispatches in one task/session start from the latest task branch, not stale worker branch state.
-    - Regression coverage exercises two sequential dispatches for the same agent and verifies branch isolation.
-
 - [TASK-0110] Dispatch parser treats `@agent` substrings inside emails or words as agent mentions.
   - Reported: 2026-06-23
   - Context: `parse_dispatch()` uses `_MENTION_RE = re.compile(r"@([A-Za-z]+)")`, so strings such as `user@codex.com`, `foo@gemini`, or code/config text containing `@claude` can be parsed as dispatch requests. `_strip_known_mentions()` then removes the substring from the prompt.

@@ -46,11 +46,11 @@ Fan-out is useful when you want to compare two approaches side-by-side:
 
 ```bash
 # Compare the two worker branches
-git diff task/myapp/20260623-150000-codex task/myapp/20260623-150000-gemini
+git diff task/myapp/20260623-150000-codex-a1b2c3d4 task/myapp/20260623-150000-gemini-e5f6a7b8
 
 # Preview each branch's diff against the task branch (which mirrors HEAD)
-git diff task/myapp/20260623-150000..task/myapp/20260623-150000-codex
-git diff task/myapp/20260623-150000..task/myapp/20260623-150000-gemini
+git diff task/myapp/20260623-150000..task/myapp/20260623-150000-codex-a1b2c3d4
+git diff task/myapp/20260623-150000..task/myapp/20260623-150000-gemini-e5f6a7b8
 ```
 
 After picking the better result, if needed merge or cherry-pick commits manually before
@@ -63,8 +63,8 @@ closing.
 ```
 
 Opens a draft PR from the task branch. The worker branches
-(`task/.../...-codex`, `task/.../...-gemini`) are deleted automatically.
+(`task/.../...-codex-<id>`, `task/.../...-gemini-<id>`) are deleted automatically.
 
 > **Note** — `!c done` targets the **task branch**, not a worker branch. If you want
 > to promote a specific worker's changes, merge that worker branch into the task branch
-> first: `git merge task/.../...-codex` while on the task branch.
+> first: `git merge task/.../...-codex-<id>` while on the task branch.

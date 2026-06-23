@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0109] Repeated dispatches create fresh worker branches.
+  - Completed: 2026-06-23
+  - Notes: Added unique run IDs to worker branch names so repeated dispatches for the same agent fork from the current task branch instead of reusing stale worker state. Updated dispatch docs/examples and added regression coverage for repeated same-agent dispatch.
+
 - [TASK-0108] Dispatch handoff preserves uncommitted worker edits.
   - Completed: 2026-06-23
   - Notes: Added dirty-worktree preservation after successful agent runs: uncommitted edits are staged and committed on the handoff branch before the worktree is removed. Updated real-git orchestrator coverage so an agent that only writes a file still leaves that file on the worker branch and reports changed files.

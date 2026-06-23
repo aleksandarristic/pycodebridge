@@ -62,8 +62,8 @@ Orchestrator plan:
 ```
 HEAD
  └─ task/<repo>/<yyyymmdd-hhmmss>   ← task branch (created on first dispatch)
-      ├─ task/.../...-codex          ← codex worker branch (forked per dispatch)
-      └─ task/.../...-gemini         ← gemini worker branch
+      ├─ task/.../...-codex-<id>     ← codex worker branch (forked per dispatch)
+      └─ task/.../...-gemini-<id>    ← gemini worker branch
 ```
 
 - The **task branch** persists across multiple dispatches in the same channel session.
@@ -82,7 +82,7 @@ When agents are done, close the task branch with `!c done`:
 ```
 
 `--pr` posts the PR URL to the channel. `--merge` confirms after push.
-In both cases, worker branches (`task/...-<agent>`) are deleted and the task branch
+In both cases, worker branches (`task/...-<agent>-<id>`) are deleted and the task branch
 is cleared from session state.
 
 ## Output modes

@@ -15,6 +15,7 @@ from codebridge.dispatch.orchestrator import (
     Orchestrator,
     _make_task_branch_name,
     _branch_to_slug,
+    _make_worker_branch_name,
 )
 from codebridge.dispatch.parser import DispatchSpec
 from codebridge.services.worktree import WorktreeError
@@ -162,6 +163,14 @@ def test_make_task_branch_name():
 def test_branch_to_slug():
     assert _branch_to_slug("task/myapp/20260623-143012") == "task-myapp-20260623-143012"
     assert _branch_to_slug("") == "branch"
+
+
+def test_make_worker_branch_name_is_unique():
+    first = _make_worker_branch_name("task/myapp/20260623-143012", "codex")
+    second = _make_worker_branch_name("task/myapp/20260623-143012", "codex")
+    assert first.startswith("task/myapp/20260623-143012-codex-")
+    assert second.startswith("task/myapp/20260623-143012-codex-")
+    assert first != second
 
 
 def test_coordinator_task_branch_lifecycle():
@@ -319,6 +328,38 @@ def test_worker_branches_forked_from_task_branch(monkeypatch):
     task_branch = coord.get_task_branch("chan1", "default")
     worker_creates = [c for c in wt.created if c.get("base_branch") == task_branch]
     assert len(worker_creates) >= 1
+    assert all(c["branch_name"].startswith(f"{task_branch}-") for c in worker_creates)
+    assert len({c["branch_name"] for c in worker_creates}) == len(worker_creates)
+
+
+def test_repeated_dispatch_creates_fresh_worker_branch(monkeypatch):
+    from codebridge.agents import base as base_mod
+
+    async def fake_run(self_b, opts):
+        if opts.on_exit:
+            await opts.on_exit(None, 0)
+        return _FakeProcess()
+
+    monkeypatch.setattr(base_mod.AgentBackend, "run", fake_run)
+
+    wt = FakeWorktreeManager()
+    coord = FakeCoordinator()
+    cfg = _make_cfg()
+    orch = Orchestrator(cfg, wt, coord)
+    sink = FakeSink()
+    spec = DispatchSpec(agents=["codex"], prompt="build feature", is_orchestrated=False, is_fanout=False, raw="@codex build feature")
+
+    run(orch.run(spec, "chan1", "default", "/repo", "myrepo", sink))
+    task_branch = coord.get_task_branch("chan1", "default")
+    run(orch.run(spec, "chan1", "default", "/repo", "myrepo", sink))
+
+    worker_branches = [
+        c["branch_name"]
+        for c in wt.created
+        if c.get("base_branch") == task_branch and c.get("branch_name", "").startswith(f"{task_branch}-codex-")
+    ]
+    assert len(worker_branches) == 2
+    assert len(set(worker_branches)) == 2
 
 
 def test_successful_worker_uncommitted_change_is_preserved_on_worker_branch(monkeypatch, tmp_path):
@@ -375,8 +416,15 @@ def test_successful_worker_uncommitted_change_is_preserved_on_worker_branch(monk
         capture_output=True,
         text=True,
     ).stdout
+    branches = subprocess.run(
+        ["git", "-C", str(repo), "branch", "--list", f"{task_branch}-codex-*"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    worker_branch = branches[0].strip().lstrip("* ")
     worker_tree = subprocess.run(
-        ["git", "-C", str(repo), "ls-tree", "-r", "--name-only", f"{task_branch}-codex"],
+        ["git", "-C", str(repo), "ls-tree", "-r", "--name-only", worker_branch],
         check=True,
         capture_output=True,
         text=True,

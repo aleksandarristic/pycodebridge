@@ -487,7 +487,7 @@ on a branch forked from a shared **task branch**. Requires `worktrees.enabled: t
 
 ```
 task/<repo>/<yyyymmdd-hhmmss>          ← persists across dispatches in a session
-  └─ task/<repo>/<ts>-<agent>          ← per-worker branch, created each dispatch
+  └─ task/<repo>/<ts>-<agent>-<id>     ← per-worker branch, created each dispatch
 ```
 
 **Close the task when done**

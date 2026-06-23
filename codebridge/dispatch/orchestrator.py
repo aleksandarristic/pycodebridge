@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import time
+import uuid
 from typing import TYPE_CHECKING, List, Optional
 
 from ..agents.base import Options
@@ -211,7 +212,7 @@ class Orchestrator:
                 return AgentResult(agent=agent, success=False, error=str(exc))
         else:
             # For workers: fork from the task branch
-            worker_branch = f"{base_or_task_branch}-{agent}"
+            worker_branch = _make_worker_branch_name(base_or_task_branch, agent)
             try:
                 wt_path = await self._wt_manager.create(
                     repo_path,
@@ -282,6 +283,11 @@ def _make_task_branch_name(repo_name: str) -> str:
 
 def _branch_to_slug(branch: str) -> str:
     return _SAFE_RE.sub("-", branch or "branch")[:40].strip("-") or "branch"
+
+
+def _make_worker_branch_name(task_branch: str, agent: str) -> str:
+    safe_agent = _SAFE_RE.sub("-", agent or "agent").strip("-") or "agent"
+    return f"{task_branch}-{safe_agent}-{uuid.uuid4().hex[:8]}"
 
 
 async def _count_changed_files(wt_path: str, base_branch: str) -> int:

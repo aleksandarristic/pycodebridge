@@ -75,8 +75,8 @@ With `--pr`, the channel posts:
 ## What to check before closing
 
 - `git log task/myapp/20260623-143012` — Claude's planning commits
-- `git log task/myapp/20260623-143012-codex` — Codex's implementation
-- `git diff task/myapp/20260623-143012..task/myapp/20260623-143012-codex` — full diff
+- `git log task/myapp/20260623-143012-codex-a1b2c3d4` — Codex's implementation
+- `git diff task/myapp/20260623-143012..task/myapp/20260623-143012-codex-a1b2c3d4` — full diff
 
 If Codex's branch looks good but you want to cherry-pick plan commits too, merge the
 task branch into the worker branch manually before running `!c done`.
