@@ -9,6 +9,26 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0104] Dispatch documentation and worked examples.
+  - Completed: 2026-06-23
+  - Notes: docs/dispatch.md reference, three examples under docs/examples/, README Multi-agent dispatch section.
+
+- [TASK-0103] Task close command: `!c done` with PR and merge modes.
+  - Completed: 2026-06-23
+  - Notes: TaskCloser (closer.py) with _open_pr, _merge, _cleanup_worker_branches; wired into router as "done" command; constructed alongside Orchestrator in cmd/bridge.py.
+
+- [TASK-0102] Dispatch output: per-agent status messages and aggregate summary.
+  - Completed: 2026-06-23
+
+- [TASK-0101] Orchestrator flow: task branch + sequential/parallel dispatch.
+  - Completed: 2026-06-23
+
+- [TASK-0100] DispatchConfig: dataclass + YAML loading + validation.
+  - Completed: 2026-06-23
+
+- [TASK-0099] Dispatch parser: @agent extraction and fan-out detection.
+  - Completed: 2026-06-23
+
 - [TASK-0098] Docs: `config.example.yaml`, `config.docker.example.yaml` + README worktree section.
   - Completed: 2026-06-23
 

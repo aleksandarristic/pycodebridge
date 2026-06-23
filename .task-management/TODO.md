@@ -10,4 +10,6 @@ Rules:
 
 ## Active tasks
 
+### Dispatch orchestrator (`feature/dispatch-orchestrator`)
 
+- TASK-0104 — Dispatch documentation and worked examples

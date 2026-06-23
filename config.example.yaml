@@ -87,6 +87,23 @@ repo_bootstrap:
   agents_template: ""
   spec_prompt: ""  # optional prompt profile override for `!c spec`
 
+dispatch:
+  # Controls what the bot posts during and after a multi-agent run.
+  #   per_agent  — status message per agent on start and finish
+  #   aggregate  — single summary after all agents complete
+  #   both       — per-agent messages AND an aggregate summary (default)
+  output_mode: both
+
+  # What happens when the user runs `!c done`.
+  #   pr     — push task branch and open a draft PR (default, review on GitHub)
+  #   merge  — merge task branch into main locally and push
+  close_mode: pr
+
+  # Prompt template fed to Claude when it orchestrates a fan-out.
+  # {{USER_REQUEST}} and {{AGENTS}} are substituted at runtime.
+  # plan_prompt: |
+  #   You are the orchestrator for a multi-agent coding session...
+
 worktrees:
   # Give each session its own git worktree so concurrent sessions on the same
   # repo cannot interfere with each other's uncommitted changes.

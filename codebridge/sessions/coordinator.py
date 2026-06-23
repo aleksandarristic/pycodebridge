@@ -140,3 +140,12 @@ class SessionCoordinator:
 
     def update_worktree_path(self, channel_id: str, session: str, path: str) -> None:
         self._sessions.update_worktree_path(channel_id, session, path)
+
+    def update_task_branch(self, channel_id: str, session: str, branch: str) -> None:
+        self._sessions.update_task_branch(channel_id, session, branch)
+
+    def get_task_branch(self, channel_id: str, session: str) -> str:
+        return self._sessions.get_task_branch(channel_id, session)
+
+    def clear_task_branch(self, channel_id: str, session: str) -> None:
+        self._sessions.clear_task_branch(channel_id, session)
