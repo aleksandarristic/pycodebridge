@@ -25,6 +25,10 @@ DEFAULT_MAX_UPLOAD_TOTAL_MB = DEFAULT_MAX_UPLOAD_MB
 DEFAULT_MAX_UPLOAD_COUNT = 20
 DEFAULT_GIT_CREDENTIAL_HELPER = "!gh auth git-credential"
 
+DEFAULT_WORKTREE_BASE_DIR = ""
+DEFAULT_WORKTREE_MAX_PER_REPO = 8
+DEFAULT_WORKTREE_CLEANUP_ON_END = "remove"
+
 DEFAULT_START_PROMPT = (
     "Discord bridge session for {{REPO_NAME}}. Work only in this repo and keep replies concise.\n"
 )
@@ -165,6 +169,15 @@ class GeminiConfig:
 
 
 @dataclass
+class WorktreeConfig:
+    """Git worktree isolation configuration."""
+    enabled: bool = False
+    base_dir: str = DEFAULT_WORKTREE_BASE_DIR
+    max_per_repo: int = DEFAULT_WORKTREE_MAX_PER_REPO
+    cleanup_on_end: str = DEFAULT_WORKTREE_CLEANUP_ON_END
+
+
+@dataclass
 class AgentConfig:
     """Agent backend configuration."""
     default_backend: str = "codex"
@@ -185,6 +198,7 @@ class Config:
     git: GitConfig = field(default_factory=GitConfig)
     files: FilesConfig = field(default_factory=FilesConfig)
     repo_bootstrap: RepoBootstrapConfig = field(default_factory=RepoBootstrapConfig)
+    worktrees: WorktreeConfig = field(default_factory=WorktreeConfig)
 
     def discord_token(self) -> str:
         """Return the Discord token from the configured env var."""
@@ -408,6 +422,17 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     )
     cfg.repo_bootstrap.spec_prompt = repo_bootstrap.get("spec_prompt", cfg.repo_bootstrap.spec_prompt)
 
+    worktrees = raw.get("worktrees", {}) or {}
+    cfg.worktrees.enabled = _coerce_bool(
+        worktrees.get("enabled", cfg.worktrees.enabled),
+        "worktrees.enabled",
+    )
+    cfg.worktrees.base_dir = str(worktrees.get("base_dir", cfg.worktrees.base_dir) or "")
+    cfg.worktrees.max_per_repo = int(worktrees.get("max_per_repo", cfg.worktrees.max_per_repo))
+    cfg.worktrees.cleanup_on_end = str(
+        worktrees.get("cleanup_on_end", cfg.worktrees.cleanup_on_end) or DEFAULT_WORKTREE_CLEANUP_ON_END
+    )
+
 
 def _apply_defaults(cfg: Config) -> None:
     """Fill missing values with defaults."""
@@ -488,6 +513,9 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.state.log_dir = os.path.join(cfg.state.data_dir, "logs")
     if not cfg.repo_bootstrap.spec_prompt:
         cfg.repo_bootstrap.spec_prompt = DEFAULT_SPEC_PROMPT
+    cfg.worktrees.enabled = _coerce_bool(cfg.worktrees.enabled, "worktrees.enabled")
+    if not cfg.worktrees.cleanup_on_end:
+        cfg.worktrees.cleanup_on_end = DEFAULT_WORKTREE_CLEANUP_ON_END
 
 
 def _expand_paths(cfg: Config) -> None:
@@ -497,6 +525,7 @@ def _expand_paths(cfg: Config) -> None:
     cfg.state.log_dir = _expand_path(cfg.state.log_dir)
     cfg.git.global_config_path = _expand_path(cfg.git.global_config_path)
     cfg.repo_bootstrap.agents_template = _expand_path(cfg.repo_bootstrap.agents_template)
+    cfg.worktrees.base_dir = _expand_path(cfg.worktrees.base_dir)
 
 
 def _coerce_bool(value: Any, field: str) -> bool:
@@ -521,6 +550,13 @@ def _validate(cfg: Config) -> None:
     cfg.codex.ask_for_approval = approval
     if cfg.discord.max_discord_message_chars <= 0:
         raise ValueError("discord.max_discord_message_chars must be > 0")
+
+    cleanup = (cfg.worktrees.cleanup_on_end or "").strip().lower()
+    if cleanup not in {"remove", "keep", "pr"}:
+        raise ValueError("worktrees.cleanup_on_end must be remove|keep|pr")
+    cfg.worktrees.cleanup_on_end = cleanup
+    if cfg.worktrees.max_per_repo < 1 or cfg.worktrees.max_per_repo > 64:
+        raise ValueError("worktrees.max_per_repo must be between 1 and 64")
 
     level = cfg.runtime.log_level.lower()
     if level not in {"debug", "info", "warn", "warning", "error"}:
