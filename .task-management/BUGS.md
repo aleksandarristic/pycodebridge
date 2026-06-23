@@ -10,6 +10,36 @@ Rules:
 
 ## Bug backlog
 
+- [TASK-0108] Dispatch drops successful worker edits that are not committed.
+  - Reported: 2026-06-23
+  - Context: `Orchestrator._run_backend()` marks a worker successful from the CLI exit code, but `_count_changed_files()` only compares `base_branch` to `HEAD`, and `_merge_worker_branch()` only merges committed branch history. Agent CLIs commonly leave edited files in the worktree without creating commits.
+  - Impact: A worker can successfully edit files and report live progress, but dispatch later removes the worktree and merges a branch with no new commits, silently losing the implementation before `!c done`.
+  - Investigate: `codebridge/dispatch/orchestrator.py` worker completion, changed-file detection, and integration semantics for committed vs uncommitted worktree changes.
+  - Acceptance criteria:
+    - Successful worker runs preserve uncommitted file edits before the worktree is removed, either by committing/stashing/applying them to the worker branch or by failing loudly when dirty work cannot be preserved.
+    - `files_changed` reflects committed and uncommitted worker changes.
+    - Regression coverage proves an agent that writes a file without committing still lands that change on the task branch or returns an actionable failure.
+
+- [TASK-0109] Repeated dispatches reuse stale per-agent worker branches.
+  - Reported: 2026-06-23
+  - Context: Worker branches are named `f"{task_branch}-{agent}"`. On a second dispatch in the same task/session, `WorktreeManager._worktree_add()` sees that branch already exists and checks it out instead of creating a fresh branch from the current task branch.
+  - Impact: Later dispatches can run from stale worker branch state rather than the latest task branch, mixing previous worker history into new runs and violating the documented "fresh per dispatch" branch lifecycle.
+  - Investigate: `codebridge/dispatch/orchestrator.py` worker branch naming, `codebridge/services/worktree.py` existing-branch fallback, and dispatch docs/examples that describe per-dispatch worker branches.
+  - Acceptance criteria:
+    - Each dispatch creates a unique worker branch, or existing worker branches are safely reset/recreated from the current task branch before use.
+    - Repeated `@codex` dispatches in one task/session start from the latest task branch, not stale worker branch state.
+    - Regression coverage exercises two sequential dispatches for the same agent and verifies branch isolation.
+
+- [TASK-0110] Dispatch parser treats `@agent` substrings inside emails or words as agent mentions.
+  - Reported: 2026-06-23
+  - Context: `parse_dispatch()` uses `_MENTION_RE = re.compile(r"@([A-Za-z]+)")`, so strings such as `user@codex.com`, `foo@gemini`, or code/config text containing `@claude` can be parsed as dispatch requests. `_strip_known_mentions()` then removes the substring from the prompt.
+  - Impact: Normal prompts can be accidentally routed to dispatch, and prompt text can be corrupted by mention stripping even when the user did not intend to invoke an agent.
+  - Investigate: `codebridge/dispatch/parser.py`, router dispatch interception in command/plain-prompt flows, and parser tests for mention boundaries.
+  - Acceptance criteria:
+    - Agent mentions are recognized only as standalone Discord-style command tokens, not inside emails, identifiers, or arbitrary words.
+    - Prompt stripping preserves non-dispatch text containing `@codex`, `@claude`, or `@gemini` substrings.
+    - Regression coverage includes email-address and word-boundary cases.
+
 - [TASK-0090] Gemini streamed Discord output chunks can arrive out of order.
   - Reported: 2026-06-11
   - Context: In a Discord channel using `!agent gemini`, the assistant response was delivered as chunks in the wrong order:
