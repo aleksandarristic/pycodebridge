@@ -24,6 +24,18 @@ def run(coro):
     return asyncio.run(coro)
 
 
+@pytest.fixture(autouse=True)
+def no_dirty_commit_for_fake_worktrees(monkeypatch, request):
+    if request.node.name == "test_successful_worker_uncommitted_change_is_preserved_on_worker_branch":
+        return
+    from codebridge.dispatch import orchestrator as orch_mod
+
+    async def fake_commit_dirty_worktree(wt_path, agent):
+        return False
+
+    monkeypatch.setattr(orch_mod, "_commit_dirty_worktree", fake_commit_dirty_worktree)
+
+
 # ---------------------------------------------------------------------------
 # Fakes
 # ---------------------------------------------------------------------------
@@ -309,7 +321,7 @@ def test_worker_branches_forked_from_task_branch(monkeypatch):
     assert len(worker_creates) >= 1
 
 
-def test_successful_worker_commit_stays_on_worker_branch_until_promotion(monkeypatch, tmp_path):
+def test_successful_worker_uncommitted_change_is_preserved_on_worker_branch(monkeypatch, tmp_path):
     from codebridge.agents import base as base_mod
     from codebridge.services.worktree import WorktreeManager
 
@@ -335,13 +347,6 @@ def test_successful_worker_commit_stays_on_worker_branch_until_promotion(monkeyp
     async def fake_run(self_b, opts):
         with open(os.path.join(opts.repo_path, "worker.txt"), "w", encoding="utf-8") as f:
             f.write("worker change\n")
-        subprocess.run(["git", "-C", opts.repo_path, "add", "worker.txt"], check=True, capture_output=True)
-        subprocess.run(
-            ["git", "-C", opts.repo_path, "commit", "-m", "worker change"],
-            check=True,
-            capture_output=True,
-            env=env,
-        )
         if opts.on_exit:
             await opts.on_exit(None, 0)
         return _FakeProcess()
@@ -378,3 +383,4 @@ def test_successful_worker_commit_stays_on_worker_branch_until_promotion(monkeyp
     ).stdout
     assert "worker.txt" not in task_tree.splitlines()
     assert "worker.txt" in worker_tree.splitlines()
+    assert any("1 file(s) changed" in msg for msg in sink.messages)

@@ -253,6 +253,7 @@ class Orchestrator:
             success = (rc == 0)
             files_changed = 0
             if success:
+                await _commit_dirty_worktree(wt_path, agent)
                 files_changed = await _count_changed_files(wt_path, base_or_task_branch)
             summary = "\n".join(output_lines[-3:]) if output_lines else ""
             return AgentResult(
@@ -298,3 +299,51 @@ async def _count_changed_files(wt_path: str, base_branch: str) -> int:
         return len(lines)
     except Exception:
         return 0
+
+
+async def _commit_dirty_worktree(wt_path: str, agent: str) -> bool:
+    """Commit dirty worktree changes so the handoff branch preserves agent edits."""
+    status = await _git_output(wt_path, ["status", "--porcelain"])
+    if not status.strip():
+        return False
+    await _git(wt_path, ["add", "-A"])
+    await _git(
+        wt_path,
+        [
+            "-c",
+            "user.name=pycodebridge",
+            "-c",
+            "user.email=pycodebridge@localhost",
+            "commit",
+            "-m",
+            f"Preserve @{agent} dispatch changes",
+        ],
+    )
+    return True
+
+
+async def _git(repo_path: str, args: List[str]) -> None:
+    """Run a git command and raise OrchestratorError on failure."""
+    proc = await asyncio.create_subprocess_exec(
+        "git", "-C", repo_path, *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr_bytes = await proc.communicate()
+    if proc.returncode != 0:
+        stderr = (stderr_bytes or b"").decode("utf-8", errors="replace").strip()
+        raise OrchestratorError(f"git {' '.join(args)} failed: {stderr}")
+
+
+async def _git_output(repo_path: str, args: List[str]) -> str:
+    """Run a git command and return stdout, raising OrchestratorError on failure."""
+    proc = await asyncio.create_subprocess_exec(
+        "git", "-C", repo_path, *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout_bytes, stderr_bytes = await proc.communicate()
+    if proc.returncode != 0:
+        stderr = (stderr_bytes or b"").decode("utf-8", errors="replace").strip()
+        raise OrchestratorError(f"git {' '.join(args)} failed: {stderr}")
+    return (stdout_bytes or b"").decode("utf-8", errors="replace")

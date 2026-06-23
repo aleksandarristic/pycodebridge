@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0108] Dispatch handoff preserves uncommitted worker edits.
+  - Completed: 2026-06-23
+  - Notes: Added dirty-worktree preservation after successful agent runs: uncommitted edits are staged and committed on the handoff branch before the worktree is removed. Updated real-git orchestrator coverage so an agent that only writes a file still leaves that file on the worker branch and reports changed files.
+
 - [TASK-0111] Dispatch preserves worker branch handoff instead of auto-merging.
   - Completed: 2026-06-23
   - Notes: Removed automatic successful-worker merges into the task branch and restored the handoff model where worker branches remain separate until explicit promotion. Updated orchestrator regression coverage to verify committed worker changes stay on the worker branch while the task branch remains unchanged.

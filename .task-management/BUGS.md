@@ -10,16 +10,6 @@ Rules:
 
 ## Bug backlog
 
-- [TASK-0108] Dispatch handoff loses successful worker edits that are not committed.
-  - Reported: 2026-06-23
-  - Context: The dispatch handoff design keeps worker branches as review artifacts, but `Orchestrator._run_backend()` treats success as a CLI exit code while changed-file detection only compares `base_branch` to `HEAD`. Agent CLIs can leave edited files in the worktree without creating commits, so the retained worker branch may not contain the work the agent performed.
-  - Impact: A worker can successfully edit files and report live progress, but dispatch later removes the worktree and leaves behind a worker branch with no corresponding implementation changes for review or promotion.
-  - Investigate: `codebridge/dispatch/orchestrator.py` worker completion, changed-file detection, and integration semantics for committed vs uncommitted worktree changes.
-  - Acceptance criteria:
-    - Successful worker runs preserve uncommitted file edits on the worker handoff branch before the worktree is removed, or fail loudly when dirty work cannot be preserved.
-    - `files_changed` reflects committed and uncommitted worker changes.
-    - Regression coverage proves an agent that writes a file without committing still leaves a useful review artifact or returns an actionable failure.
-
 - [TASK-0109] Repeated dispatches reuse stale per-agent worker branches.
   - Reported: 2026-06-23
   - Context: Worker branches are named `f"{task_branch}-{agent}"`. On a second dispatch in the same task/session, `WorktreeManager._worktree_add()` sees that branch already exists and checks it out instead of creating a fresh branch from the current task branch.
