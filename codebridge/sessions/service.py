@@ -420,6 +420,36 @@ class SessionService:
 
         self._state.update(mutator)
 
+    def update_task_branch(self, channel_id: str, session: str, branch: str) -> None:
+        """Persist the active task branch for a session (empty string to clear)."""
+        session = _normalize_session_default(session)
+
+        def mutator(fs):
+            from .state import ChannelState, SessionState
+            ch = fs.channels.setdefault(channel_id, ChannelState())
+            ss = ch.sessions.get(session)
+            if ss is None:
+                ss = SessionState(repo_name="", repo_path="", thread_id="")
+                ch.sessions[session] = ss
+            ss.task_branch = branch
+
+        self._state.update(mutator)
+
+    def get_task_branch(self, channel_id: str, session: str) -> str:
+        """Return the active task branch for a session, or empty string."""
+        session = _normalize_session_default(session)
+        state = self._state.load()
+        ch = state.channels.get(channel_id)
+        if ch:
+            ss = ch.sessions.get(session)
+            if ss:
+                return ss.task_branch or ""
+        return ""
+
+    def clear_task_branch(self, channel_id: str, session: str) -> None:
+        """Clear the active task branch for a session."""
+        self.update_task_branch(channel_id, session, "")
+
 
 def _normalize_session_default(session: str) -> str:
     raw = (session or "").strip()

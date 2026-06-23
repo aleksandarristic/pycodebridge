@@ -12,6 +12,8 @@ _log = logging.getLogger(__name__)
 
 _SAFE_SLUG_RE = re.compile(r"[^A-Za-z0-9._-]")
 _SESSION_BRANCH_PREFIX = "session/"
+_TASK_BRANCH_PREFIX = "task/"
+_MANAGED_PREFIXES = (_SESSION_BRANCH_PREFIX, _TASK_BRANCH_PREFIX)
 
 
 class WorktreeError(Exception):
@@ -30,11 +32,20 @@ class WorktreeManager:
     def cleanup_on_end(self) -> str:
         return self._cleanup_on_end
 
-    async def create(self, repo_path: str, session_key: str) -> str:
+    async def create(
+        self,
+        repo_path: str,
+        session_key: str,
+        base_branch: str = "",
+        branch_name: str = "",
+    ) -> str:
         """Create a new git worktree for (repo_path, session_key).
 
         Returns the absolute path to the worktree directory.
         Raises WorktreeError on failure or if max_per_repo is reached.
+
+        base_branch: when set, fork the new branch from this ref instead of HEAD.
+        branch_name: when set, use this exact branch name instead of the auto-generated one.
         """
         count = await self.count_for_repo(repo_path)
         if count >= self._max_per_repo:
@@ -43,10 +54,13 @@ class WorktreeManager:
             )
 
         slug = _safe_slug(session_key)
-        branch = f"{_SESSION_BRANCH_PREFIX}{slug}/{_timestamp()}"
+        branch = branch_name or f"{_SESSION_BRANCH_PREFIX}{slug}/{_timestamp()}"
         wt_path = self._worktree_path(repo_path, slug)
 
-        await _git(repo_path, ["worktree", "add", "-b", branch, wt_path])
+        if base_branch:
+            await _git(repo_path, ["worktree", "add", "-b", branch, wt_path, base_branch])
+        else:
+            await _git(repo_path, ["worktree", "add", "-b", branch, wt_path])
         return wt_path
 
     async def remove(self, worktree_path: str) -> None:
@@ -73,9 +87,9 @@ class WorktreeManager:
             _log.warning("worktree.prune_failed", extra={"repo": repo_path, "error": str(exc)})
 
     async def count_for_repo(self, repo_path: str) -> int:
-        """Count managed worktrees (branch starts with session/) for a repo."""
+        """Count managed worktrees (session/ or task/ branches) for a repo."""
         lines = await _git_output(repo_path, ["worktree", "list", "--porcelain"])
-        return _count_session_worktrees(lines)
+        return _count_managed_worktrees(lines)
 
     def _worktree_path(self, repo_path: str, slug: str) -> str:
         repo_abs = os.path.realpath(repo_path)
@@ -116,10 +130,14 @@ def _find_repo_for_worktree(worktree_path: str) -> str:
 
 
 def _count_session_worktrees(porcelain_output: str) -> int:
+    return _count_managed_worktrees(porcelain_output)
+
+
+def _count_managed_worktrees(porcelain_output: str) -> int:
     count = 0
     for line in porcelain_output.splitlines():
         line = line.strip()
-        if line.startswith("branch ") and _SESSION_BRANCH_PREFIX in line:
+        if line.startswith("branch ") and any(p in line for p in _MANAGED_PREFIXES):
             count += 1
     return count
 
