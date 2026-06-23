@@ -114,7 +114,7 @@ async def _worktree_add(repo_path: str, branch: str, wt_path: str, base_branch: 
         if os.path.isdir(wt_path):
             shutil.rmtree(wt_path, ignore_errors=True)
 
-    args_create = ["worktree", "add", "-b", branch, wt_path]
+    args_create = ["worktree", "add", "-f", "-b", branch, wt_path]
     if base_branch:
         args_create.append(base_branch)
     try:
@@ -126,7 +126,7 @@ async def _worktree_add(repo_path: str, branch: str, wt_path: str, base_branch: 
 
     # Branch already exists (left from a previous run) — check it out instead.
     _log.warning("worktree.branch_exists", extra={"branch": branch})
-    args_checkout = ["worktree", "add", wt_path, branch]
+    args_checkout = ["worktree", "add", "-f", wt_path, branch]
     await _git(repo_path, args_checkout)
 
 
