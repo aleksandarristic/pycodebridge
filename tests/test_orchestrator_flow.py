@@ -94,6 +94,7 @@ def _make_cfg(output_mode="both", close_mode="pr"):
     cfg.dispatch.plan_prompt = (
         "Plan for {{USER_REQUEST}} using {{AGENTS}}"
     )
+    cfg.discord.max_discord_message_chars = 2000
     # codex config needed by build_backend
     cfg.codex.binary = "codex"
     cfg.codex.sandbox = "workspace-write"
@@ -181,6 +182,31 @@ def test_solo_dispatch_creates_task_branch(monkeypatch):
     branch = coord.get_task_branch("chan1", "default")
     assert branch.startswith("task/myrepo/")
     assert len(wt.created) >= 1
+
+
+def test_solo_dispatch_relays_worker_output(monkeypatch):
+    from codebridge.agents import base as base_mod
+
+    async def fake_run(self_b, opts):
+        if opts.on_output:
+            await opts.on_output("live progress")
+        if opts.on_exit:
+            await opts.on_exit(None, 0)
+        return _FakeProcess()
+
+    monkeypatch.setattr(base_mod.AgentBackend, "run", fake_run)
+
+    wt = FakeWorktreeManager()
+    coord = FakeCoordinator()
+    cfg = _make_cfg()
+    orch = Orchestrator(cfg, wt, coord)
+    sink = FakeSink()
+
+    spec = DispatchSpec(agents=["codex"], prompt="implement X", is_orchestrated=False, is_fanout=False, raw="@codex implement X")
+    run(orch.run(spec, "chan1", "default", "/repo", "myrepo", sink))
+
+    assert "⚙ @codex: live progress" in sink.messages
+    assert sink.messages.index("⚙ @codex: live progress") < sink.messages.index("✅ ⚙ @codex done")
 
 
 def test_orchestrated_fanout_claude_runs_first(monkeypatch):

@@ -230,6 +230,11 @@ class Orchestrator:
 
         async def on_output(text: str) -> None:
             output_lines.append(text)
+            await handler.on_agent_output(
+                agent,
+                text,
+                self._cfg.discord.max_discord_message_chars,
+            )
 
         try:
             args = backend.build_start_args(wt_path, prompt, "", "")

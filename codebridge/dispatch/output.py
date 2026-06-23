@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List
 
+from ..util.chunk import chunk_text
+
 if TYPE_CHECKING:
     from ..platform.transport import ResponseSink
 
@@ -52,6 +54,16 @@ class DispatchOutputHandler:
         else:
             err = f": {result.error}" if result.error else ""
             await self._sink.send(f"❌ {emoji} @{result.agent} failed{err}")
+
+    async def on_agent_output(self, agent: str, text: str, max_chars: int) -> None:
+        """Relay live assistant output from a dispatched agent."""
+        text = (text or "").strip()
+        if not text:
+            return
+        prefix = f"{self._emoji(agent)} @{agent}: "
+        limit = max(1, max_chars - len(prefix)) if max_chars > len(prefix) else max_chars
+        for chunk in chunk_text(text, limit):
+            await self._sink.send(f"{prefix}{chunk}")
 
     async def on_all_done(self, results: List[AgentResult]) -> None:
         if not self._aggregate():
