@@ -14,7 +14,3 @@ Rules:
 
 - TASK-0112 — Update AGENTS.sample.md with dispatch workflow section; wire it into docker config
 - TASK-0113 — `!c gh-create` command: check existing GH repo, create if absent, add remote
-
-### Run lifecycle hardening
-
-- TASK-0114 — Prevent output delivery, chunking, and steering-side failures from aborting active agent runs

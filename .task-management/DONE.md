@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0114] Prevent output delivery, chunking, and steering-side failures from aborting active agent runs.
+  - Completed: 2026-06-23
+  - Notes: Added non-fatal logging for streamed output send failures, made steer/answer acknowledgements log-only after input is delivered, rejected `!c done --merge` while the target session is still active, and covered the output, steering, and active-close regressions with targeted integration tests.
+
 - [TASK-0090] Gemini streamed output preserves ask prefix across split chunks.
   - Completed: 2026-06-23
   - Notes: Added buffered-output prefixing so a later chunk that reveals a split prompt can prepend `Gemini asks:` to the already-buffered first chunk before flushing. Added coalescer regression coverage for split Gemini prompt output and empty-buffer behavior.

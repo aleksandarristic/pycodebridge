@@ -617,6 +617,13 @@ class Router:
         if canonical_cmd == "done":
             if self._task_closer is not None:
                 session = self.current_session_for_event(event)
+                if await self.get_active(event.channel_id, session):
+                    await self.reply_forbidden(
+                        sink,
+                        f"Cannot close dispatch task while session '{session}' is still running. "
+                        "Wait for the agent to finish or stop it first.",
+                    )
+                    return
                 mode = parse_close_mode(rest, self.cfg.dispatch.close_mode)
                 try:
                     await self._task_closer.close(event.channel_id, session, repo_path, mode, sink)

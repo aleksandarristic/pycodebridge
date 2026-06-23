@@ -478,7 +478,13 @@ async def handle_answer(router: "Router", event: MessageEvent, sink: ResponseSin
         await router.reply_forbidden(sink, f"send input failed: {exc}")
         return
     router.clear_awaiting_input(sink.channel_id, session)
-    await router.reply(sink, f"Sent response to session '{session}'.")
+    try:
+        await router.reply(sink, f"Sent response to session '{session}'.")
+    except Exception as exc:
+        router.logger.warning(
+            "relay.answer_ack_failed",
+            extra={"channel_id": sink.channel_id, "session": session, "error": str(exc)},
+        )
     router.logger.info(
         "relay.answer",
         extra={
@@ -521,7 +527,13 @@ async def handle_steer(router: "Router", event: MessageEvent, sink: ResponseSink
             f"Steer failed: session process is not accepting input (ended/interrupted). Details: {exc}",
         )
         return
-    await router.reply(sink, f"Steer delivered to session '{session}'.")
+    try:
+        await router.reply(sink, f"Steer delivered to session '{session}'.")
+    except Exception as exc:
+        router.logger.warning(
+            "relay.steer_ack_failed",
+            extra={"channel_id": sink.channel_id, "session": session, "error": str(exc)},
+        )
     router.logger.info(
         "relay.steer",
         extra={

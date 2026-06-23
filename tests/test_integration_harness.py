@@ -323,6 +323,14 @@ class _FailingSendSink(_FakeSink):
         raise RuntimeError("Separator is not found, and chunk exceed the limit")
 
 
+class _FakeTaskCloser:
+    def __init__(self) -> None:
+        self.calls = []
+
+    async def close(self, channel_id: str, session: str, repo_path: str, mode: str, sink) -> None:
+        self.calls.append((channel_id, session, repo_path, mode, sink))
+
+
 class _FakeAsyncContext:
     async def __aenter__(self):
         return None
@@ -1583,6 +1591,30 @@ def test_integration_plain_message_auto_steers_single_active_session(tmp_path):
     assert any("Steer delivered to session 'default'." in msg for msg in texts)
 
 
+def test_integration_plain_message_steer_ack_failure_does_not_abort(tmp_path):
+    router, _ = _build_router(tmp_path)
+    sink = _FailingSendSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    proc = _FakeProc()
+
+    async def run():
+        await router.set_active("chan", "default", proc)
+        await router.handle_message(_discord_event("focus on the failing tests", "code-repo"), sink)
+
+    asyncio.run(run())
+
+    assert "focus on the failing tests\n" in proc.writes
+    assert any(
+        level == "warning"
+        and name == "relay.steer_ack_failed"
+        and extra["error"] == "Separator is not found, and chunk exceed the limit"
+        for level, name, extra in router.logger.entries
+    )
+    assert any(
+        level == "info" and name == "relay.steer"
+        for level, name, _ in router.logger.entries
+    )
+
+
 def test_integration_plain_message_with_multiple_active_sessions_is_rejected(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -1617,6 +1649,27 @@ def test_integration_plain_message_with_no_active_session_falls_through_to_resum
 
     asyncio.run(run())
     assert runner.calls != [] or runner.last_proc is not None
+
+
+def test_integration_done_merge_rejected_while_session_active(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    closer = _FakeTaskCloser()
+    router._task_closer = closer
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.set_active("chan", "default", _FakeProc())
+        await router.handle_message(_discord_event("!c done --merge", "code-repo"), sink)
+
+    asyncio.run(run())
+
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Cannot close dispatch task while session 'default' is still running." in msg for msg in texts)
+    assert closer.calls == []
 
 
 def test_integration_session_targeted_steer_and_answer_shortcuts(tmp_path):

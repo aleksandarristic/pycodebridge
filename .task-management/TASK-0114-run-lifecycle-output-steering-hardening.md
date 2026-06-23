@@ -1,7 +1,7 @@
 # TASK-0114: Prevent output delivery, chunking, and steering-side failures from aborting active agent runs
 
 ## Status
-Immediate TODO.
+Completed 2026-06-23.
 
 ## Context
 On 2026-06-23, the `pycodebridge` channel session for repo `pycodebridge` showed an apparent Claude failure while the run was still active and heartbeat/steering behavior was in play.
