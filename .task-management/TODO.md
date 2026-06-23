@@ -10,6 +10,7 @@ Rules:
 
 ## Active tasks
 
-### Dispatch orchestrator (`feature/dispatch-orchestrator`)
+### Repo bootstrap improvements
 
-- TASK-0104 — Dispatch documentation and worked examples
+- TASK-0112 — Update AGENTS.sample.md with dispatch workflow section; wire it into docker config
+- TASK-0113 — `!c gh-create` command: check existing GH repo, create if absent, add remote
