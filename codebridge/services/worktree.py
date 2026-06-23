@@ -57,10 +57,7 @@ class WorktreeManager:
         branch = branch_name or f"{_SESSION_BRANCH_PREFIX}{slug}/{_timestamp()}"
         wt_path = self._worktree_path(repo_path, slug)
 
-        if base_branch:
-            await _git(repo_path, ["worktree", "add", "-b", branch, wt_path, base_branch])
-        else:
-            await _git(repo_path, ["worktree", "add", "-b", branch, wt_path])
+        await _worktree_add(repo_path, branch, wt_path, base_branch)
         return wt_path
 
     async def remove(self, worktree_path: str) -> None:
@@ -104,6 +101,34 @@ class WorktreeManager:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+async def _worktree_add(repo_path: str, branch: str, wt_path: str, base_branch: str) -> None:
+    """Run git worktree add, recovering from stale directory and existing branch."""
+    # Clean up orphaned directory left by a previous crashed session.
+    if os.path.isdir(wt_path):
+        _log.warning("worktree.stale_dir", extra={"path": wt_path})
+        try:
+            await _git(repo_path, ["worktree", "remove", "--force", wt_path])
+        except WorktreeError:
+            pass
+        if os.path.isdir(wt_path):
+            shutil.rmtree(wt_path, ignore_errors=True)
+
+    args_create = ["worktree", "add", "-b", branch, wt_path]
+    if base_branch:
+        args_create.append(base_branch)
+    try:
+        await _git(repo_path, args_create)
+        return
+    except WorktreeError as exc:
+        if "already exists" not in str(exc):
+            raise
+
+    # Branch already exists (left from a previous run) — check it out instead.
+    _log.warning("worktree.branch_exists", extra={"branch": branch})
+    args_checkout = ["worktree", "add", wt_path, branch]
+    await _git(repo_path, args_checkout)
+
 
 def _safe_slug(session_key: str, max_len: int = 40) -> str:
     slug = _SAFE_SLUG_RE.sub("-", session_key or "session")
