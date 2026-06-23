@@ -536,6 +536,11 @@ class Router:
         if repo_path is None:
             return True
         session = self.current_session_for_event(event)
+        if self._orchestrator is not None:
+            spec = parse_dispatch(prompt)
+            if spec is not None:
+                await self._orchestrator.run(spec, event.channel_id, session, repo_path, repo_name, sink)
+                return True
         await self.handle_resume(event, sink, repo_name, repo_path, session, prompt)
         return True
 
