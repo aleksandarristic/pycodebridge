@@ -58,6 +58,8 @@ class DispatchOutputHandler:
 
     async def on_agent_output(self, agent: str, text: str, max_chars: int) -> None:
         """Relay live assistant output from a dispatched agent."""
+        if not self._per_agent():
+            return
         text = (text or "").strip()
         if not text:
             return

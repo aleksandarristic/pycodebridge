@@ -110,6 +110,29 @@ def test_both_mode_posts_everything():
     assert len(sink.messages) == 3  # start + done + aggregate
 
 
+def test_aggregate_output_silent():
+    sink = FakeSink()
+    h = DispatchOutputHandler("aggregate", sink)
+    run(h.on_agent_output("codex", "some live text", 2000))
+    assert len(sink.messages) == 0
+
+
+def test_per_agent_output_relays():
+    sink = FakeSink()
+    h = DispatchOutputHandler("per_agent", sink)
+    run(h.on_agent_output("codex", "hello world", 2000))
+    assert len(sink.messages) == 1
+    assert "@codex" in sink.messages[0]
+    assert "hello world" in sink.messages[0]
+
+
+def test_both_mode_output_relays():
+    sink = FakeSink()
+    h = DispatchOutputHandler("both", sink)
+    run(h.on_agent_output("claude", "thinking…", 2000))
+    assert len(sink.messages) == 1
+
+
 def test_zero_files_changed_does_not_crash():
     sink = FakeSink()
     h = DispatchOutputHandler("both", sink)
