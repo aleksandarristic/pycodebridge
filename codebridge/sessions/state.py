@@ -23,6 +23,7 @@ class SessionState:
     model: str = ""
     reasoning_effort: str = ""
     backend: str = ""
+    worktree_path: str = ""
     created_at: str = ""
     last_used_at: str = ""
 
@@ -170,6 +171,7 @@ def _from_dict(data: Dict[str, Any]) -> FileState:
                 model=s.get("model", ""),
                 reasoning_effort=s.get("reasoning_effort", ""),
                 backend=s.get("backend", ""),
+                worktree_path=s.get("worktree_path", ""),
                 created_at=s.get("created_at", ""),
                 last_used_at=s.get("last_used_at", ""),
             )
@@ -223,6 +225,7 @@ def _to_dict(state: FileState) -> Dict[str, Any]:
                 "model": s.model,
                 "reasoning_effort": s.reasoning_effort,
                 "backend": s.backend,
+                "worktree_path": s.worktree_path,
                 "created_at": s.created_at,
                 "last_used_at": s.last_used_at,
             }

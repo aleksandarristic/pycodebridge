@@ -160,3 +160,52 @@ def test_state_load_invalidates_cache_after_external_write(tmp_path):
 
     loaded = store.load()
     assert loaded.channels["chan"].sessions["default"].thread_id == "thread-2"
+
+
+def test_worktree_path_round_trips(tmp_path):
+    store = Store(str(tmp_path))
+
+    def mutator(fs):
+        from codebridge.sessions.state import ChannelState, SessionState
+        ch = ChannelState()
+        ch.sessions["default"] = SessionState(
+            repo_name="myrepo", repo_path="/repos/myrepo", thread_id="",
+            worktree_path="/repos/myrepo-wt-ch1"
+        )
+        fs.channels["ch1"] = ch
+
+    store.update(mutator)
+    loaded = store.load()
+    assert loaded.channels["ch1"].sessions["default"].worktree_path == "/repos/myrepo-wt-ch1"
+
+
+def test_worktree_path_defaults_empty_for_old_state(tmp_path):
+    import json
+    path = tmp_path / "state.json"
+    path.write_text(json.dumps({
+        "version": 1,
+        "channels": {"ch1": {"sessions": {"default": {
+            "repo_name": "myrepo", "repo_path": "/repos/myrepo", "thread_id": "",
+        }}, "sticky": {}}},
+    }), encoding="utf-8")
+    store = Store(str(tmp_path))
+    loaded = store.load()
+    assert loaded.channels["ch1"].sessions["default"].worktree_path == ""
+
+
+def test_worktree_path_cleared_serializes_as_empty_string(tmp_path):
+    store = Store(str(tmp_path))
+
+    def mutator(fs):
+        from codebridge.sessions.state import ChannelState, SessionState
+        ch = ChannelState()
+        ch.sessions["default"] = SessionState(
+            repo_name="myrepo", repo_path="/repos/myrepo", thread_id="",
+            worktree_path="",
+        )
+        fs.channels["ch1"] = ch
+
+    store.update(mutator)
+    import json
+    raw = json.loads((tmp_path / "state.json").read_text())
+    assert raw["channels"]["ch1"]["sessions"]["default"]["worktree_path"] == ""
