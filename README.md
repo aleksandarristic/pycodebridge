@@ -10,6 +10,8 @@ Default backend: Codex. Additional supported backends: Claude Code and Gemini CL
 - Stream agent JSONL output to transports; strip control codes; flag prompts needing user input.
 - Per-channel queue, multi-session support (max 3 per channel), run control (stop/interrupt/kill/quit).
 - Per-session backend selection across supported agentic coding CLIs.
+- **Multi-agent dispatch** — `@claude @codex @gemini` syntax routes a task to multiple agents,
+  with Claude planning first and workers running in parallel on isolated git branches.
 - Optional DM admin mode for owner-only repo management (Discord).
 - Transport-agnostic router (`MessageEvent` + `ResponseSink`).
 
@@ -460,6 +462,53 @@ worktrees:
   cleanup_on_end: remove  # remove | keep | pr
 ```
 
+## Multi-agent dispatch
+
+Dispatch routes a single message to one or more AI agents, each running in a git worktree
+on a branch forked from a shared **task branch**. Requires `worktrees.enabled: true`.
+
+**Syntax** — prefix your prompt with `@agent` handles:
+
+```
+@codex implement OAuth2 login
+@codex @gemini refactor the payment module
+@claude @codex add rate limiting with Redis
+```
+
+**Patterns**
+
+| Pattern | Trigger | Behaviour |
+|---------|---------|-----------|
+| Solo | `@codex <prompt>` | One agent, one branch |
+| Fan-out | `@codex @gemini <prompt>` | Both run in parallel, separate branches |
+| Orchestrated | `@claude @codex <prompt>` | Claude plans first, workers receive the plan |
+
+**Branch layout**
+
+```
+task/<repo>/<yyyymmdd-hhmmss>          ← persists across dispatches in a session
+  └─ task/<repo>/<ts>-<agent>          ← per-worker branch, created each dispatch
+```
+
+**Close the task when done**
+
+```
+!c done          # uses dispatch.close_mode from config (default: pr)
+!c done --pr     # push branch + open a draft PR
+!c done --merge  # merge into default branch and push
+```
+
+**Config**
+
+```yaml
+dispatch:
+  output_mode: both    # per_agent | aggregate | both
+  close_mode: pr       # pr | merge
+```
+
+Full reference: [`docs/dispatch.md`](docs/dispatch.md)
+Examples: [`docs/examples/`](docs/examples/)
+
 ## State And Artifact Map
 - `state.data_dir/state.json` — canonical persisted channel/session metadata, DM bindings, and runtime options.
 - `state.data_dir/state.json.lock` — file lock used for atomic state mutations.
@@ -482,3 +531,7 @@ worktrees:
 ## Docs
 - Architecture diagram (Mermaid): `docs/architecture.mmd`
 - Docker run guide: `DOCKER.md`
+- Multi-agent dispatch: `docs/dispatch.md`
+  - Example: orchestrated `@claude @codex`: `docs/examples/login-feature.md`
+  - Example: parallel fan-out `@codex @gemini`: `docs/examples/refactor.md`
+  - Example: solo `@claude`: `docs/examples/solo-claude.md`

@@ -12,9 +12,4 @@ Rules:
 
 ### Dispatch orchestrator (`feature/dispatch-orchestrator`)
 
-- TASK-0099 — Dispatch parser: @agent extraction and fan-out detection
-- TASK-0100 — DispatchConfig: dataclass + YAML loading + validation
-- TASK-0101 — Orchestrator flow: task branch + sequential/parallel dispatch
-- TASK-0102 — Dispatch output: per-agent status messages and aggregate summary
-- TASK-0103 — Task close command: `!c done` with PR and merge modes
 - TASK-0104 — Dispatch documentation and worked examples
