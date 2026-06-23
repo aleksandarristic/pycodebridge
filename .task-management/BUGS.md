@@ -10,17 +10,6 @@ Rules:
 
 ## Bug backlog
 
-- [TASK-0107] Worktree cleanup leaves stale Git worktree entries when `worktrees.base_dir` is outside the repo parent.
-  - Reported: 2026-06-23
-  - Context: `WorktreeManager.remove()` tries to rediscover the owning repo by scanning siblings of the worktree path. When `base_dir` points to an external directory, the original repo is not a sibling, so cleanup deletes the directory with `shutil.rmtree()` without running `git worktree remove`.
-  - Impact: Git retains a prunable worktree entry for a non-existent path; `count_for_repo()` still counts it until prune runs, which can incorrectly hit `max_per_repo` and block new sessions.
-  - Evidence: A local reproduction with an external `base_dir` showed `count_for_repo()` remained `1` after `remove()`, and `git worktree list --porcelain` reported `prunable gitdir file points to non-existent location`.
-  - Investigate: `codebridge/services/worktree.py` repo ownership tracking, startup prune behavior, and `tests/test_worktree_manager.py` base-dir cleanup coverage.
-  - Acceptance criteria:
-    - Removing an externally hosted worktree runs `git worktree remove` against the correct repo.
-    - `count_for_repo()` returns `0` immediately after cleanup for worktrees created under `base_dir`.
-    - Regression coverage covers external `base_dir` cleanup and max-per-repo behavior after removal.
-
 - [TASK-0090] Gemini streamed Discord output chunks can arrive out of order.
   - Reported: 2026-06-11
   - Context: In a Discord channel using `!agent gemini`, the assistant response was delivered as chunks in the wrong order:

@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0107] Worktree cleanup unregisters external `base_dir` worktrees.
+  - Completed: 2026-06-23
+  - Notes: Resolved linked worktree owners from the worktree `.git` file before falling back to sibling repo discovery, so external `worktrees.base_dir` cleanup runs `git worktree remove` against the correct repo. Added regression coverage proving external worktree removal clears `count_for_repo()` immediately and leaves no prunable entry.
+
 - [TASK-0106] Failed dispatch close preserves the active task branch for retry.
   - Completed: 2026-06-23
   - Notes: Changed `TaskCloser.close()` to clear task state and clean worker branches only after PR creation or merge succeeds. Updated regression coverage so failed close attempts keep the task branch and skip cleanup.

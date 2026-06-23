@@ -140,7 +140,11 @@ def _timestamp() -> str:
 
 
 def _find_repo_for_worktree(worktree_path: str) -> str:
-    """Walk upward from a worktree sibling to find its git repo."""
+    """Return the owning repo for a linked worktree path, when discoverable."""
+    repo = _find_repo_from_git_file(worktree_path)
+    if repo:
+        return repo
+
     parent = os.path.dirname(os.path.realpath(worktree_path))
     try:
         entries = list(os.scandir(parent))
@@ -151,6 +155,33 @@ def _find_repo_for_worktree(worktree_path: str) -> str:
             git_dir = os.path.join(entry.path, ".git")
             if os.path.isdir(git_dir):
                 return entry.path
+    return ""
+
+
+def _find_repo_from_git_file(worktree_path: str) -> str:
+    """Resolve the main repo from a linked worktree's .git file."""
+    wt_real = os.path.realpath(worktree_path)
+    git_file = os.path.join(wt_real, ".git")
+    if not os.path.isfile(git_file):
+        return ""
+    try:
+        with open(git_file, "r", encoding="utf-8") as f:
+            first = f.readline().strip()
+    except OSError:
+        return ""
+    prefix = "gitdir:"
+    if not first.lower().startswith(prefix):
+        return ""
+    gitdir = first[len(prefix) :].strip()
+    if not os.path.isabs(gitdir):
+        gitdir = os.path.join(wt_real, gitdir)
+    gitdir = os.path.realpath(gitdir)
+    common_git_dir = os.path.dirname(os.path.dirname(gitdir))
+    if os.path.basename(common_git_dir) != ".git":
+        return ""
+    repo = os.path.dirname(common_git_dir)
+    if os.path.isdir(os.path.join(repo, ".git")):
+        return repo
     return ""
 
 

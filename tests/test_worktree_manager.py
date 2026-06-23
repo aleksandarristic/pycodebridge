@@ -79,6 +79,24 @@ def test_create_path_base_dir_strategy(repo, tmp_path):
     assert os.path.dirname(os.path.realpath(wt_path)) == str(base)
 
 
+def test_remove_external_base_dir_unregisters_git_worktree(repo, tmp_path):
+    base = tmp_path / "external" / "worktrees"
+    base.mkdir(parents=True)
+    mgr = WorktreeManager(base_dir=str(base), max_per_repo=8, cleanup_on_end="remove")
+    wt_path = run(mgr.create(str(repo), "ch1-default"))
+
+    assert run(mgr.count_for_repo(str(repo))) == 1
+    run(mgr.remove(wt_path))
+
+    assert not os.path.isdir(wt_path)
+    assert run(mgr.count_for_repo(str(repo))) == 0
+    result = subprocess.run(
+        ["git", "-C", str(repo), "worktree", "list", "--porcelain"],
+        capture_output=True, text=True, check=True,
+    )
+    assert "prunable gitdir file points to non-existent location" not in result.stdout
+
+
 def test_remove_deletes_directory(repo, manager):
     wt_path = run(manager.create(str(repo), "ch1-default"))
     assert os.path.isdir(wt_path)
