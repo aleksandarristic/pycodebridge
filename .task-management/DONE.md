@@ -8,6 +8,21 @@ Rules:
 Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
+
+- [TASK-0098] Docs: `config.example.yaml`, `config.docker.example.yaml` + README worktree section.
+  - Completed: 2026-06-23
+
+- [TASK-0097] Wire `WorktreeManager` into router/coordinator: create on run-start, remove on exit.
+  - Completed: 2026-06-23
+
+- [TASK-0096] `SessionState.worktree_path` field + JSON persistence.
+  - Completed: 2026-06-23
+
+- [TASK-0095] `services/worktree.py`: `WorktreeManager` with create/remove/prune.
+  - Completed: 2026-06-23
+
+- [TASK-0094] `WorktreeConfig` dataclass + YAML loading + validation in `config.py`.
+  - Completed: 2026-06-23
   - Notes: Optional
 
 ## Completed tasks
