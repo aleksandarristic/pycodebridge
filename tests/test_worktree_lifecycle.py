@@ -110,7 +110,7 @@ class _FakeWorktreeManager:
         self.prune_calls: List[str] = []
         self.cleanup_on_end = "remove"
 
-    async def create(self, repo_path: str, session_key: str) -> str:
+    async def create(self, repo_path: str, session_key: str, symlink_dirs=None, **kwargs) -> str:
         self.create_calls.append((repo_path, session_key))
         if self._raise_on_create:
             raise WorktreeError("max worktrees reached")

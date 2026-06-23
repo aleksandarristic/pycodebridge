@@ -158,7 +158,7 @@ class Orchestrator:
             )
             # Remove the worktree immediately — we just needed the branch created.
             # Agents get their own forked worktrees from this branch.
-            await self._wt_manager.remove(wt_path)
+            await self._wt_manager.remove(wt_path)  # no need to symlink for ephemeral branch-init worktree
         except WorktreeError as exc:
             raise OrchestratorError(str(exc)) from exc
         return task_branch
@@ -199,6 +199,7 @@ class Orchestrator:
             return AgentResult(agent=agent, success=False, error=str(exc))
 
         slug = _branch_to_slug(base_or_task_branch)
+        symlink_dirs = list(getattr(self._cfg.worktrees, "symlink_dirs", None) or [])
         if branch_is_base:
             # For planning: agent runs directly on the task branch (no fork)
             worker_branch = base_or_task_branch
@@ -207,6 +208,7 @@ class Orchestrator:
                     repo_path,
                     f"{slug}-{agent}",
                     branch_name=worker_branch,
+                    symlink_dirs=symlink_dirs,
                 )
             except WorktreeError as exc:
                 return AgentResult(agent=agent, success=False, error=str(exc))
@@ -219,6 +221,7 @@ class Orchestrator:
                     f"{slug}-{agent}",
                     base_branch=base_or_task_branch,
                     branch_name=worker_branch,
+                    symlink_dirs=symlink_dirs,
                 )
             except WorktreeError as exc:
                 return AgentResult(agent=agent, success=False, error=str(exc))

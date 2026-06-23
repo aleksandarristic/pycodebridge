@@ -130,3 +130,10 @@ worktrees:
   #   keep   — leave the branch and directory for manual inspection or PR
   #   pr     — (future) push branch and open a draft PR, then remove
   cleanup_on_end: remove
+
+  # Directories to symlink from the main repo into each new worktree.
+  # Useful for non-git dirs that agents need (e.g. .venv, node_modules).
+  # Symlinks are created only when the source dir exists in the main repo.
+  symlink_dirs:
+    - .venv
+    - node_modules

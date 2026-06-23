@@ -2166,7 +2166,10 @@ class Router:
             if self._wt_manager is not None:
                 session_key = f"{channel_id}-{session or DEFAULT_SESSION}"
                 try:
-                    active_worktree_path = await self._wt_manager.create(repo_path, session_key)
+                    active_worktree_path = await self._wt_manager.create(
+                        repo_path, session_key,
+                        symlink_dirs=list(getattr(self.cfg.worktrees, "symlink_dirs", None) or []),
+                    )
                     effective_repo_path = active_worktree_path
                     self.coordinator.update_worktree_path(channel_id, session, active_worktree_path)
                 except WorktreeError as exc:

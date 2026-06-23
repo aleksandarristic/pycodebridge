@@ -38,6 +38,7 @@ class WorktreeManager:
         session_key: str,
         base_branch: str = "",
         branch_name: str = "",
+        symlink_dirs: "list[str] | None" = None,
     ) -> str:
         """Create a new git worktree for (repo_path, session_key).
 
@@ -46,6 +47,7 @@ class WorktreeManager:
 
         base_branch: when set, fork the new branch from this ref instead of HEAD.
         branch_name: when set, use this exact branch name instead of the auto-generated one.
+        symlink_dirs: dirs to symlink from repo_path into the worktree (e.g. [".venv"]).
         """
         count = await self.count_for_repo(repo_path)
         if count >= self._max_per_repo:
@@ -58,6 +60,8 @@ class WorktreeManager:
         wt_path = self._worktree_path(repo_path, slug)
 
         await _worktree_add(repo_path, branch, wt_path, base_branch)
+        if symlink_dirs:
+            _symlink_dirs(repo_path, wt_path, symlink_dirs)
         return wt_path
 
     async def remove(self, worktree_path: str) -> None:
@@ -128,6 +132,22 @@ async def _worktree_add(repo_path: str, branch: str, wt_path: str, base_branch: 
     _log.warning("worktree.branch_exists", extra={"branch": branch})
     args_checkout = ["worktree", "add", "-f", wt_path, branch]
     await _git(repo_path, args_checkout)
+
+
+def _symlink_dirs(repo_path: str, wt_path: str, names: "list[str]") -> None:
+    """Symlink non-git dirs (e.g. .venv) from the main repo into a worktree."""
+    repo_abs = os.path.realpath(repo_path)
+    for name in names:
+        src = os.path.join(repo_abs, name)
+        dst = os.path.join(wt_path, name)
+        if not os.path.exists(src):
+            continue
+        if os.path.exists(dst) or os.path.islink(dst):
+            continue
+        try:
+            os.symlink(src, dst)
+        except OSError as exc:
+            _log.warning("worktree.symlink_failed", extra={"src": src, "dst": dst, "error": str(exc)})
 
 
 def _safe_slug(session_key: str, max_len: int = 40) -> str:

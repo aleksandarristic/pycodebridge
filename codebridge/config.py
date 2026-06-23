@@ -186,6 +186,7 @@ class WorktreeConfig:
     base_dir: str = DEFAULT_WORKTREE_BASE_DIR
     max_per_repo: int = DEFAULT_WORKTREE_MAX_PER_REPO
     cleanup_on_end: str = DEFAULT_WORKTREE_CLEANUP_ON_END
+    symlink_dirs: list = field(default_factory=lambda: [".venv", "node_modules"])
 
 
 @dataclass
@@ -452,6 +453,9 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.worktrees.cleanup_on_end = str(
         worktrees.get("cleanup_on_end", cfg.worktrees.cleanup_on_end) or DEFAULT_WORKTREE_CLEANUP_ON_END
     )
+    raw_symlink = worktrees.get("symlink_dirs")
+    if isinstance(raw_symlink, list):
+        cfg.worktrees.symlink_dirs = [str(d) for d in raw_symlink if d]
 
     dispatch = raw.get("dispatch", {}) or {}
     cfg.dispatch.output_mode = str(

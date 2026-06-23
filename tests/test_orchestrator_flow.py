@@ -51,7 +51,7 @@ class FakeWorktreeManager:
     _count: int = 0
     fail_on_create: bool = False
 
-    async def create(self, repo_path, session_key, base_branch="", branch_name=""):
+    async def create(self, repo_path, session_key, base_branch="", branch_name="", symlink_dirs=None):
         if self.fail_on_create:
             raise WorktreeError("create failed")
         entry = {
