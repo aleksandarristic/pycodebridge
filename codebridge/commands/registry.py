@@ -854,25 +854,9 @@ async def _cmd_agent(router: Any, message: MessageEvent, sink: ResponseSink, rep
     model_override = ""
     effort_override = ""
 
-    # No args or lone non-backend token → show current selection
-    show_session: str | None = None
     if not parts:
-        show_session = session_name
-    elif len(parts) == 1 and parts[0].strip().lower() not in KNOWN_BACKENDS:
-        show_session = parts[0]
-    if show_session is not None:
-        resolved = await _resolve_session_name(router, message, sink, show_session)
-        if not resolved:
-            return
-        state = router.state.load()
-        ch = state.channels.get(message.channel_id)
-        sess = ch.sessions.get(resolved) if ch else None
-        if sess and sess.backend:
-            label = f"{sess.backend} (session override)"
-        else:
-            default_bn = (getattr(router.cfg, "agent", None) and router.cfg.agent.default_backend) or "codex"
-            label = f"{default_bn} (configured default)"
-        await router.reply(sink, f"Session '{resolved}' backend: {label}.")
+        prefix = getattr(router, "_transport_prefix", lambda e: "!c")(message)
+        await router.reply_forbidden(sink, f"Usage: {prefix} agent [session] <backend> [model] [effort]\nAvailable: {', '.join(sorted(KNOWN_BACKENDS))}")
         return
 
     # Disambiguate: first token is a backend name or a session name
