@@ -75,3 +75,29 @@ def test_coalescer_flush_is_noop_when_empty():
 
     asyncio.run(run())
     assert sent == []
+
+
+def test_coalescer_can_prefix_buffered_split_prompt():
+    sent, relay = _collector()
+
+    async def run() -> None:
+        c = _OutputCoalescer(relay, max_chars=1000, flush_seconds=10.0)
+        await c.add("Hello! How can I help you with the s")
+        assert await c.prefix_buffer("Gemini asks: ") is True
+        await c.add("ajt repository today?")
+        await c.flush()
+
+    asyncio.run(run())
+    assert sent == ["Gemini asks: Hello! How can I help you with the s\najt repository today?"]
+
+
+def test_coalescer_prefix_buffer_noops_when_empty():
+    sent, relay = _collector()
+
+    async def run() -> None:
+        c = _OutputCoalescer(relay, max_chars=1000, flush_seconds=10.0)
+        assert await c.prefix_buffer("Gemini asks: ") is False
+        await c.flush()
+
+    asyncio.run(run())
+    assert sent == []

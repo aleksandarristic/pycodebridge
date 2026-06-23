@@ -228,6 +228,17 @@ class _OutputCoalescer:
         async with self._lock:
             await self._flush_locked()
 
+    async def prefix_buffer(self, prefix: str) -> bool:
+        """Prepend prefix to buffered output; return True when buffered text existed."""
+        async with self._lock:
+            if not self._buf:
+                return False
+            if self._buf[0].startswith(prefix):
+                return True
+            self._buf[0] = f"{prefix}{self._buf[0]}"
+            self._size += len(prefix)
+            return True
+
     async def _flush_locked(self) -> None:
         self._cancel_timer()
         if not self._buf:
@@ -2890,7 +2901,9 @@ class Router:
             if awaiting:
                 self._mark_awaiting_input(channel_id, session)
                 ask_prefix = (backend or self.runner).ask_prefix
-                text = f"{ask_prefix} {text}"
+                prefix = f"{ask_prefix} "
+                if coalescer is None or not await coalescer.prefix_buffer(prefix):
+                    text = f"{prefix}{text}"
             if tracker is not None and text.strip():
                 tracker.events += 1
                 tracker.last = text.strip()

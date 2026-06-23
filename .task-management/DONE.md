@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0090] Gemini streamed output preserves ask prefix across split chunks.
+  - Completed: 2026-06-23
+  - Notes: Added buffered-output prefixing so a later chunk that reveals a split prompt can prepend `Gemini asks:` to the already-buffered first chunk before flushing. Added coalescer regression coverage for split Gemini prompt output and empty-buffer behavior.
+
 - [TASK-0110] Dispatch parser ignores `@agent` substrings inside emails and words.
   - Completed: 2026-06-23
   - Notes: Tightened dispatch mention parsing to require standalone mention boundaries, preserving emails, identifiers, and hyphenated tokens that contain known agent names. Added parser regression coverage for email, word-boundary, hyphenated, and punctuation cases.
