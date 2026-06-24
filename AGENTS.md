@@ -19,6 +19,15 @@
   - `./.venv/bin/pytest`
 - Do not use system `python`, `pip`, or `pytest` for repo tasks.
 
+## Local runtime environment
+- Do not assume every agent run has the same surrounding tooling. At the start
+  of any task that needs build, preview, or external CLI verification, check the
+  current session for the required commands before deciding which verification
+  steps are available.
+- If present, `.agent-env.local.md` is a gitignored environment note for quick
+  orientation. Treat it as a cache only; verify relevant commands before relying
+  on it.
+
 ## Baseline workflow
 - Validate quickly before/after non-trivial edits:
   - Run only tests related to changed code.
