@@ -352,6 +352,7 @@ async def dm_create_repo(
         return err
     await router.bootstrap_repo_git_config(repo_path)
     try:
+        router.bootstrap_agent_env_cache(repo_path)
         router.seed_agents_template(repo_path)
     except Exception as exc:
         return exc
@@ -385,6 +386,10 @@ async def dm_clone_repo(
     if err:
         return err
     await router.bootstrap_repo_git_config(repo_path)
+    try:
+        router.bootstrap_agent_env_cache(repo_path)
+    except Exception as exc:
+        return exc
     await dm_reply(router, sink, entry, f"Clone complete: {clone_url} -> {repo_path}. Use `#code-{repo_name}` for prompts.")
     router.logger.info("dm.bind.clonerepo", extra={"platform": event.platform, "user_id": event.author_id, "repo": repo_name})
     router.logger.info("dm.clonerepo.ok", extra={"user_id": event.author_id, "repo": repo_name, "url": clone_url, "path": repo_path})
@@ -417,6 +422,10 @@ async def dm_copy_repo(
     if err:
         return err
     await router.bootstrap_repo_git_config(dst_path)
+    try:
+        router.bootstrap_agent_env_cache(dst_path)
+    except Exception as exc:
+        return exc
     await dm_reply(router, sink, entry, f"Copied repo to {dst_path}. Continue in #code-{to_name}")
     router.logger.info("dm.bind.copyrepo", extra={"platform": event.platform, "user_id": event.author_id, "repo": to_name})
     router.logger.info("dm.copyrepo.ok", extra={"user_id": event.author_id, "repo": from_name, "target": dst_path})

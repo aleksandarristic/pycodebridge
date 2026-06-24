@@ -3,6 +3,7 @@ import asyncio
 from codebridge import config as cfgmod
 from codebridge.handlers import dm_admin
 from codebridge.platform.transport import Capabilities, MessageEvent
+from codebridge.routing.router import LOCAL_AGENT_ENV_FILENAME, LOCAL_AGENT_EXCLUDE_LINES, Router
 
 
 class _FakeSink:
@@ -42,6 +43,12 @@ class _FakeLogger:
 
 
 class _FakeRouter:
+    _agent_env_content = classmethod(Router._agent_env_content.__func__)
+    _repo_tool_status = staticmethod(Router._repo_tool_status)
+    _external_tool_status = staticmethod(Router._external_tool_status)
+    _git_info_exclude_path = staticmethod(Router._git_info_exclude_path)
+    _ensure_exclude_line = staticmethod(Router._ensure_exclude_line)
+
     def __init__(self, cfg: cfgmod.Config) -> None:
         self.cfg = cfg
         self.logger = _FakeLogger()
@@ -53,6 +60,9 @@ class _FakeRouter:
 
     async def bootstrap_repo_git_config(self, repo_path: str) -> None:
         self.bootstrapped.append(repo_path)
+
+    def bootstrap_agent_env_cache(self, repo_path: str) -> None:
+        Router.bootstrap_agent_env_cache(self, repo_path)
 
     def seed_agents_template(self, repo_path: str) -> None:
         _ = repo_path
@@ -80,6 +90,7 @@ def test_dm_create_repo_applies_git_bootstrap(tmp_path, monkeypatch):
 
     async def _fake_run_limited_command(repo_path, args, timeout=30.0, env=None):
         _ = (repo_path, args, timeout, env)
+        (tmp_path / "repo" / ".git").mkdir(parents=True, exist_ok=True)
         return "", None
 
     monkeypatch.setattr(dm_admin, "run_limited_command", _fake_run_limited_command)
@@ -90,6 +101,15 @@ def test_dm_create_repo_applies_git_bootstrap(tmp_path, monkeypatch):
 
     asyncio.run(run())
     assert router.bootstrapped == [str(tmp_path / "repo")]
+    assert (tmp_path / "repo" / LOCAL_AGENT_ENV_FILENAME).exists()
+    content = (tmp_path / "repo" / LOCAL_AGENT_ENV_FILENAME).read_text(encoding="utf-8")
+    assert "`./.venv/bin/python`: missing" in content
+    assert "Python virtualenv policy" in content
+    assert "keep it gitignored" in content
+    assert "`ruby`:" in content
+    exclude = (tmp_path / "repo" / ".git" / "info" / "exclude").read_text(encoding="utf-8")
+    for line in LOCAL_AGENT_EXCLUDE_LINES:
+        assert line in exclude
 
 
 def test_dm_clone_repo_applies_git_bootstrap(tmp_path, monkeypatch):
@@ -120,6 +140,8 @@ def test_dm_clone_repo_applies_git_bootstrap(tmp_path, monkeypatch):
 
     asyncio.run(run())
     assert router.bootstrapped == [str(tmp_path / "repo")]
+    assert (tmp_path / "repo" / LOCAL_AGENT_ENV_FILENAME).exists()
+    assert LOCAL_AGENT_ENV_FILENAME in (tmp_path / "repo" / ".git" / "info" / "exclude").read_text(encoding="utf-8")
 
 
 def test_dm_copy_repo_applies_git_bootstrap(tmp_path, monkeypatch):
@@ -136,6 +158,7 @@ def test_dm_copy_repo_applies_git_bootstrap(tmp_path, monkeypatch):
 
     async def _fake_run_limited_command(repo_path, args, timeout=30.0, env=None):
         _ = (repo_path, args, timeout, env)
+        (tmp_path / "dst" / ".git").mkdir(parents=True, exist_ok=True)
         return "", None
 
     monkeypatch.setattr(dm_admin, "run_limited_command", _fake_run_limited_command)
@@ -146,3 +169,22 @@ def test_dm_copy_repo_applies_git_bootstrap(tmp_path, monkeypatch):
 
     asyncio.run(run())
     assert router.bootstrapped == [str(tmp_path / "dst")]
+    assert (tmp_path / "dst" / LOCAL_AGENT_ENV_FILENAME).exists()
+    assert LOCAL_AGENT_ENV_FILENAME in (tmp_path / "dst" / ".git" / "info" / "exclude").read_text(encoding="utf-8")
+
+
+def test_agent_env_bootstrap_preserves_existing_memory(tmp_path):
+    cfg = cfgmod.Config()
+    router = _FakeRouter(cfg)
+    repo = tmp_path / "repo"
+    (repo / ".git" / "info").mkdir(parents=True)
+    env_path = repo / LOCAL_AGENT_ENV_FILENAME
+    env_path.write_text("existing memory\n", encoding="utf-8")
+
+    router.bootstrap_agent_env_cache(str(repo))
+    router.bootstrap_agent_env_cache(str(repo))
+
+    assert env_path.read_text(encoding="utf-8") == "existing memory\n"
+    exclude_lines = (repo / ".git" / "info" / "exclude").read_text(encoding="utf-8").splitlines()
+    for line in LOCAL_AGENT_EXCLUDE_LINES:
+        assert exclude_lines.count(line) == 1

@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import os
 import re
+import shutil
 import shlex
 import subprocess
 import time
@@ -92,6 +93,8 @@ _RUN_COMPLETION_MIN_SECONDS = 300
 _RUN_KEY_RESULT_MAX = 180
 _FINAL_RESULT_EXIT_GRACE_SECONDS = 2.0
 _RUNTIME_OPTION_KEYS = ("run_heartbeat_seconds", "run_completion_min_seconds", "run_idle_timeout_seconds", "show_reasoning_details", "show_tool_calls")
+LOCAL_AGENT_ENV_FILENAME = ".agent-env.local.md"
+LOCAL_AGENT_EXCLUDE_LINES = (LOCAL_AGENT_ENV_FILENAME, ".venv/")
 _TOP_LEVEL_SHORTCUT_ALIASES = (("!reset", "reset"),)
 _CODEX_UNSUPPORTED_CHATGPT_MODEL_RE = re.compile(
     r"The ['\"]([^'\"]+)['\"] model is not supported when using Codex with a ChatGPT account",
@@ -942,6 +945,97 @@ class Router:
         if not self.cfg.git.enabled or not self.cfg.git.apply_on_repo_create_clone_copy:
             return
         await git_bootstrap.apply_repo_local(self.cfg, self.logger, repo_path)
+
+    def bootstrap_agent_env_cache(self, repo_path: str) -> None:
+        """Create the local agent environment cache and ignore it locally."""
+        repo = Path(repo_path)
+        exclude_path = self._git_info_exclude_path(repo)
+        if exclude_path is not None:
+            for line in LOCAL_AGENT_EXCLUDE_LINES:
+                self._ensure_exclude_line(exclude_path, line)
+        env_path = repo / LOCAL_AGENT_ENV_FILENAME
+        if not env_path.exists():
+            env_path.write_text(self._agent_env_content(repo), encoding="utf-8")
+
+    @classmethod
+    def _agent_env_content(cls, repo: Path) -> str:
+        checked = datetime.now(timezone.utc).date().isoformat()
+        return f"""# Local Agent Environment
+
+This gitignored file is local memory for agents running in this pycodebridge
+checkout. Agents may update it with environment hints that should not be
+committed, such as missing toolchains, available virtualenvs, or local runtime
+caveats.
+
+## Session
+
+- Runtime: PyCodeBridge managed repo
+- Last checked: {checked}
+
+## Repo Tooling
+
+- `./.venv/bin/python`: {cls._repo_tool_status(repo, ".venv/bin/python")}
+- `./.venv/bin/pip`: {cls._repo_tool_status(repo, ".venv/bin/pip")}
+- `./.venv/bin/pytest`: {cls._repo_tool_status(repo, ".venv/bin/pytest")}
+- Python virtualenv policy: create `.venv` only when this repo needs Python
+  tooling, and keep it gitignored.
+
+## External Tooling
+
+- `git`: {cls._external_tool_status("git")}
+- `gh`: {cls._external_tool_status("gh")}
+- `docker`: {cls._external_tool_status("docker")}
+- `mise`: {cls._external_tool_status("mise")}
+- `ruby`: {cls._external_tool_status("ruby")}
+- `bundle`: {cls._external_tool_status("bundle")}
+- `node`: {cls._external_tool_status("node")}
+- `npm`: {cls._external_tool_status("npm")}
+
+## Notes
+
+- Verify relevant commands in the current session before relying on this file.
+- Update this file with repo-specific setup notes, missing tools, and working
+  verification commands.
+"""
+
+    @staticmethod
+    def _repo_tool_status(repo: Path, rel_path: str) -> str:
+        path = repo / rel_path
+        if not path.exists():
+            return "missing"
+        if not path.is_file():
+            return "present but not a file"
+        if not os.access(path, os.X_OK):
+            return "present but not executable"
+        return "available"
+
+    @staticmethod
+    def _external_tool_status(command: str) -> str:
+        return "available" if shutil.which(command) else "missing"
+
+    @staticmethod
+    def _git_info_exclude_path(repo: Path) -> Optional[Path]:
+        git_meta = repo / ".git"
+        if git_meta.is_dir():
+            return git_meta / "info" / "exclude"
+        if git_meta.is_file():
+            raw = git_meta.read_text(encoding="utf-8").strip()
+            prefix = "gitdir:"
+            if raw.lower().startswith(prefix):
+                git_dir = Path(raw[len(prefix):].strip())
+                if not git_dir.is_absolute():
+                    git_dir = (repo / git_dir).resolve()
+                return git_dir / "info" / "exclude"
+        return None
+
+    @staticmethod
+    def _ensure_exclude_line(exclude_path: Path, line: str) -> None:
+        exclude_path.parent.mkdir(parents=True, exist_ok=True)
+        existing = exclude_path.read_text(encoding="utf-8") if exclude_path.exists() else ""
+        if line in {item.strip() for item in existing.splitlines()}:
+            return
+        prefix = "" if not existing or existing.endswith("\n") else "\n"
+        exclude_path.write_text(f"{existing}{prefix}{line}\n", encoding="utf-8")
 
     async def handle_updates(self, sink: ResponseSink, repo_path: str) -> None:
         """Check installed Codex CLI version against npm latest."""

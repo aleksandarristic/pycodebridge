@@ -171,10 +171,11 @@ async def handle_create_repo(
         return
     await router.bootstrap_repo_git_config(repo_path)
     try:
+        router.bootstrap_agent_env_cache(repo_path)
         router.seed_agents_template(repo_path)
     except Exception as exc:
         await router.reply_forbidden(sink, str(exc))
-        router.logger.error("createrepo.agents_failed", extra={"channel_id": channel_id, "repo": repo_name, "error": str(exc)})
+        router.logger.error("createrepo.bootstrap_failed", extra={"channel_id": channel_id, "repo": repo_name, "error": str(exc)})
         return
     await router.reply(sink, f"Created repo at {repo_path}")
     router.logger.info("createrepo.ok", extra={"channel_id": channel_id, "repo": repo_name, "path": repo_path})
@@ -212,6 +213,12 @@ async def handle_clone_repo(
         router.logger.error("clonerepo.failed", extra={"channel_id": channel_id, "repo": repo_name, "url": clone_url, "error": str(err)})
         return
     await router.bootstrap_repo_git_config(repo_path)
+    try:
+        router.bootstrap_agent_env_cache(repo_path)
+    except Exception as exc:
+        await router.reply_forbidden(sink, str(exc))
+        router.logger.error("clonerepo.bootstrap_failed", extra={"channel_id": channel_id, "repo": repo_name, "error": str(exc)})
+        return
     await router.reply(sink, f"Clone complete: {clone_url} -> {repo_path}\nUse `#code-{repo_name}` for prompts.")
     router.logger.info("clonerepo.ok", extra={"channel_id": channel_id, "repo": repo_name, "url": clone_url, "path": repo_path})
 
@@ -242,6 +249,12 @@ async def handle_copy_repo(
         router.logger.error("copyrepo.git_init_failed", extra={"channel_id": channel_id, "repo": repo_name, "target": target_path, "error": str(err)})
         return
     await router.bootstrap_repo_git_config(target_path)
+    try:
+        router.bootstrap_agent_env_cache(target_path)
+    except Exception as exc:
+        await router.reply_forbidden(sink, str(exc))
+        router.logger.error("copyrepo.bootstrap_failed", extra={"channel_id": channel_id, "repo": repo_name, "target": target_path, "error": str(exc)})
+        return
     await router.reply(sink, f"Copied repo to {target_path}. Continue in #code-{new_name}")
     router.logger.info("copyrepo.ok", extra={"channel_id": channel_id, "repo": repo_name, "target": target_path})
 

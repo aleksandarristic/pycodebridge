@@ -173,6 +173,10 @@ network_access = true
 ### `repo_bootstrap`
 - `agents_template` (default empty) — optional AGENTS.md template for `!c create`.
 - `spec_prompt` (default template) — prompt used by `!c spec`.
+- Managed create/clone/copy operations also seed `.agent-env.local.md` as a
+  gitignored local memory file with initial tool availability hints. The ignore
+  rules for `.agent-env.local.md` and `.venv/` are written to
+  `.git/info/exclude`, so project `.gitignore` is not modified.
 
 ### Prompt profiles and model defaults
 - Routine coding/support tasks:
