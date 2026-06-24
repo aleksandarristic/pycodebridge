@@ -11,7 +11,7 @@ Format:
 
 - [TASK-0116] Bootstrap local agent environment cache for managed repos.
   - Completed: 2026-06-24
-  - Notes: Create/clone/copy now seed `.agent-env.local.md` as a preserved local agent memory file with initial tool availability hints and add local ignore rules for `.agent-env.local.md` and `.venv/` to `.git/info/exclude` so project `.gitignore` stays untouched. Updated repo lifecycle coverage and README docs.
+  - Notes: Create/clone/copy now seed `.agent-env.local.md` as a preserved local agent memory file with initial tool availability hints and add local ignore rules for `.agent-env.local.md` and `.venv/` to `.git/info/exclude` so project `.gitignore` stays untouched. Linked worktrees resolve the common Git exclude path. Updated repo lifecycle coverage and README docs.
 
 - [TASK-0115] Add gitignored local agent environment cache pattern.
   - Completed: 2026-06-24

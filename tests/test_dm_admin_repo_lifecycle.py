@@ -188,3 +188,23 @@ def test_agent_env_bootstrap_preserves_existing_memory(tmp_path):
     exclude_lines = (repo / ".git" / "info" / "exclude").read_text(encoding="utf-8").splitlines()
     for line in LOCAL_AGENT_EXCLUDE_LINES:
         assert exclude_lines.count(line) == 1
+
+
+def test_agent_env_bootstrap_uses_common_exclude_for_linked_worktree(tmp_path):
+    cfg = cfgmod.Config()
+    router = _FakeRouter(cfg)
+    repo = tmp_path / "repo"
+    git_dir = tmp_path / "main.git" / "worktrees" / "repo"
+    common_dir = tmp_path / "main.git"
+    repo.mkdir()
+    git_dir.mkdir(parents=True)
+    (repo / ".git").write_text(f"gitdir: {git_dir}\n", encoding="utf-8")
+    (git_dir / "commondir").write_text("../..\n", encoding="utf-8")
+
+    router.bootstrap_agent_env_cache(str(repo))
+
+    common_exclude = common_dir / "info" / "exclude"
+    assert common_exclude.exists()
+    exclude_lines = common_exclude.read_text(encoding="utf-8").splitlines()
+    for line in LOCAL_AGENT_EXCLUDE_LINES:
+        assert exclude_lines.count(line) == 1

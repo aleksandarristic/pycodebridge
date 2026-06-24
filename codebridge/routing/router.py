@@ -1025,6 +1025,12 @@ caveats.
                 git_dir = Path(raw[len(prefix):].strip())
                 if not git_dir.is_absolute():
                     git_dir = (repo / git_dir).resolve()
+                common_dir_file = git_dir / "commondir"
+                if common_dir_file.is_file():
+                    common_dir = Path(common_dir_file.read_text(encoding="utf-8").strip())
+                    if not common_dir.is_absolute():
+                        common_dir = (git_dir / common_dir).resolve()
+                    return common_dir / "info" / "exclude"
                 return git_dir / "info" / "exclude"
         return None
 
