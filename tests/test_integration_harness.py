@@ -3192,6 +3192,46 @@ def test_totp_required_for_config_tests_download_logs_and_upload(tmp_path, monke
     assert any("TOTP required for 'upload'" in msg for msg, _, _ in sink.sent)
 
 
+def test_totp_file_transfer_group_can_be_disabled(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    (repo / "note.txt").write_text("hi")
+
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    router.cfg.discord.totp_enforce_file_transfer = False
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def save_noop(path: str) -> None:
+        _ = path
+
+    upload_event = MessageEvent(
+        platform="discord",
+        content="",
+        channel_id="chan",
+        channel_name="code-repo",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=False,
+        guild_id="guild",
+        attachments=[Attachment(filename="note.txt", size=2, content_type="text/plain", save=save_noop)],
+        raw_event=_FakeDiscordMessage(_FakeDiscordChannel(is_private=True, channel_id="chan", channel_name="code-repo")),
+    )
+
+    async def run():
+        await router.handle_message(_discord_event("!c download note.txt", "code-repo"), sink)
+        await router.handle_message(upload_event, sink)
+
+    asyncio.run(run())
+    assert sink.files and sink.files[0][1] == "note.txt"
+    assert any("Where do you want to put these file(s)?" in msg for msg, _, _ in sink.sent)
+    assert not any("TOTP required for 'download'" in msg for msg, _, _ in sink.sent)
+    assert not any("TOTP required for 'upload'" in msg for msg, _, _ in sink.sent)
+
+
 def test_totp_rate_limit_lock_and_cooldown(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()

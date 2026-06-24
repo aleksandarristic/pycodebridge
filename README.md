@@ -88,6 +88,7 @@ Paths support `$VAR`/`%APPDATA%`/`~` expansion.
 - `totp.command_groups.git` (default `true`) — enforce TOTP/default-unlock behavior for `git` commands.
 - `totp.command_groups.gh` (default `true`) — enforce TOTP/gh-unlock behavior for `gh` commands.
 - `totp.command_groups.high_risk` (default `true`) — enforce always-TOTP behavior for high-risk commands (unlock mutations, repo create/clone/copy/delete/rename, and lock extend).
+- `totp.command_groups.file_transfer` (default `true`) — enforce TOTP for upload flows and default-unlock behavior for `download`; set `false` to allow uploads/downloads without TOTP while TOTP remains enabled for other command groups.
 - Legacy flat keys (`totp_enabled`, `totp_secret_env`, `totp_window`, limiter knobs) are still accepted for backward compatibility.
 - `max_discord_message_chars` (default `1800`) — outbound chunk size.
 
@@ -235,7 +236,7 @@ TOTP always required (high-risk in channel; controlled by `discord.totp.command_
 - `!c clone <url>` (alias: `clonerepo`)
 - `!c copy <newname>` (aliases: `copyrepo`, `cp`)
 - High-risk git remote mutations: `!c git remote set-url ...`, `!c git remote add ...`, `!c git remote remove ...`, `!c git remote rename ...`, `!c git remote set-head ...`
-- Upload flows (attachment submit and upload-path response)
+- Upload flows (attachment submit and upload-path response; controlled by `discord.totp.command_groups.file_transfer`)
 
 DM admin `!c reset all` also requires TOTP before the yes/no confirmation when TOTP is enabled.
 
@@ -356,7 +357,8 @@ Run control:
 
 Repo helpers:
 - `show` (aliases: `showrepo`, `tree`), `changes` (alias: `showchanges`), `branch` `[open]`
-- `tests` (alias: `test`), `download` (alias: `dl`) `[unlock/default]`
+- `tests` (alias: `test`) `[unlock/default]`
+- `download` (alias: `dl`) `[unlock/default]` when `discord.totp.command_groups.file_transfer` is enabled
 - `unpin` `[unlock/default]` — remove all but the most recent pin from the current channel.
 - `git` `[unlock/default]`
   - Dangerous `git` helper operations (force push, branch delete) require opt-in and explicit confirmation token.
@@ -403,7 +405,7 @@ When `discord.totp.enabled: true`, TOTP is always required in DMs for:
 - `!c copy <from> <to>` / `!c copyrepo <from> <to>` / `!c cp <from> <to>`
 - `!c deleterepo <name>` / `!c delete <name>`
 - `!c renamerepo <from> <to>` / `!c rename <from> <to>`
-- DM upload flows (attachment submit and upload-path response)
+- DM upload flows (attachment submit and upload-path response; controlled by `discord.totp.command_groups.file_transfer`)
 
 TOTP is required in DMs for GitHub CLI unless gh scope is unlocked:
 - `!c gh <args>`

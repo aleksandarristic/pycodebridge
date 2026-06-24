@@ -19,6 +19,7 @@ discord:
       git: true
       gh: true
       high_risk: true
+      file_transfer: true
   max_discord_message_chars: 1800
 
 codex:

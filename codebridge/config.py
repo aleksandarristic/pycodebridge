@@ -72,6 +72,7 @@ class DiscordConfig:
     totp_enforce_git: bool = True
     totp_enforce_gh: bool = True
     totp_enforce_high_risk: bool = True
+    totp_enforce_file_transfer: bool = True
 
     _compiled_regex: Optional[re.Pattern] = field(default=None, init=False, repr=False)
 
@@ -315,6 +316,13 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
         ),
         "discord.totp.command_groups.high_risk",
     )
+    cfg.discord.totp_enforce_file_transfer = _coerce_bool(
+        command_groups.get(
+            "file_transfer",
+            discord.get("totp_enforce_file_transfer", cfg.discord.totp_enforce_file_transfer),
+        ),
+        "discord.totp.command_groups.file_transfer",
+    )
 
     codex = raw.get("codex", {}) or {}
     cfg.codex.binary = codex.get("binary", cfg.codex.binary)
@@ -484,6 +492,10 @@ def _apply_defaults(cfg: Config) -> None:
     cfg.discord.totp_enforce_high_risk = _coerce_bool(
         cfg.discord.totp_enforce_high_risk,
         "discord.totp.command_groups.high_risk",
+    )
+    cfg.discord.totp_enforce_file_transfer = _coerce_bool(
+        cfg.discord.totp_enforce_file_transfer,
+        "discord.totp.command_groups.file_transfer",
     )
     if not cfg.codex.binary:
         cfg.codex.binary = "codex"

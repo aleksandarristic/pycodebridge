@@ -69,7 +69,7 @@ Source of truth: `codebridge/commands/registry.py`.
 | `branch` | none | Channel | repo channel/thread | open | git | convenience |
 | `git <...>` | none | Channel | repo channel/thread | unlock/default | git | essential |
 | `gh <args>` | none | Channel | repo channel/thread | unlock/gh | gh | essential |
-| `download <path>` | `dl` | Channel | repo channel/thread | unlock/default | filesystem | convenience |
+| `download <path>` | `dl` | Channel | repo channel/thread | unlock/default when `discord.totp.command_groups.file_transfer` is enabled | filesystem | convenience |
 | `logs [session] [n]` | `log` | Channel | repo channel/thread | unlock/default | audit | admin-only |
 | `audit ...` | none | Channel | repo channel/thread | unlock/default | audit | admin-only |
 | `ps` | none | Channel | repo channel/thread | open | queue state | essential |
@@ -80,7 +80,7 @@ Source of truth: `codebridge/commands/registry.py`.
 
 | Workflow | Trigger | Audience | Context | Auth | Backend | Category |
 |---|---|---|---|---|---|---|
-| Upload files | Attach one or more files, then reply with a repo-relative destination path | Channel/DM | repo channel/thread or bound DM | totp when TOTP is enabled for upload | filesystem | convenience |
+| Upload files | Attach one or more files, then reply with a repo-relative destination path | Channel/DM | repo channel/thread or bound DM | totp when `discord.totp.command_groups.file_transfer` is enabled | filesystem | convenience |
 
 For one uploaded file, the destination reply can be a file path such as
 `docs/input.txt`. For multiple uploaded files, the destination reply must be a

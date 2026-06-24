@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0119] Make file-transfer TOTP enforcement configurable.
+  - Completed: 2026-06-24
+  - Notes: Added `discord.totp.command_groups.file_transfer` to control TOTP enforcement for upload flows and the `download` command independently from other command groups. Updated config examples, README, COMMAND_SURFACE, and config/integration coverage.
+
 - [TASK-0118] Verify and document repo file upload workflow.
   - Completed: 2026-06-24
   - Notes: Documented the attachment-triggered upload flow in README and COMMAND_SURFACE, including single-file destination paths and multi-file directory replies. Added focused FileTransferService coverage for direct single-file saves, multi-file directory enforcement, and multi-file directory saves. Targeted tests: `tests/test_dm_upload_download_gating.py`, `tests/test_dm_binding.py -k upload`, `tests/test_integration_harness.py -k upload`.

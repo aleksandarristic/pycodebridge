@@ -521,7 +521,7 @@ async def _prepare_dm_content(
     if file_transfers is not None and hasattr(file_transfers, "has_pending_upload"):
         pending_upload = file_transfers.has_pending_upload(event)
     pending_content = content
-    if pending_upload and router._totp_enabled(event):
+    if pending_upload and router._totp_required_for_file_transfer(event):
         ok, pending_content = await router.require_totp(event, sink, "upload", content)
         if not ok:
             return content, True
@@ -567,7 +567,7 @@ async def _handle_dm_unprefixed(
         await sink.send(forbidden_message(f"Repo error: {exc}"))
         return True
     if event.attachments:
-        if router._totp_enabled(event):
+        if router._totp_required_for_file_transfer(event):
             ok, _ = await router.require_totp(event, sink, "upload", content)
             if not ok:
                 return True

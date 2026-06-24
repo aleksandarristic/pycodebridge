@@ -441,7 +441,7 @@ class Router:
     async def _handle_attachment_flow(self, event: MessageEvent, sink: ResponseSink, repo_name: str, content: str) -> bool:
         if not event.attachments:
             return False
-        if self._totp_enabled(event):
+        if self._totp_required_for_file_transfer(event):
             ok, _ = await self.require_totp(event, sink, "upload", content)
             if not ok:
                 return True
@@ -459,7 +459,7 @@ class Router:
         content: str,
     ) -> tuple[bool, str]:
         pending_content = content
-        if self.file_transfers.has_pending_upload(event) and self._totp_enabled(event):
+        if self.file_transfers.has_pending_upload(event) and self._totp_required_for_file_transfer(event):
             ok, pending_content = await self.require_totp(event, sink, "upload", content)
             if not ok:
                 return True, pending_content
@@ -3390,6 +3390,8 @@ caveats.
             if not self.cfg.discord.totp_enforce_gh:
                 return False
             return not self._totp_is_unlocked(event, _UNLOCK_SCOPE_GH)
+        if token == "download" and not self.cfg.discord.totp_enforce_file_transfer:
+            return False
         if auth_mode == command_registry.AUTH_OPEN:
             return False
         if auth_mode == command_registry.AUTH_UNLOCK:
@@ -3409,6 +3411,9 @@ caveats.
         if self._totp_is_unlocked(event):
             return False
         return True
+
+    def _totp_required_for_file_transfer(self, event: MessageEvent) -> bool:
+        return self._totp_enabled(event) and self.cfg.discord.totp_enforce_file_transfer
 
     def _totp_command_is_high_risk(self, cmd: str, rest: str) -> bool:
         if cmd in {"create", "clone", "copy", "deleterepo", "delete", "renamerepo", "rename"}:
