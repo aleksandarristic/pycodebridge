@@ -4203,6 +4203,21 @@ class Router:
         """Return active session names for a channel."""
         return await self.coordinator.active_sessions(channel_id)
 
+    async def recover_orphaned_run(self, channel_id: str, session: str) -> bool:
+        """Clear orphaned run state when a process died without bridge cleanup.
+
+        Returns True if stale state was found and cleared, False if nothing to clean up.
+        Called by handle_kill when get_active returns None but run state may still exist.
+        """
+        run_state = self._run_relay(channel_id, session)
+        if run_state is None:
+            return False
+        self._mark_run_terminal(channel_id, session, "failed", 1)
+        self._clear_run_relay(channel_id, session)
+        await self.clear_active(channel_id, session)
+        self.clear_awaiting_input(channel_id, session)
+        return True
+
     async def consume_pending(self, channel_id: str, session: str) -> Optional[PendingConflict]:
         """Consume a pending conflict if present and not expired."""
         return await self.coordinator.consume_pending(channel_id, session)

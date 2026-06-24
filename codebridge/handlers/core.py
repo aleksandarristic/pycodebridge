@@ -438,6 +438,14 @@ async def handle_kill(router: "Router", sink: ResponseSink, session: str) -> Non
             f"Sent kill to session '{session or DEFAULT_SESSION}'.{_usage_suffix(router, sink.channel_id, session)}",
         )
         return
+    # Process already gone but bridge state may still be dirty — recover it.
+    if await router.recover_orphaned_run(sink.channel_id, session):
+        sess_label = session or DEFAULT_SESSION
+        await router.reply(
+            sink,
+            f"Session '{sess_label}': process had already exited but state was stale — cleared. Use `!c reset` if the session behaves unexpectedly.",
+        )
+        return
     await _no_active_agent_reply(router, sink, session)
 
 

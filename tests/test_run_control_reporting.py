@@ -72,3 +72,58 @@ def test_end_commands_include_usage_summary():
         assert "Usage so far: input 10, output 20, total 30." in joined
 
     asyncio.run(run())
+
+
+class _FakeRouterNoProc:
+    """Router where no process is active but orphaned run state may exist."""
+
+    def __init__(self, *, orphaned: bool = False) -> None:
+        self._orphaned = orphaned
+        self._stats = _Stats(0, 0, 0)
+        self._recovered = False
+
+    async def get_active(self, channel_id: str, session: str):
+        return None
+
+    def get_usage(self, channel_id: str, session: str):
+        return self._stats
+
+    async def recover_orphaned_run(self, channel_id: str, session: str) -> bool:
+        if self._orphaned:
+            self._recovered = True
+            return True
+        return False
+
+    async def reply(self, sink: _FakeSink, content: str) -> None:
+        sink.messages.append(content)
+
+    async def reply_forbidden(self, sink: _FakeSink, detail: str) -> None:
+        sink.forbidden.append(detail)
+
+    async def active_sessions(self, channel_id: str) -> list:
+        return []
+
+
+def test_handle_kill_recovers_orphaned_state():
+    async def run():
+        sink = _FakeSink()
+        router = _FakeRouterNoProc(orphaned=True)
+        await core.handle_kill(router, sink, "default")
+        assert router._recovered
+        assert sink.messages
+        assert "stale" in sink.messages[0]
+        assert not sink.forbidden
+
+    asyncio.run(run())
+
+
+def test_handle_kill_no_agent_no_orphan():
+    async def run():
+        sink = _FakeSink()
+        router = _FakeRouterNoProc(orphaned=False)
+        await core.handle_kill(router, sink, "default")
+        assert not router._recovered
+        assert not sink.messages
+        assert sink.forbidden
+
+    asyncio.run(run())
