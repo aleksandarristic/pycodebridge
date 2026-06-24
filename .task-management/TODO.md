@@ -18,4 +18,3 @@ Rules:
 ### Repo file transfer UX
 
 - TASK-0117 — Verify and document repo file download request workflow
-- TASK-0118 — Verify and document repo file upload workflow

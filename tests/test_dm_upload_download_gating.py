@@ -160,6 +160,114 @@ def test_upload_rejects_aggregate_size_over_limit(tmp_path):
     assert not service.has_pending_upload(event)
 
 
+def test_upload_saves_single_attachment_to_requested_file_path(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+    cfg.files.max_upload_mb = 1
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    request = _event_with_attachments([_attachment("note.txt")])
+    response = MessageEvent(
+        platform="discord",
+        content="docs/readme.txt",
+        channel_id="dm",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    service = FileTransferService(cfg, logger=_FakeLogger())
+    sink = _FakeSink(Capabilities(uploads=True))
+
+    async def run():
+        await service.handle_upload_request(request, sink, "repo", str(repo), _reply_forbidden, _reply)
+        handled = await service.handle_pending_upload_response(response, sink, "repo", "!c", _reply_forbidden, _reply)
+        assert handled is True
+
+    asyncio.run(run())
+    assert (repo / "docs" / "readme.txt").read_text(encoding="utf-8") == "saved"
+    assert "Saved 1 file(s):\ndocs/readme.txt" in sink.sent[-1]
+
+
+def test_upload_requires_directory_for_multiple_attachments(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+    cfg.files.max_upload_mb = 1
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    request = _event_with_attachments([_attachment("a.txt"), _attachment("b.txt")])
+    response = MessageEvent(
+        platform="discord",
+        content="combined.txt",
+        channel_id="dm",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    service = FileTransferService(cfg, logger=_FakeLogger())
+    sink = _FakeSink(Capabilities(uploads=True))
+
+    async def run():
+        await service.handle_upload_request(request, sink, "repo", str(repo), _reply_forbidden, _reply)
+        handled = await service.handle_pending_upload_response(response, sink, "repo", "!c", _reply_forbidden, _reply)
+        assert handled is True
+
+    asyncio.run(run())
+    assert "Provide a directory path when uploading multiple files." in sink.sent[-1]
+    assert not (repo / "combined.txt").exists()
+
+
+def test_upload_saves_multiple_attachments_to_requested_directory(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+    cfg.files.max_upload_mb = 1
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    request = _event_with_attachments([_attachment("a.txt"), _attachment("b.txt")])
+    response = MessageEvent(
+        platform="discord",
+        content="uploads/",
+        channel_id="dm",
+        channel_name="",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=True,
+    )
+
+    service = FileTransferService(cfg, logger=_FakeLogger())
+    sink = _FakeSink(Capabilities(uploads=True))
+
+    async def run():
+        await service.handle_upload_request(request, sink, "repo", str(repo), _reply_forbidden, _reply)
+        handled = await service.handle_pending_upload_response(response, sink, "repo", "!c", _reply_forbidden, _reply)
+        assert handled is True
+
+    asyncio.run(run())
+    assert (repo / "uploads" / "a.txt").read_text(encoding="utf-8") == "saved"
+    assert (repo / "uploads" / "b.txt").read_text(encoding="utf-8") == "saved"
+    assert "Saved 2 file(s):" in sink.sent[-1]
+    assert "uploads/a.txt" in sink.sent[-1]
+    assert "uploads/b.txt" in sink.sent[-1]
+
+
 def test_download_gated_when_capability_false(tmp_path):
     cfg = cfgmod.Config()
     cfg.codex.code_root = str(tmp_path)

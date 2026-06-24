@@ -76,6 +76,16 @@ Source of truth: `codebridge/commands/registry.py`.
 | `cancel <job-id>` | `drop` | Channel | repo channel/thread | unlock/default | queue control | essential |
 | `rerun` | `retry` | Channel | repo channel/thread | unlock/default | queue control | convenience |
 
+## Attachment-triggered workflows
+
+| Workflow | Trigger | Audience | Context | Auth | Backend | Category |
+|---|---|---|---|---|---|---|
+| Upload files | Attach one or more files, then reply with a repo-relative destination path | Channel/DM | repo channel/thread or bound DM | totp when TOTP is enabled for upload | filesystem | convenience |
+
+For one uploaded file, the destination reply can be a file path such as
+`docs/input.txt`. For multiple uploaded files, the destination reply must be a
+directory path such as `uploads/`.
+
 ## Channel top-level shortcuts (`!<command>`)
 
 Source of truth: `codebridge/commands/shortcuts.py` and router shortcut normalization.

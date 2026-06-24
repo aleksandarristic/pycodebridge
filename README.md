@@ -286,6 +286,8 @@ TOTP required unless the chat is unlocked:
 - `!c config`
 - `!c tests`
 - `!c download <path>`
+- Attach one or more files in a repo channel or bound DM, then reply with a
+  repo-relative destination path to upload them.
 - `!c logs [session] [n]`
 - Shortcut: `!log [n]` (maps to `!c logs [n]`)
 - `!c unpin`
@@ -428,7 +430,13 @@ TOTP is not required in DMs for:
 - `!c lock [gh|all]`
 
 When a repo is bound in DMs, a message without `!c` is treated as a prompt unless the selected agent is currently awaiting input (then it is relayed to the active session stdin).
-Attachments in channels or bound DMs will prompt for a destination path before saving. Attachment filenames are normalized to a basename before write; upload batches are bounded by `files.max_upload_mb`, `files.max_upload_total_mb`, and `files.max_upload_count`, then saved via repo-local temporary files with symlink-safe finalization.
+Attachments in repo channels or bound DMs start an upload flow and prompt for a
+repo-relative destination path before saving. For one file, reply with a file
+path such as `docs/input.txt`; for multiple files, reply with a directory path
+ending in `/`, such as `uploads/`. Attachment filenames are normalized to a
+basename before write; upload batches are bounded by `files.max_upload_mb`,
+`files.max_upload_total_mb`, and `files.max_upload_count`, then saved via
+repo-local temporary files with symlink-safe finalization.
 
 ## Package layout
 Core modules are now grouped by responsibility:

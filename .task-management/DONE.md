@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0118] Verify and document repo file upload workflow.
+  - Completed: 2026-06-24
+  - Notes: Documented the attachment-triggered upload flow in README and COMMAND_SURFACE, including single-file destination paths and multi-file directory replies. Added focused FileTransferService coverage for direct single-file saves, multi-file directory enforcement, and multi-file directory saves. Targeted tests: `tests/test_dm_upload_download_gating.py`, `tests/test_dm_binding.py -k upload`, `tests/test_integration_harness.py -k upload`.
+
 - [TASK-0116] Bootstrap local agent environment cache for managed repos.
   - Completed: 2026-06-24
   - Notes: Create/clone/copy now seed `.agent-env.local.md` as a preserved local agent memory file with initial tool availability hints and add local ignore rules for `.agent-env.local.md` and `.venv/` to `.git/info/exclude` so project `.gitignore` stays untouched. Linked worktrees resolve the common Git exclude path. Updated repo lifecycle coverage and README docs.
