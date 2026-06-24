@@ -91,7 +91,7 @@ _RUN_HEARTBEAT_SECONDS = 120
 _RUN_COMPLETION_MIN_SECONDS = 300
 _RUN_KEY_RESULT_MAX = 180
 _FINAL_RESULT_EXIT_GRACE_SECONDS = 2.0
-_RUNTIME_OPTION_KEYS = ("run_heartbeat_seconds", "run_completion_min_seconds", "show_reasoning_details", "show_tool_calls")
+_RUNTIME_OPTION_KEYS = ("run_heartbeat_seconds", "run_completion_min_seconds", "run_idle_timeout_seconds", "show_reasoning_details", "show_tool_calls")
 _TOP_LEVEL_SHORTCUT_ALIASES = (("!reset", "reset"),)
 _CODEX_UNSUPPORTED_CHATGPT_MODEL_RE = re.compile(
     r"The ['\"]([^'\"]+)['\"] model is not supported when using Codex with a ChatGPT account",
@@ -334,6 +334,7 @@ class Router:
             "run_completion_min_seconds": max(
                 1, min(86400, int(getattr(self.cfg.runtime, "run_completion_min_seconds", _RUN_COMPLETION_MIN_SECONDS)))
             ),
+            "run_idle_timeout_seconds": max(0, int(getattr(self.cfg.runtime, "run_idle_timeout_seconds", 1800))),
             "show_reasoning_details": bool(getattr(self.cfg.runtime, "show_reasoning_details", True)),
             "show_tool_calls": bool(getattr(self.cfg.runtime, "show_tool_calls", True)),
         }
@@ -988,6 +989,10 @@ class Router:
             "run_completion_min_seconds": "run_completion_min_seconds",
             "completion": "run_completion_min_seconds",
             "runtime.run_completion_min_seconds": "run_completion_min_seconds",
+            "run_idle_timeout_seconds": "run_idle_timeout_seconds",
+            "idle_timeout": "run_idle_timeout_seconds",
+            "idle": "run_idle_timeout_seconds",
+            "runtime.run_idle_timeout_seconds": "run_idle_timeout_seconds",
             "show_reasoning_details": "show_reasoning_details",
             "reasoning_details": "show_reasoning_details",
             "show_reasoning": "show_reasoning_details",
@@ -1006,22 +1011,23 @@ class Router:
                 "Use `!c options` to see current values and examples.",
             )
             return
-        if canonical in {"run_heartbeat_seconds", "run_completion_min_seconds"}:
+        if canonical in {"run_heartbeat_seconds", "run_completion_min_seconds", "run_idle_timeout_seconds"}:
             try:
                 parsed = int(value)
             except ValueError:
                 await self.reply_forbidden(
                     sink,
                     f"Invalid integer value for {canonical}: {value!r}\n"
-                    "Expected an integer between 1 and 86400.\n"
-                    "Example: `!c options set run_heartbeat_seconds 120`",
+                    "Expected an integer (0 to disable for idle_timeout, 1–86400 for others).\n"
+                    "Example: `!c options set idle_timeout 1800`",
                 )
                 return
-            if parsed < 1 or parsed > 86400:
+            lo = 0 if canonical == "run_idle_timeout_seconds" else 1
+            if parsed < lo or parsed > 86400:
                 await self.reply_forbidden(
                     sink,
-                    f"{canonical} must be between 1 and 86400.\n"
-                    "Example: `!c options set run_completion_min_seconds 300`",
+                    f"{canonical} must be between {lo} and 86400 (0 = disabled).\n"
+                    "Example: `!c options set idle_timeout 1800`",
                 )
                 return
             self._set_runtime_option(scope, sink.channel_id, canonical, parsed)
@@ -2184,17 +2190,23 @@ class Router:
                     await self.reply_forbidden(sink, f"Cannot start session: {exc}")
                     return
 
+            last_event_at: list[float] = [time.monotonic()]
+
+            async def _on_jsonl_tracked(line: str, evt: Optional[NormalizedEvent] = None) -> None:
+                last_event_at[0] = time.monotonic()
+                await self.on_jsonl(
+                    sink, channel_id, session, repo_name, entry, line, relay_output,
+                    event, budget_monitor, run_state, evt=evt, tracker=tracker,
+                    coalescer=coalescer, backend=_backend,
+                )
+
             try:
                 proc = await _backend.run(
                     Options(
                         repo_path=effective_repo_path,
                         args=args_to_run,
                         env=self.cfg.codex.env,
-                        on_jsonl=lambda line, evt=None, _b=_backend: self.on_jsonl(
-                            sink, channel_id, session, repo_name, entry, line, relay_output,
-                            event, budget_monitor, run_state, evt=evt, tracker=tracker,
-                            coalescer=coalescer, backend=_b,
-                        ),
+                        on_jsonl=_on_jsonl_tracked,
                         on_thread=lambda tid: self.on_thread(
                             channel_id, session, repo_name, repo_path, model, reasoning_effort, entry, tid
                         ),
@@ -2241,6 +2253,9 @@ class Router:
                         reasoning_effort=reasoning_effort,
                     )
                 )
+            watchdog_task = asyncio.create_task(
+                self._run_watchdog(sink, session, proc, last_event_at)
+            )
             wait_task = asyncio.create_task(proc.wait())
             final_result_task = asyncio.create_task(self._wait_for_final_result_grace(run_state))
             try:
@@ -2270,6 +2285,9 @@ class Router:
                     heartbeat_task.cancel()
                     with contextlib.suppress(asyncio.CancelledError):
                         await heartbeat_task
+                watchdog_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await watchdog_task
                 await self.clear_active(channel_id, session)
                 # Flush any buffered output (and cancel the idle timer) before the
                 # completion summary / error reply so streamed output stays ordered.
@@ -2524,6 +2542,73 @@ class Router:
                 msg += f" in session '{session}'"
             msg += "."
             await self.reply(sink, msg)
+
+    async def _run_watchdog(
+        self,
+        sink: "ResponseSink",
+        session: str,
+        proc: "Process",
+        last_event_at: list,
+    ) -> None:
+        """Watch for a dead-but-uncleaned agent and enforce idle output timeout.
+
+        Runs every 60 s while the agent is active.  Two jobs:
+        1. Dead-agent auto-recovery: if the process has exited but run_codex's
+           wait loop has not noticed (stream-error race), clear the stale state
+           and notify the channel so the session is not left in limbo.
+        2. Idle output timeout: if no JSONL event has arrived for
+           run_idle_timeout_seconds, notify first; kill on the next check.
+        """
+        channel_id = sink.channel_id
+        idle_timeout = self._runtime_option_value(channel_id, "run_idle_timeout_seconds")
+        idle_notified = False
+
+        while True:
+            await asyncio.sleep(60)
+
+            run_state = self._run_relay(channel_id, session)
+            if run_state is None or run_state.is_terminal:
+                return
+
+            # --- dead-agent auto-recovery ---
+            if not proc.is_running:
+                self.logger.warning(
+                    "run.watchdog_orphan",
+                    extra={"channel_id": channel_id, "session": session or DEFAULT_SESSION},
+                )
+                self._mark_run_terminal(channel_id, session, "failed", proc.returncode or 1)
+                self._clear_run_relay(channel_id, session)
+                await self.clear_active(channel_id, session)
+                self.clear_awaiting_input(channel_id, session)
+                sess = f" '{session}'" if session and session != DEFAULT_SESSION else ""
+                await self.reply(
+                    sink,
+                    f"Session{sess}: agent had already exited but the bridge did not notice — state recovered automatically.",
+                )
+                return
+
+            # --- idle output timeout ---
+            if idle_timeout > 0:
+                idle = time.monotonic() - last_event_at[0]
+                if idle >= idle_timeout:
+                    display = self._format_duration(int(idle))
+                    sess = f" in session '{session}'" if session and session != DEFAULT_SESSION else ""
+                    if not idle_notified:
+                        idle_notified = True
+                        await self.reply(
+                            sink,
+                            f"Agent{sess} has not produced output for {display}. "
+                            "It may be stuck — use `!c kill` to stop it, or wait if it is running a long operation.",
+                        )
+                    else:
+                        # Second check: still idle after notification — kill and let run_codex clean up.
+                        await self.reply(
+                            sink,
+                            f"Agent{sess} still unresponsive after {display} — killing. "
+                            "Use `!c reset` if the session is in a bad state.",
+                        )
+                        proc.kill()
+                        return
 
     async def _send_run_completion_summary(
         self,
@@ -3285,7 +3370,12 @@ class Router:
             if parsed < 1 or parsed > 86400:
                 raise ValueError(f"{key} must be between 1 and 86400.")
             return parsed
-        if key == "show_reasoning_details":
+        if key == "run_idle_timeout_seconds":
+            parsed = int(value)
+            if parsed < 0 or parsed > 86400:
+                raise ValueError(f"{key} must be between 0 and 86400 (0 = disabled).")
+            return parsed
+        if key in {"show_reasoning_details", "show_tool_calls"}:
             return parse_bool(value)
         raise ValueError(f"Unknown option key: {key}")
 
@@ -3354,18 +3444,23 @@ class Router:
 
     def _runtime_options_text(self, channel_id: str, is_dm: bool) -> str:
         effective = self._effective_runtime_options(channel_id)
+        idle = effective['run_idle_timeout_seconds']
+        idle_display = self._format_duration(idle) if idle else "disabled"
         lines = [
             "Runtime options (persisted):",
             f"- local.run_heartbeat_seconds: {effective['run_heartbeat_seconds']}",
             f"- local.run_completion_min_seconds: {effective['run_completion_min_seconds']}",
+            f"- local.run_idle_timeout_seconds: {idle} ({idle_display})",
             f"- local.show_reasoning_details: {effective['show_reasoning_details']}",
             f"- local.show_tool_calls: {effective['show_tool_calls']}",
         ]
         if is_dm:
+            global_idle = self._runtime_options_global.get('run_idle_timeout_seconds', '<unset>')
             lines.extend(
                 [
                     f"- global.run_heartbeat_seconds: {self._runtime_options_global.get('run_heartbeat_seconds', '<unset>')}",
                     f"- global.run_completion_min_seconds: {self._runtime_options_global.get('run_completion_min_seconds', '<unset>')}",
+                    f"- global.run_idle_timeout_seconds: {global_idle}",
                     f"- global.show_reasoning_details: {self._runtime_options_global.get('show_reasoning_details', '<unset>')}",
                     f"- global.show_tool_calls: {self._runtime_options_global.get('show_tool_calls', '<unset>')}",
                     "DM set usage: !c options set <key> <value> [local|global]",

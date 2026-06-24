@@ -102,6 +102,16 @@ class Process:
         """Write raw text to the agent stdin."""
         await self._write_bytes(text.encode("utf-8"))
 
+    @property
+    def is_running(self) -> bool:
+        """Return True if the process has not yet exited."""
+        return self._proc.returncode is None
+
+    @property
+    def returncode(self) -> Optional[int]:
+        """Return the process exit code, or None if still running."""
+        return self._proc.returncode
+
     async def wait(self) -> int:
         """Wait for process exit and return returncode."""
         try:
