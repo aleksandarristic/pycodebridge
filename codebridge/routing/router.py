@@ -2999,6 +2999,7 @@ class Router:
                 {"error": str(err)},
                 repo_name=repo_name,
             )
+            self._clear_run_relay(channel_id, session)
             return
         self.logger.info("codex.exit", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "code": rc})
         self._session_log.append(

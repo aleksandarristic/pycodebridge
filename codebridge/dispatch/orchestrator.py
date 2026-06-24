@@ -229,6 +229,7 @@ class Orchestrator:
         done_event = asyncio.Event()
         rc_holder: list[int] = [1]
         output_lines: list[str] = []
+        stderr_lines: list[str] = []
 
         async def on_exit(err: Optional[BaseException], rc: int) -> None:
             rc_holder[0] = rc
@@ -242,6 +243,11 @@ class Orchestrator:
                 self._cfg.discord.max_discord_message_chars,
             )
 
+        async def on_stderr(line: str) -> None:
+            stripped = line.strip()
+            if stripped:
+                stderr_lines.append(stripped)
+
         try:
             args = backend.build_start_args(wt_path, prompt, "", "")
             await backend.run(Options(
@@ -250,6 +256,7 @@ class Orchestrator:
                 env={},
                 on_exit=on_exit,
                 on_output=on_output,
+                on_stderr=on_stderr,
             ))
             await done_event.wait()
 
@@ -260,12 +267,21 @@ class Orchestrator:
                 await _commit_dirty_worktree(wt_path, agent)
                 files_changed = await _count_changed_files(wt_path, base_or_task_branch)
             summary = "\n".join(output_lines[-3:]) if output_lines else ""
+            error = ""
+            if not success:
+                if stderr_lines:
+                    error = stderr_lines[-1]
+                elif summary:
+                    error = summary
+                else:
+                    error = f"exit code {rc}"
             return AgentResult(
                 agent=agent,
                 success=success,
                 branch=worker_branch,
                 files_changed=files_changed,
                 summary=summary,
+                error=error,
             )
         except Exception as exc:
             _log.warning("orchestrator.agent_failed", extra={"agent": agent, "error": str(exc)})
