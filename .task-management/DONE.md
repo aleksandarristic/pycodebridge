@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0122] DM assistant: start prompt builder.
+  - Completed: 2026-06-25
+  - Notes: Added compact DM assistant prompt assembly with repo path resolution, key doc paths, managed repo list, session summary, optional memory section, memory file path, template substitution, and prompt-focused tests.
+
 - [TASK-0121] DM assistant: per-user memory service.
   - Completed: 2026-06-25
   - Notes: Added `DmMemoryService` with default/configured memory directory resolution, safe per-user markdown paths, missing-file read fallback, router wiring, and focused unit coverage.

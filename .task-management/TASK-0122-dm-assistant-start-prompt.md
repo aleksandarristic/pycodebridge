@@ -1,5 +1,7 @@
 # TASK-0122 — DM assistant: start prompt builder
 
+**Status:** DONE
+
 ## Intent
 
 Build a lightweight, dynamically-composed start prompt that gives the

@@ -51,8 +51,9 @@ DEFAULT_SPEC_PROMPT = (
 )
 
 DEFAULT_DM_ASSISTANT_START_PROMPT = (
-    "You are the pycodebridge assistant. Answer questions about bridge configuration, "
-    "running sessions, and managed repos. Read docs on demand as needed."
+    "You are the pycodebridge assistant. You have access to the pycodebridge repo at {{REPO_PATH}}. "
+    "Answer questions about the bridge configuration, running sessions, and managed repos. "
+    "Read docs on demand as needed."
 )
 
 
