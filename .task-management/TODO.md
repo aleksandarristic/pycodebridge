@@ -18,3 +18,12 @@ Rules:
 ### Repo file transfer UX
 
 - TASK-0117 — Verify and document repo file download request workflow
+
+### DM assistant
+
+- TASK-0120 — DM assistant: config section (`dm_assistant.*`)
+- TASK-0121 — DM assistant: per-user memory service
+- TASK-0122 — DM assistant: start prompt builder (repo list, session summary, memory)
+- TASK-0123 — DM assistant: routing and session lifecycle
+- TASK-0124 — DM assistant: session control commands (`!c agent/model/reset/status/…` in no-bound-repo DM)
+- TASK-0125 — DM assistant: help text and README docs
