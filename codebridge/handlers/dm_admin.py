@@ -144,6 +144,26 @@ _DM_ADMIN_HELP_OVERVIEW_ORDER = (
     "renamerepo",
 )
 
+_DM_ASSISTANT_HELP_ORDER = (
+    "agent",
+    "model",
+    "effort",
+    "reset",
+    "status",
+    "choose",
+    "logs",
+)
+
+_DM_ASSISTANT_HELP_DETAILS: dict[str, tuple[str, str]] = {
+    "agent": ("agent [codex|claude|gemini] [model] [effort]", "show or switch assistant backend"),
+    "model": ("model <id|default>", "show or set assistant model"),
+    "effort": ("effort <level|default>", "show or set assistant effort"),
+    "reset": ("reset", "clear the assistant session"),
+    "status": ("status", "show assistant session state"),
+    "choose": ("choose continue|new|compact", "resolve an assistant session conflict"),
+    "logs": ("logs [n]", "show recent assistant session logs"),
+}
+
 _DM_HELP_DETAILS: dict[str, tuple[str, str]] = {
     "help": ("help [command]", "show DM command help"),
     "bind": ("bind <repo>", "bind this DM to a repo"),
@@ -205,7 +225,7 @@ def _normalize_dm_help_token(token: str) -> str:
     return _DM_COMMAND_ALIASES.get(raw, raw)
 
 
-def _render_dm_help_index(prefix: str, is_admin: bool) -> str:
+def _render_dm_help_index(prefix: str, is_admin: bool, assistant_enabled: bool = False) -> str:
     lines = [
         "DM Commands:",
         "",
@@ -220,6 +240,18 @@ def _render_dm_help_index(prefix: str, is_admin: bool) -> str:
     for cmd in ("use", "unbind", "updates", "health", "options", "unlock", "lock"):
         usage, desc = _DM_HELP_DETAILS[cmd]
         lines.append(f"- `{prefix} {usage}` - {desc}")
+    if assistant_enabled:
+        lines.extend(
+            [
+                "",
+                "Assistant:",
+                "- Messages without a command go to the bridge assistant when no repo is bound.",
+            ]
+        )
+        for cmd in _DM_ASSISTANT_HELP_ORDER:
+            usage, desc = _DM_ASSISTANT_HELP_DETAILS[cmd]
+            lines.append(f"- `{prefix} {usage}` - {desc}")
+        lines.append("- The assistant maintains a per-user memory file it can update during conversation.")
     if is_admin:
         lines.extend(["", "DM admin-only commands:"])
         for cmd in _DM_ADMIN_HELP_OVERVIEW_ORDER:
@@ -228,12 +260,17 @@ def _render_dm_help_index(prefix: str, is_admin: bool) -> str:
     return "\n".join(lines)
 
 
-def _render_dm_help_command(prefix: str, cmd: str, is_admin: bool) -> str | None:
+def _render_dm_help_command(prefix: str, cmd: str, is_admin: bool, assistant_enabled: bool = False) -> str | None:
     allowed = set(_DM_HELP_OVERVIEW_ORDER)
+    if assistant_enabled:
+        allowed.update(_DM_ASSISTANT_HELP_ORDER)
     if is_admin:
         allowed.update(_DM_ADMIN_HELP_OVERVIEW_ORDER)
     if cmd not in allowed:
         return None
+    if assistant_enabled and cmd in _DM_ASSISTANT_HELP_DETAILS:
+        usage, desc = _DM_ASSISTANT_HELP_DETAILS[cmd]
+        return f"DM help `{cmd}`:\n- Preferred: `{prefix} {usage}`\n- {desc}"
     usage, desc = _DM_HELP_DETAILS[cmd]
     return f"DM help `{cmd}`:\n- Preferred: `{prefix} {usage}`\n- {desc}"
 
@@ -781,9 +818,9 @@ async def _dispatch_prefixed_dm_command(
             return
         token = _normalize_dm_help_token(rest)
         if not token:
-            await send(_render_dm_help_index(prefix, is_admin))
+            await send(_render_dm_help_index(prefix, is_admin, router.cfg.dm_assistant.enabled))
             return
-        detail = _render_dm_help_command(prefix, token, is_admin)
+        detail = _render_dm_help_command(prefix, token, is_admin, router.cfg.dm_assistant.enabled)
         if not detail:
             unknown = token or rest.strip()
             await send_forbidden(f"Unknown DM command `{unknown}`. Use `{prefix} help` to list DM commands.")

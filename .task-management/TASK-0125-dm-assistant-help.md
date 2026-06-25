@@ -1,5 +1,7 @@
 # TASK-0125 — DM assistant: help and user-facing docs
 
+**Status:** DONE
+
 ## Intent
 
 Document the DM assistant in help text and README so users know it

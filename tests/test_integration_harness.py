@@ -2702,6 +2702,24 @@ def test_integration_dm_help_is_chunked_for_discord_limit(tmp_path):
     assert any("DM Commands:" in t for t in texts)
 
 
+def test_dm_assistant_help_section_when_enabled(tmp_path):
+    repo = tmp_path / "pycodebridge"
+    repo.mkdir()
+    router, _ = _build_router(tmp_path)
+    router.cfg.dm_assistant.enabled = True
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_dm_event("!c help"), sink)
+
+    asyncio.run(run())
+    text = "\n".join(msg for msg, _, _ in sink.sent)
+    assert "Assistant:" in text
+    assert "Messages without a command go to the bridge assistant" in text
+    assert "`!c agent [codex|claude|gemini] [model] [effort]`" in text
+    assert "per-user memory file" in text
+
+
 def test_dm_assistant_disabled_keeps_no_repo_bound_message(tmp_path):
     router, _ = _build_router(tmp_path)
     sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))

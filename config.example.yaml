@@ -39,12 +39,12 @@ codex:
   env: {}
 
 # dm_assistant:
-#   enabled: false
+#   enabled: false  # route unbound DM messages to the bridge assistant
 #   default_backend: ""  # empty falls back to agent.default_backend
-#   model: ""
-#   effort: ""
+#   model: ""  # optional assistant model override
+#   effort: ""  # optional assistant effort/reasoning override
 #   memory_dir: ""  # empty falls back to {state.data_dir}/dm-memory/
-#   start_prompt: |
+#   start_prompt: |  # optional template; supports {{REPO_PATH}}, {{CODE_ROOT}}, {{MEMORY_FILE}}, {{USER_ID}}
 #     You are the pycodebridge assistant. You have access to the pycodebridge repo at {{REPO_PATH}}. Answer questions about the bridge configuration, running sessions, and managed repos. Read docs on demand as needed.
 
 state:

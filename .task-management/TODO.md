@@ -10,6 +10,4 @@ Rules:
 
 ## Active tasks
 
-### DM assistant
-
-- TASK-0125 — DM assistant: help text and README docs
+_No active tasks._

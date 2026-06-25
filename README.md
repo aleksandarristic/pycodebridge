@@ -127,6 +127,14 @@ network_access = true
 ### `agent`
 - `default_backend` (default `codex`) — default backend for new sessions (`codex|claude|gemini`). Override per session with `!c agent`.
 
+### `dm_assistant`
+- `enabled` (default `false`) — enable the bridge assistant for allowed users in unbound DMs.
+- `default_backend` (default empty) — backend for the assistant `dm` session; empty falls back to `agent.default_backend`.
+- `model` (default empty) — model override for the assistant session.
+- `effort` (default empty) — effort/reasoning override for the assistant session.
+- `memory_dir` (default empty) — directory for per-user markdown memory files; empty uses `{state.data_dir}/dm-memory/`.
+- `start_prompt` (default template) — assistant start prompt template. Supported variables include `{{REPO_PATH}}`, `{{CODE_ROOT}}`, `{{MEMORY_FILE}}`, and `{{USER_ID}}`.
+
 ### `state`
 - `data_dir` (required) — directory for state.json and locks.
 - `log_dir` (required) — directory for runtime logs (`bridge.log`, legacy `codex_errors.log`, unified `session_jsonl/` logs) and audit artifacts.
@@ -441,6 +449,24 @@ ending in `/`, such as `uploads/`. Attachment filenames are normalized to a
 basename before write; upload batches are bounded by `files.max_upload_mb`,
 `files.max_upload_total_mb`, and `files.max_upload_count`, then saved via
 repo-local temporary files with symlink-safe finalization.
+
+## DM assistant
+Enable with `dm_assistant.enabled: true`. When an allowed user sends a DM with no bound repo, messages without a command go to the bridge assistant. Bound DMs keep the repo prompt behavior described above.
+
+The assistant runs as session `dm` in the pycodebridge repo under `codex.code_root`. Its start prompt includes the pycodebridge repo path, key doc paths (`README.md`, `AGENTS.md`, `docs/`), managed repo names, active session summaries, and the user's memory file path. It reads docs on demand instead of bulk-loading the repo.
+
+Session lifecycle matches normal sessions: the first message starts the assistant session, later messages resume it, and idle sessions use the same `continue` / `new` / `compact` conflict flow. Assistant prompts require the default unlock when TOTP is enabled.
+
+Assistant controls in unbound DMs:
+- `!c agent [codex|claude|gemini] [model] [effort]`
+- `!c model <id|default>`
+- `!c effort <level|default>`
+- `!c status`
+- `!c reset`
+- `!c choose continue|new|compact`
+- `!c logs [n]`
+
+The assistant stores per-user memory as markdown in `dm_assistant.memory_dir` or `{state.data_dir}/dm-memory/`. The agent can update that file during a session using normal file tools.
 
 ## Package layout
 Core modules are now grouped by responsibility:
