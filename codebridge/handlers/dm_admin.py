@@ -19,6 +19,7 @@ from ..routing.helpers import (
     rename_state_repo,
     run_limited_command,
 )
+from ..services.dm_assistant import DM_ASSISTANT_SESSION, build_dm_assistant_prompt, resolve_dm_assistant_repo_path
 from ..sessions.state import utc_now_iso
 from ..platform.transport import Capabilities, MessageEvent, ResponseSink
 from ..util import path as pathutil
@@ -559,6 +560,9 @@ async def _handle_dm_unprefixed(
         return True
     bound_repo = router.get_dm_binding(event)
     if not bound_repo:
+        if router.cfg.dm_assistant.enabled and not event.attachments:
+            await handle_dm_assistant_prompt(router, event, sink, content)
+            return True
         await sink.send("No repo bound. Send `!c repos` to list and then `!c bind <repo>` to bind a repo. Send `!c help` for instructions.")
         return True
     try:
@@ -581,6 +585,43 @@ async def _handle_dm_unprefixed(
             return True
     await router.handle_resume(event, prefixed_sink, bound_repo, repo_path, session, content)
     return True
+
+
+async def handle_dm_assistant_prompt(
+    router: "Router",
+    event: MessageEvent,
+    sink: ResponseSink,
+    content: str,
+) -> None:
+    """Route an unbound DM prompt to the bridge assistant session."""
+    prompt_text = (content or "").strip()
+    if not prompt_text:
+        return
+    if router._totp_enabled(event) and not router._totp_is_unlocked(event):
+        ok, prompt_text = await router.require_totp(event, sink, "resume", prompt_text)
+        if not ok:
+            return
+        prompt_text = (prompt_text or "").strip()
+        if not prompt_text:
+            return
+    try:
+        repo_path = resolve_dm_assistant_repo_path(router)
+    except Exception as exc:
+        await sink.send(forbidden_message(f"DM assistant repo error: {exc}"))
+        return
+    session = DM_ASSISTANT_SESSION
+    state = router.state.load()
+    channel_state = state.channels.get(event.channel_id)
+    existing_session = channel_state.sessions.get(session) if channel_state else None
+    if existing_session:
+        prompt = prompt_text
+    else:
+        prompt = f"{build_dm_assistant_prompt(router, event)}\n\n## Current user message\n{prompt_text}"
+    router.logger.info(
+        "dm.assistant_prompt",
+        extra={"platform": event.platform, "user_id": event.author_id, "session": session},
+    )
+    await router.handle_resume(event, sink, "pycodebridge", repo_path, session, prompt)
 
 
 async def _dispatch_prefixed_dm_command(

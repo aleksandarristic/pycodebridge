@@ -1,5 +1,7 @@
 # TASK-0123 — DM assistant: routing and session lifecycle
 
+**Status:** DONE
+
 ## Intent
 
 Route non-command DM messages to the assistant when no repo is bound,

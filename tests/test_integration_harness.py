@@ -2702,6 +2702,123 @@ def test_integration_dm_help_is_chunked_for_discord_limit(tmp_path):
     assert any("DM Commands:" in t for t in texts)
 
 
+def test_dm_assistant_disabled_keeps_no_repo_bound_message(tmp_path):
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_dm_event("what repos are running?"), sink)
+
+    asyncio.run(run())
+    assert any("No repo bound" in msg for msg, _, _ in sink.sent)
+
+
+def test_dm_assistant_first_message_starts_dm_session(tmp_path):
+    repo = tmp_path / "pycodebridge"
+    repo.mkdir()
+    router, runner = _build_router(tmp_path)
+    router.cfg.dm_assistant.enabled = True
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    captured = {"prompt": "", "repo_path": "", "model": "", "reasoning": ""}
+
+    def _build_start_args(repo_path: str, prompt: str, model: str, reasoning: str) -> list[str]:
+        captured["repo_path"] = repo_path
+        captured["prompt"] = prompt
+        captured["model"] = model
+        captured["reasoning"] = reasoning
+        return ["assistant-start"]
+
+    runner.build_start_args = _build_start_args
+
+    async def run():
+        await router.handle_message(_discord_dm_event("what sessions are active?"), sink)
+
+    asyncio.run(run())
+    assert runner.calls and runner.calls[0] == ["assistant-start"]
+    assert captured["repo_path"] == str(repo)
+    assert "pycodebridge assistant" in captured["prompt"]
+    assert "## Current user message\nwhat sessions are active?" in captured["prompt"]
+    state = router.state.load()
+    assert "dm" in state.channels["dm-1"].sessions
+
+
+def test_dm_assistant_second_message_resumes_dm_session(tmp_path):
+    repo = tmp_path / "pycodebridge"
+    repo.mkdir()
+    router, runner = _build_router(tmp_path)
+    router.cfg.dm_assistant.enabled = True
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    captured = {"resume_prompt": ""}
+
+    def _build_resume_args(repo_path: str, thread_id: str, prompt: str, model: str, reasoning: str) -> list[str]:
+        _ = (repo_path, model, reasoning)
+        captured["resume_prompt"] = prompt
+        return ["assistant-resume", thread_id]
+
+    async def _completed_run(opts: Options):
+        runner.calls.append(opts.args)
+        if opts.on_thread:
+            await opts.on_thread("thread-1")
+        return _ProcDone(0)
+
+    runner.build_resume_args = _build_resume_args
+    runner.run = _completed_run
+
+    async def run():
+        await router.handle_message(_discord_dm_event("first question"), sink)
+        await asyncio.sleep(0.05)
+        await router.handle_message(_discord_dm_event("second question"), sink)
+        await asyncio.sleep(0.05)
+
+    asyncio.run(run())
+    assert ["assistant-resume", "thread-1"] in runner.calls
+    assert captured["resume_prompt"] == "second question"
+
+
+def test_dm_assistant_expired_session_prompts_for_choice(tmp_path):
+    repo = tmp_path / "pycodebridge"
+    repo.mkdir()
+    router, runner = _build_router(tmp_path)
+    router.cfg.dm_assistant.enabled = True
+    router.cfg.state.session_idle_ttl_seconds = 1
+    old = (datetime.now(timezone.utc) - timedelta(seconds=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    router.update_state("dm-1", "dm", "pycodebridge", str(repo), "thread-old", "", "")
+
+    def _mark_old(state):
+        state.channels["dm-1"].sessions["dm"].last_used_at = old
+
+    router.state.update(_mark_old)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_dm_event("continue this"), sink)
+
+    asyncio.run(run())
+    assert not runner.calls
+    assert any("Session 'dm' expired" in msg for msg, _, _ in sink.sent)
+    pending = asyncio.run(router.consume_pending("dm-1", "dm"))
+    assert pending is not None
+    assert pending.prompt == "continue this"
+
+
+def test_dm_assistant_prompt_requires_default_totp_when_enabled(tmp_path, monkeypatch):
+    repo = tmp_path / "pycodebridge"
+    repo.mkdir()
+    secret = "JBSWY3DPEHPK3PXP"
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", secret)
+
+    router, runner = _build_router(tmp_path, totp_enabled=True)
+    router.cfg.dm_assistant.enabled = True
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_dm_event("assistant question"), sink)
+
+    asyncio.run(run())
+    assert not runner.calls
+    assert any("TOTP required for 'resume'" in msg for msg, _, _ in sink.sent)
+
+
 # ---------------------------------------------------------------------------
 # TOTP authorization model (default scope, gh scope, lock state, cooldowns)
 # ---------------------------------------------------------------------------

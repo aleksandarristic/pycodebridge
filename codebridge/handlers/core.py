@@ -22,6 +22,7 @@ from ..routing.helpers import (
     session_exists,
 )
 from ..platform.transport import MessageEvent, ResponseSink
+from ..services.dm_assistant import DM_ASSISTANT_SESSION
 
 if TYPE_CHECKING:
     from ..routing.router import Router
@@ -656,7 +657,10 @@ def _session_model_reasoning_from_state(router: "Router", state, channel_id: str
     """Resolve model/reasoning for a session using one already-loaded state snapshot."""
     ch = state.channels.get(channel_id)
     sess = ch.sessions.get(session or DEFAULT_SESSION) if ch else None
-    backend_name = (sess.backend if sess else "") or router.cfg.agent.default_backend
+    is_dm_assistant = session == DM_ASSISTANT_SESSION and getattr(router.cfg.dm_assistant, "enabled", False)
+    backend_name = (sess.backend if sess else "") or (
+        router.cfg.dm_assistant.default_backend if is_dm_assistant and router.cfg.dm_assistant.default_backend else ""
+    ) or router.cfg.agent.default_backend
     if backend_name == "claude":
         default_model = router.cfg.claude.model
         default_reasoning = router.cfg.claude.effort
@@ -666,6 +670,9 @@ def _session_model_reasoning_from_state(router: "Router", state, channel_id: str
     else:
         default_model = router.cfg.codex.model
         default_reasoning = router.cfg.codex.model_reasoning_effort
+    if is_dm_assistant:
+        default_model = router.cfg.dm_assistant.model or default_model
+        default_reasoning = router.cfg.dm_assistant.effort or default_reasoning
     if not sess:
         return default_model, default_reasoning
     model = sess.model or default_model
@@ -685,6 +692,11 @@ def _session_backend_from_state(router: "Router", state, channel_id: str, sessio
         if sess and sess.backend:
             from ..agents.factory import build_backend
             return build_backend(router.cfg, sess.backend)
+    if session == DM_ASSISTANT_SESSION and getattr(router.cfg.dm_assistant, "enabled", False):
+        backend_name = (router.cfg.dm_assistant.default_backend or "").strip()
+        if backend_name and backend_name != router.cfg.agent.default_backend:
+            from ..agents.factory import build_backend
+            return build_backend(router.cfg, backend_name)
     return router.runner
 
 

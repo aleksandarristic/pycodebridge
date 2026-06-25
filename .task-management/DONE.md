@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0123] DM assistant: routing and session lifecycle.
+  - Completed: 2026-06-25
+  - Notes: Routed unbound non-command DMs to the assistant when enabled, using fixed `dm` session scope, pycodebridge repo resolution, default-unlock TOTP gating, first-message prompt bootstrap, normal resume behavior, and existing idle-expiry conflict prompts. Added integration coverage for disabled behavior, first start, continuation, expiry, and TOTP gating.
+
 - [TASK-0122] DM assistant: start prompt builder.
   - Completed: 2026-06-25
   - Notes: Added compact DM assistant prompt assembly with repo path resolution, key doc paths, managed repo list, session summary, optional memory section, memory file path, template substitution, and prompt-focused tests.
