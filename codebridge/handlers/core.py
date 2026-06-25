@@ -657,7 +657,7 @@ def _session_model_reasoning_from_state(router: "Router", state, channel_id: str
     """Resolve model/reasoning for a session using one already-loaded state snapshot."""
     ch = state.channels.get(channel_id)
     sess = ch.sessions.get(session or DEFAULT_SESSION) if ch else None
-    is_dm_assistant = session == DM_ASSISTANT_SESSION and getattr(router.cfg.dm_assistant, "enabled", False)
+    is_dm_assistant = session == DM_ASSISTANT_SESSION and router.cfg.dm_assistant.enabled
     backend_name = (sess.backend if sess else "") or (
         router.cfg.dm_assistant.default_backend if is_dm_assistant and router.cfg.dm_assistant.default_backend else ""
     ) or router.cfg.agent.default_backend
@@ -692,7 +692,7 @@ def _session_backend_from_state(router: "Router", state, channel_id: str, sessio
         if sess and sess.backend:
             from ..agents.factory import build_backend
             return build_backend(router.cfg, sess.backend)
-    if session == DM_ASSISTANT_SESSION and getattr(router.cfg.dm_assistant, "enabled", False):
+    if session == DM_ASSISTANT_SESSION and router.cfg.dm_assistant.enabled:
         backend_name = (router.cfg.dm_assistant.default_backend or "").strip()
         if backend_name and backend_name != router.cfg.agent.default_backend:
             from ..agents.factory import build_backend

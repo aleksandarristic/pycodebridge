@@ -26,9 +26,10 @@ def resolve_dm_assistant_repo_path(router: "Router") -> str:
     raise FileNotFoundError("pycodebridge repo was not found under codex.code_root")
 
 
-def build_dm_assistant_prompt(router: "Router", event: MessageEvent) -> str:
+def build_dm_assistant_prompt(router: "Router", event: MessageEvent, repo_path: str | None = None) -> str:
     """Build the compact start prompt for a DM assistant session."""
-    repo_path = resolve_dm_assistant_repo_path(router)
+    if repo_path is None:
+        repo_path = resolve_dm_assistant_repo_path(router)
     memory_file = str(router.dm_memory.get_path(event.author_id))
     role = _render_template(
         router.cfg.dm_assistant.start_prompt,

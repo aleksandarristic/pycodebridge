@@ -602,7 +602,6 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.dispatch.close_mode = DEFAULT_DISPATCH_CLOSE_MODE
     if not cfg.dispatch.plan_prompt:
         cfg.dispatch.plan_prompt = DEFAULT_DISPATCH_PLAN_PROMPT
-    cfg.dm_assistant.enabled = _coerce_bool(cfg.dm_assistant.enabled, "dm_assistant.enabled")
     if not cfg.dm_assistant.start_prompt:
         cfg.dm_assistant.start_prompt = DEFAULT_DM_ASSISTANT_START_PROMPT
 

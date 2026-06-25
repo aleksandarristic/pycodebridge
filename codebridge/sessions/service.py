@@ -275,7 +275,7 @@ class SessionService:
             sess = ch.sessions.get(session)
             if sess and sess.model:
                 return sess.model
-        if session == DM_ASSISTANT_SESSION and getattr(self._cfg.dm_assistant, "enabled", False):
+        if session == DM_ASSISTANT_SESSION and self._cfg.dm_assistant.enabled:
             if self._cfg.dm_assistant.model:
                 return self._cfg.dm_assistant.model
             backend = self.session_backend(channel_id, session)
@@ -294,7 +294,7 @@ class SessionService:
             sess = ch.sessions.get(session)
             if sess and sess.reasoning_effort:
                 return sess.reasoning_effort
-        if session == DM_ASSISTANT_SESSION and getattr(self._cfg.dm_assistant, "enabled", False):
+        if session == DM_ASSISTANT_SESSION and self._cfg.dm_assistant.enabled:
             if self._cfg.dm_assistant.effort:
                 return self._cfg.dm_assistant.effort
             backend = self.session_backend(channel_id, session)
@@ -364,7 +364,7 @@ class SessionService:
             sess = ch.sessions.get(session)
             if sess and sess.backend:
                 return sess.backend
-        if session == DM_ASSISTANT_SESSION and getattr(self._cfg.dm_assistant, "enabled", False):
+        if session == DM_ASSISTANT_SESSION and self._cfg.dm_assistant.enabled:
             if self._cfg.dm_assistant.default_backend:
                 return self._cfg.dm_assistant.default_backend
         return self._cfg.agent.default_backend

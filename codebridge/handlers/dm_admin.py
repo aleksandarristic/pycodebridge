@@ -672,7 +672,7 @@ async def handle_dm_assistant_prompt(
     if existing_session:
         prompt = prompt_text
     else:
-        prompt = f"{build_dm_assistant_prompt(router, event)}\n\n## Current user message\n{prompt_text}"
+        prompt = f"{build_dm_assistant_prompt(router, event, repo_path)}\n\n## Current user message\n{prompt_text}"
     router.logger.info(
         "dm.assistant_prompt",
         extra={"platform": event.platform, "user_id": event.author_id, "session": session},
@@ -805,7 +805,7 @@ async def _dispatch_prefixed_dm_command(
         "config",
         "reset",
         "unpin",
-            "create",
+        "create",
         "clone",
         "copy",
         "deleterepo",
