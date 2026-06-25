@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0124] DM assistant: session control commands.
+  - Completed: 2026-06-25
+  - Notes: Routed supported no-bound DM commands to the assistant `dm` session, including backend/model/effort controls, status/stats/peek/logs, run controls, reset, and choose. Added DM assistant default backend/model/effort fallback handling and integration coverage, including open list commands under TOTP.
+
 - [TASK-0123] DM assistant: routing and session lifecycle.
   - Completed: 2026-06-25
   - Notes: Routed unbound non-command DMs to the assistant when enabled, using fixed `dm` session scope, pycodebridge repo resolution, default-unlock TOTP gating, first-message prompt bootstrap, normal resume behavior, and existing idle-expiry conflict prompts. Added integration coverage for disabled behavior, first start, continuation, expiry, and TOTP gating.

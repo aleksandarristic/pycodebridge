@@ -8,6 +8,7 @@ import time
 from typing import TYPE_CHECKING, Awaitable, Callable, Optional
 
 from ..observability.audit import Entry
+from ..commands import registry as command_registry
 from ..commands.shortcuts import normalize_bang_shortcut
 from ..routing.helpers import (
     DEFAULT_SESSION,
@@ -169,6 +170,24 @@ _DM_HELP_DETAILS: dict[str, tuple[str, str]] = {
     "copy": ("copy/cp <from> <to>", "copy repo"),
     "deleterepo": ("deleterepo/del <name>", "delete repo"),
     "renamerepo": ("renamerepo/ren <from> <to>", "rename repo"),
+}
+
+_DM_ASSISTANT_COMMANDS = {
+    "agent",
+    "agents",
+    "model",
+    "models",
+    "effort",
+    "efforts",
+    "status",
+    "stats",
+    "peek",
+    "stop",
+    "interrupt",
+    "kill",
+    "reset",
+    "choose",
+    "logs",
 }
 
 
@@ -624,6 +643,110 @@ async def handle_dm_assistant_prompt(
     await router.handle_resume(event, sink, "pycodebridge", repo_path, session, prompt)
 
 
+async def _handle_dm_assistant_command(
+    router: "Router",
+    event: MessageEvent,
+    sink: ResponseSink,
+    cmd: str,
+    rest: str,
+    cmdline: str,
+    send_forbidden: Callable[[str], Awaitable[None]],
+) -> bool:
+    """Route supported prefixed DM commands to the assistant session."""
+    if router.get_dm_binding(event) or not router.cfg.dm_assistant.enabled:
+        return False
+    if cmd not in _DM_ASSISTANT_COMMANDS:
+        return False
+    if cmd == "reset" and (rest or "").strip().lower() == "all":
+        return False
+    if not router._transport_user_allowed(event):
+        await send_forbidden("You are not allowed to use this bot.")
+        return True
+    try:
+        repo_path = resolve_dm_assistant_repo_path(router)
+    except Exception as exc:
+        await send_forbidden(f"DM assistant repo error: {exc}")
+        return True
+
+    dispatch_rest = _dm_assistant_command_rest(cmd, rest)
+    if cmd == "agent" and not (rest or "").strip():
+        await _send_dm_assistant_agent_info(router, event, sink)
+        return True
+    if router._totp_enabled(event) and router._totp_required_for_command(event, cmd, dispatch_rest):
+        ok, updated = await router.require_totp(event, sink, cmd, cmdline)
+        if not ok:
+            return True
+        fields = updated.split()
+        if not fields:
+            return True
+        rest = updated[len(fields[0]) :].strip()
+        dispatch_rest = _dm_assistant_command_rest(cmd, rest)
+
+    handled = await command_registry.dispatch(
+        router._command_registry,
+        router,
+        event,
+        sink,
+        "pycodebridge",
+        repo_path,
+        cmd,
+        dispatch_rest,
+    )
+    if not handled:
+        await send_forbidden(f"Unknown DM assistant command `{cmd}`.")
+    return True
+
+
+def _dm_assistant_command_rest(cmd: str, rest: str) -> str:
+    raw = (rest or "").strip()
+    if cmd == "status":
+        return raw
+    if cmd in {"stats", "peek", "stop", "interrupt", "kill", "reset", "models", "efforts"}:
+        return raw or DM_ASSISTANT_SESSION
+    if cmd == "logs":
+        if not raw:
+            return DM_ASSISTANT_SESSION
+        parts = raw.split()
+        if parts[0].isdigit():
+            return f"{DM_ASSISTANT_SESSION} {raw}"
+        return raw
+    if cmd == "choose":
+        if not raw:
+            return raw
+        parts = raw.split()
+        if len(parts) == 1:
+            return f"{DM_ASSISTANT_SESSION} {raw}"
+        return raw
+    if cmd in {"model", "effort"}:
+        if not raw:
+            return DM_ASSISTANT_SESSION
+        parts = raw.split()
+        if parts[0] == DM_ASSISTANT_SESSION:
+            return raw
+        return f"{DM_ASSISTANT_SESSION} {raw}"
+    if cmd == "agent":
+        if not raw:
+            return raw
+        from ..agents.factory import KNOWN_BACKENDS
+
+        parts = raw.split()
+        if parts[0].lower() in KNOWN_BACKENDS:
+            return f"{DM_ASSISTANT_SESSION} {raw}"
+        return raw
+    return raw
+
+
+async def _send_dm_assistant_agent_info(router: "Router", event: MessageEvent, sink: ResponseSink) -> None:
+    session = DM_ASSISTANT_SESSION
+    backend = router.coordinator.session_backend(event.channel_id, session)
+    model = router.session_model(event.channel_id, session) or "(none configured)"
+    effort = router.session_reasoning_effort(event.channel_id, session) or "(none configured)"
+    await router.reply(
+        sink,
+        f"Session '{session}' backend: {backend}. Model: {model}. Effort: {effort}.",
+    )
+
+
 async def _dispatch_prefixed_dm_command(
     router: "Router",
     event: MessageEvent,
@@ -666,6 +789,9 @@ async def _dispatch_prefixed_dm_command(
             await send_forbidden(f"Unknown DM command `{unknown}`. Use `{prefix} help` to list DM commands.")
             return
         await send(detail)
+        return
+
+    if await _handle_dm_assistant_command(router, event, sink, cmd, rest, cmdline, send_forbidden):
         return
 
     if cmd in admin_commands:

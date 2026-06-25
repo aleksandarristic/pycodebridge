@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 
 from .. import config as cfgmod
 from ..routing.helpers import DEFAULT_SESSION, PendingConflict, normalize_session, set_sticky
+from ..services.dm_assistant import DM_ASSISTANT_SESSION
 from .state import Store, utc_now_iso
 from ..util import path as pathutil
 
@@ -274,6 +275,14 @@ class SessionService:
             sess = ch.sessions.get(session)
             if sess and sess.model:
                 return sess.model
+        if session == DM_ASSISTANT_SESSION and getattr(self._cfg.dm_assistant, "enabled", False):
+            if self._cfg.dm_assistant.model:
+                return self._cfg.dm_assistant.model
+            backend = self.session_backend(channel_id, session)
+            if backend == "claude":
+                return self._cfg.claude.model
+            if backend == "gemini":
+                return self._cfg.gemini.model
         return self._cfg.codex.model
 
     def session_reasoning_effort(self, channel_id: str, session: str) -> str:
@@ -285,6 +294,14 @@ class SessionService:
             sess = ch.sessions.get(session)
             if sess and sess.reasoning_effort:
                 return sess.reasoning_effort
+        if session == DM_ASSISTANT_SESSION and getattr(self._cfg.dm_assistant, "enabled", False):
+            if self._cfg.dm_assistant.effort:
+                return self._cfg.dm_assistant.effort
+            backend = self.session_backend(channel_id, session)
+            if backend == "claude":
+                return self._cfg.claude.effort
+            if backend == "gemini":
+                return ""
         return self._cfg.codex.model_reasoning_effort
 
     def set_session_model(
@@ -347,6 +364,9 @@ class SessionService:
             sess = ch.sessions.get(session)
             if sess and sess.backend:
                 return sess.backend
+        if session == DM_ASSISTANT_SESSION and getattr(self._cfg.dm_assistant, "enabled", False):
+            if self._cfg.dm_assistant.default_backend:
+                return self._cfg.dm_assistant.default_backend
         return self._cfg.agent.default_backend
 
     def set_session_backend(

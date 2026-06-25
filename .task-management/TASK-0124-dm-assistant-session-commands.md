@@ -1,5 +1,7 @@
 # TASK-0124 — DM assistant: session control commands
 
+**Status:** DONE
+
 ## Intent
 
 Make existing session control commands work for the assistant session

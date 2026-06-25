@@ -2819,6 +2819,105 @@ def test_dm_assistant_prompt_requires_default_totp_when_enabled(tmp_path, monkey
     assert any("TOTP required for 'resume'" in msg for msg, _, _ in sink.sent)
 
 
+def test_dm_assistant_agent_command_switches_dm_backend(tmp_path):
+    repo = tmp_path / "pycodebridge"
+    repo.mkdir()
+    router, _ = _build_router(tmp_path)
+    router.cfg.dm_assistant.enabled = True
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_dm_event("!c agent claude"), sink)
+
+    asyncio.run(run())
+    assert router.coordinator.session_backend("dm-1", "dm") == "claude"
+    assert any("Backend for session 'dm' set to 'claude'" in msg for msg, _, _ in sink.sent)
+
+
+def test_dm_assistant_model_and_effort_default_to_dm_session(tmp_path):
+    repo = tmp_path / "pycodebridge"
+    repo.mkdir()
+    router, _ = _build_router(tmp_path)
+    router.cfg.dm_assistant.enabled = True
+    router.cfg.dm_assistant.model = "assistant-default"
+    router.cfg.dm_assistant.effort = "medium"
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_dm_event("!c agent"), sink)
+        await router.handle_message(_discord_dm_event("!c model"), sink)
+        await router.handle_message(_discord_dm_event("!c effort"), sink)
+        await router.handle_message(_discord_dm_event("!c model gpt-assistant"), sink)
+        await router.handle_message(_discord_dm_event("!c effort low"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Session 'dm' backend: codex. Model: assistant-default. Effort: medium." in msg for msg in texts)
+    assert any("Session 'dm' model: assistant-default (configured default)." in msg for msg in texts)
+    assert any("Session 'dm' effort: medium (configured default)." in msg for msg in texts)
+    assert router.session_model("dm-1", "dm") == "gpt-assistant"
+    assert router.session_reasoning_effort("dm-1", "dm") == "low"
+
+
+def test_dm_assistant_status_reflects_dm_session(tmp_path):
+    repo = tmp_path / "pycodebridge"
+    repo.mkdir()
+    router, _ = _build_router(tmp_path)
+    router.cfg.dm_assistant.enabled = True
+    router.update_state("dm-1", "dm", "pycodebridge", str(repo), "thread-1", "", "")
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_dm_event("!c status"), sink)
+
+    asyncio.run(run())
+    text = "\n".join(msg for msg, _, _ in sink.sent)
+    assert "Repo: pycodebridge" in text
+    assert "Sessions (1/" in text
+    assert "dm" in text
+
+
+def test_dm_assistant_reset_clears_dm_session_only(tmp_path):
+    repo = tmp_path / "pycodebridge"
+    repo.mkdir()
+    other = tmp_path / "repo"
+    other.mkdir()
+    router, _ = _build_router(tmp_path)
+    router.cfg.dm_assistant.enabled = True
+    router.update_state("dm-1", "dm", "pycodebridge", str(repo), "thread-dm", "", "")
+    router.update_state("dm-1", "default", "repo", str(other), "thread-default", "", "")
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_dm_event("!c reset"), sink)
+
+    asyncio.run(run())
+    state = router.state.load()
+    sessions = state.channels["dm-1"].sessions
+    assert "dm" not in sessions
+    assert "default" in sessions
+
+
+def test_dm_assistant_list_commands_remain_open_with_totp(tmp_path, monkeypatch):
+    repo = tmp_path / "pycodebridge"
+    repo.mkdir()
+    monkeypatch.setenv("DISCORD_TOTP_SECRET", "JBSWY3DPEHPK3PXP")
+
+    router, _ = _build_router(tmp_path, totp_enabled=True)
+    router.cfg.dm_assistant.enabled = True
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_dm_event("!c agents"), sink)
+        await router.handle_message(_discord_dm_event("!c efforts"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Available agent backends" in msg for msg in texts)
+    assert any("Valid effort levels" in msg for msg in texts)
+    assert not any("TOTP required" in msg for msg in texts)
+
+
 # ---------------------------------------------------------------------------
 # TOTP authorization model (default scope, gh scope, lock state, cooldowns)
 # ---------------------------------------------------------------------------
