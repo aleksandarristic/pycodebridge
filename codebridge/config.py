@@ -50,6 +50,11 @@ DEFAULT_SPEC_PROMPT = (
     "append a milestone to `instructions/progress_log.md`, and summarize results concisely.\n"
 )
 
+DEFAULT_DM_ASSISTANT_START_PROMPT = (
+    "You are the pycodebridge assistant. Answer questions about bridge configuration, "
+    "running sessions, and managed repos. Read docs on demand as needed."
+)
+
 
 @dataclass
 class DiscordConfig:
@@ -205,6 +210,17 @@ class AgentConfig:
 
 
 @dataclass
+class DmAssistantConfig:
+    """LLM-powered DM assistant configuration."""
+    enabled: bool = False
+    default_backend: str = ""
+    model: str = ""
+    effort: str = ""
+    memory_dir: str = ""
+    start_prompt: str = DEFAULT_DM_ASSISTANT_START_PROMPT
+
+
+@dataclass
 class Config:
     """Top-level configuration container."""
     discord: DiscordConfig = field(default_factory=DiscordConfig)
@@ -221,6 +237,7 @@ class Config:
     repo_bootstrap: RepoBootstrapConfig = field(default_factory=RepoBootstrapConfig)
     worktrees: WorktreeConfig = field(default_factory=WorktreeConfig)
     dispatch: DispatchConfig = field(default_factory=DispatchConfig)
+    dm_assistant: DmAssistantConfig = field(default_factory=DmAssistantConfig)
 
     def discord_token(self) -> str:
         """Return the Discord token from the configured env var."""
@@ -476,6 +493,21 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
         dispatch.get("plan_prompt", cfg.dispatch.plan_prompt) or DEFAULT_DISPATCH_PLAN_PROMPT
     )
 
+    dm_assistant = raw.get("dm_assistant", {}) or {}
+    cfg.dm_assistant.enabled = _coerce_bool(
+        dm_assistant.get("enabled", cfg.dm_assistant.enabled),
+        "dm_assistant.enabled",
+    )
+    cfg.dm_assistant.default_backend = str(
+        dm_assistant.get("default_backend", cfg.dm_assistant.default_backend) or ""
+    )
+    cfg.dm_assistant.model = str(dm_assistant.get("model", cfg.dm_assistant.model) or "")
+    cfg.dm_assistant.effort = str(dm_assistant.get("effort", cfg.dm_assistant.effort) or "")
+    cfg.dm_assistant.memory_dir = str(dm_assistant.get("memory_dir", cfg.dm_assistant.memory_dir) or "")
+    cfg.dm_assistant.start_prompt = str(
+        dm_assistant.get("start_prompt", cfg.dm_assistant.start_prompt) or DEFAULT_DM_ASSISTANT_START_PROMPT
+    )
+
 
 def _apply_defaults(cfg: Config) -> None:
     """Fill missing values with defaults."""
@@ -569,6 +601,9 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.dispatch.close_mode = DEFAULT_DISPATCH_CLOSE_MODE
     if not cfg.dispatch.plan_prompt:
         cfg.dispatch.plan_prompt = DEFAULT_DISPATCH_PLAN_PROMPT
+    cfg.dm_assistant.enabled = _coerce_bool(cfg.dm_assistant.enabled, "dm_assistant.enabled")
+    if not cfg.dm_assistant.start_prompt:
+        cfg.dm_assistant.start_prompt = DEFAULT_DM_ASSISTANT_START_PROMPT
 
 
 def _expand_paths(cfg: Config) -> None:
@@ -579,6 +614,7 @@ def _expand_paths(cfg: Config) -> None:
     cfg.git.global_config_path = _expand_path(cfg.git.global_config_path)
     cfg.repo_bootstrap.agents_template = _expand_path(cfg.repo_bootstrap.agents_template)
     cfg.worktrees.base_dir = _expand_path(cfg.worktrees.base_dir)
+    cfg.dm_assistant.memory_dir = _expand_path(cfg.dm_assistant.memory_dir)
 
 
 def _coerce_bool(value: Any, field: str) -> bool:

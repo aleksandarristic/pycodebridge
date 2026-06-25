@@ -1,5 +1,7 @@
 # TASK-0120 — DM assistant: config section
 
+**Status:** DONE
+
 ## Intent
 
 Add a `dm_assistant` config section that controls the LLM-powered DM

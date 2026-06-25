@@ -51,6 +51,15 @@ gemini:
 agent:
   default_backend: "codex"  # codex|claude|gemini
 
+# dm_assistant:
+#   enabled: false
+#   default_backend: ""  # empty falls back to agent.default_backend
+#   model: ""
+#   effort: ""
+#   memory_dir: ""  # empty falls back to {state.data_dir}/dm-memory/
+#   start_prompt: |
+#     You are the pycodebridge assistant. Answer questions about bridge configuration, running sessions, and managed repos. Read docs on demand as needed.
+
 state:
   data_dir: "/workspace/state"
   lock_timeout_seconds: 600

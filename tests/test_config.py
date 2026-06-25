@@ -36,6 +36,57 @@ def test_load_config_expands_paths(tmp_path, monkeypatch):
     assert cfg.discord.prefix == cfgmod.DEFAULT_PREFIX
 
 
+def test_load_config_dm_assistant_defaults_when_absent():
+    cfg = cfgmod.Config()
+    assert cfg.dm_assistant.enabled is False
+    assert cfg.dm_assistant.default_backend == ""
+    assert cfg.dm_assistant.model == ""
+    assert cfg.dm_assistant.effort == ""
+    assert cfg.dm_assistant.memory_dir == ""
+    assert cfg.dm_assistant.start_prompt == cfgmod.DEFAULT_DM_ASSISTANT_START_PROMPT
+
+
+def test_load_config_dm_assistant_fields_and_path_expansion(tmp_path, monkeypatch):
+    code_root = tmp_path / "code"
+    data_dir = tmp_path / "data"
+    memory_dir = data_dir / "memory"
+    code_root.mkdir()
+    data_dir.mkdir()
+
+    monkeypatch.setenv("CODE_ROOT", str(code_root))
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        """
+        discord:
+          guild_id: "123"
+          allowed_user_ids: ["1"]
+        codex:
+          code_root: "$CODE_ROOT"
+        state:
+          data_dir: "%DATA_DIR%"
+          log_dir: "%DATA_DIR%/logs"
+        dm_assistant:
+          enabled: true
+          default_backend: claude
+          model: assistant-model
+          effort: high
+          memory_dir: "%DATA_DIR%/memory"
+          start_prompt: "custom {{MEMORY_FILE}}"
+        """,
+        encoding="utf-8",
+    )
+
+    cfg = cfgmod.load(str(cfg_path))
+    assert cfg.dm_assistant.enabled is True
+    assert cfg.dm_assistant.default_backend == "claude"
+    assert cfg.dm_assistant.model == "assistant-model"
+    assert cfg.dm_assistant.effort == "high"
+    assert cfg.dm_assistant.memory_dir == str(memory_dir)
+    assert cfg.dm_assistant.start_prompt == "custom {{MEMORY_FILE}}"
+
+
 def test_expand_path_uses_expanduser_for_tilde_variants(monkeypatch):
     monkeypatch.setattr(
         cfgmod.os.path,

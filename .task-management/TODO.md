@@ -12,7 +12,6 @@ Rules:
 
 ### DM assistant
 
-- TASK-0120 — DM assistant: config section (`dm_assistant.*`)
 - TASK-0121 — DM assistant: per-user memory service
 - TASK-0122 — DM assistant: start prompt builder (repo list, session summary, memory)
 - TASK-0123 — DM assistant: routing and session lifecycle

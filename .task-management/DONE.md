@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0120] DM assistant: config section (`dm_assistant.*`).
+  - Completed: 2026-06-25
+  - Notes: Added `DmAssistantConfig`, YAML parsing/defaults/path expansion, commented config example blocks, and focused config coverage for defaults plus explicit field parsing.
+
 - [TASK-0113] `!c gh-create` command: check existing GH repo, create if absent, add remote.
   - Completed: 2026-06-25
   - Notes: Added the `gh-create [--public]` repo lifecycle command with gh-scope auth, existing-origin no-op handling, existing GitHub repo remote wiring, guarded create/push flow, docs, and mocked GitHub helper coverage.
