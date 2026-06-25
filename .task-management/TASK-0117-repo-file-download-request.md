@@ -1,5 +1,7 @@
 # TASK-0117 — Verify and document repo file download request workflow
 
+**Status:** DONE
+
 ## Intent
 
 Make the repo file download workflow explicit and reliable for Discord users:

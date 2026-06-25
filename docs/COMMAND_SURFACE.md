@@ -69,6 +69,7 @@ Source of truth: `codebridge/commands/registry.py`.
 | `branch` | none | Channel | repo channel/thread | open | git | convenience |
 | `git <...>` | none | Channel | repo channel/thread | unlock/default | git | essential |
 | `gh <args>` | none | Channel | repo channel/thread | unlock/gh | gh | essential |
+| `gh-create [--public]` | none | Channel | repo channel/thread | unlock/gh | gh/git | convenience |
 | `download <path>` | `dl` | Channel | repo channel/thread | unlock/default when `discord.totp.command_groups.file_transfer` is enabled | filesystem | convenience |
 | `logs [session] [n]` | `log` | Channel | repo channel/thread | unlock/default | audit | admin-only |
 | `audit ...` | none | Channel | repo channel/thread | unlock/default | audit | admin-only |

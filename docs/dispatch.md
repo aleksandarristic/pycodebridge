@@ -5,6 +5,13 @@ Use `@agent` mentions to select agents; the orchestrator creates isolated git br
 runs agents (with Claude planning first when included), and reports results back to the
 channel.
 
+## Before you dispatch
+
+If you plan to close the task with `!c done --pr`, the local repo needs a GitHub
+`origin` remote. Run `!c gh-create` in the repo channel to check for an existing
+remote, create a private GitHub repo if needed, and wire `origin`. Use
+`!c gh-create --public` for a public repo.
+
 ## Syntax
 
 ```

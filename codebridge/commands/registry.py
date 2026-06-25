@@ -81,6 +81,7 @@ COMMAND_MODEL_META: Dict[str, Dict[str, str]] = {
     "branch": {"surface": SURFACE_CORE, "namespace": "repo"},
     "git": {"surface": SURFACE_CORE, "namespace": "repo"},
     "gh": {"surface": SURFACE_CORE, "namespace": "repo"},
+    "gh-create": {"surface": SURFACE_ADVANCED, "namespace": "repo-admin"},
     "download": {"surface": SURFACE_ADVANCED, "namespace": "repo"},
     "logs": {"surface": SURFACE_ADMIN, "namespace": "diag"},
     "audit": {"surface": SURFACE_ADMIN, "namespace": "diag"},
@@ -551,6 +552,14 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             "GitHub CLI helper passthrough",
             "Repo helpers",
             _cmd_gh,
+            AUTH_UNLOCK_GH,
+        ),
+        CommandSpec(
+            "gh-create",
+            "gh-create [--public]",
+            "create GitHub repo if absent and wire origin",
+            "Repo lifecycle",
+            _cmd_gh_create,
             AUTH_UNLOCK_GH,
         ),
         CommandSpec("download", "download <path>", "download a file from repo", "Repo helpers", _cmd_download, AUTH_UNLOCK, aliases=("dl",)),
@@ -1530,6 +1539,10 @@ async def _cmd_git(router: Any, message: MessageEvent, sink: ResponseSink, repo_
 
 async def _cmd_gh(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     await router.handle_gh(sink, repo_path, rest)
+
+
+async def _cmd_gh_create(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    await router.handle_gh_create(sink, repo_name, repo_path, rest)
 
 
 async def _cmd_download(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

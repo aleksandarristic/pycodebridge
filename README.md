@@ -242,6 +242,7 @@ DM admin `!c reset all` also requires TOTP before the yes/no confirmation when T
 
 TOTP required for GitHub CLI unless gh scope is unlocked (controlled by `discord.totp.command_groups.gh`):
 - `!c gh <args>`
+- `!c gh-create [--public]`
 - `!gh <args>` (shortcut for `!c gh <args>`)
 
 TOTP required unless the chat is unlocked:
@@ -286,7 +287,7 @@ TOTP required unless the chat is unlocked:
 - Shortcut: `!retry` (maps to `!c rerun`)
 - `!c config`
 - `!c tests`
-- `!c download <path>`
+- `!c download <path>` / `!c dl <path>` sends a repo-relative file back as a Discord attachment. Directories, missing files, and paths outside the repo are rejected.
 - Attach one or more files in a repo channel or bound DM, then reply with a
   repo-relative destination path to upload them.
 - `!c logs [session] [n]`
@@ -363,6 +364,7 @@ Repo helpers:
 - `git` `[unlock/default]`
   - Dangerous `git` helper operations (force push, branch delete) require opt-in and explicit confirmation token.
 - `gh` `[unlock/gh]` (examples: `!c gh repo sync` or `!gh repo sync`)
+- `gh-create [--public]` `[unlock/gh]` creates the GitHub repo if absent and wires `origin` for the current repo.
 
 Queue:
 - `logs` (alias: `log`), `cancel` (alias: `drop`), `rerun` (alias: `retry`) `[unlock/default]`
@@ -480,6 +482,10 @@ worktrees:
 
 Dispatch routes a single message to one or more AI agents, each running in a git worktree
 on a branch forked from a shared **task branch**. Requires `worktrees.enabled: true`.
+
+**Before you dispatch** — make sure the repo has a GitHub remote if you plan to close
+with `!c done --pr`. Use `!c gh-create` to create a private GitHub repo and wire
+`origin`; add `--public` for a public repo. Existing `origin` remotes are left alone.
 
 **Syntax** — prefix your prompt with `@agent` handles:
 

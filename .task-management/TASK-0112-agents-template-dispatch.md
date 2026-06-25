@@ -1,6 +1,6 @@
 # TASK-0112 — Update AGENTS.sample.md with dispatch workflow section; wire into docker config
 
-**Status:** TODO
+**Status:** DONE
 
 ## Goal
 

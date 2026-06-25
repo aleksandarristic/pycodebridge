@@ -9,6 +9,18 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0113] `!c gh-create` command: check existing GH repo, create if absent, add remote.
+  - Completed: 2026-06-25
+  - Notes: Added the `gh-create [--public]` repo lifecycle command with gh-scope auth, existing-origin no-op handling, existing GitHub repo remote wiring, guarded create/push flow, docs, and mocked GitHub helper coverage.
+
+- [TASK-0117] Verify and document repo file download request workflow.
+  - Completed: 2026-06-25
+  - Notes: Confirmed download capability gating, `download`/`dl` command UX, missing path, missing file, directory, and traversal rejection. Updated README docs and added focused FileTransferService plus router alias/usage coverage.
+
+- [TASK-0112] Update AGENTS.sample.md with dispatch workflow section; wire it into docker config.
+  - Completed: 2026-06-25
+  - Notes: Added a multi-agent dispatch workflow section to `AGENTS.sample.md` and changed Docker example repo bootstrap config to seed `./AGENTS.sample.md`.
+
 - [TASK-0119] Make file-transfer TOTP enforcement configurable.
   - Completed: 2026-06-24
   - Notes: Added `discord.totp.command_groups.file_transfer` to control TOTP enforcement for upload flows and the `download` command independently from other command groups. Updated config examples, README, COMMAND_SURFACE, and config/integration coverage.

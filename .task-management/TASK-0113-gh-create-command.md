@@ -1,6 +1,6 @@
 # TASK-0113 — `!c gh-create` command: check existing GH repo, create if absent, add remote
 
-**Status:** TODO
+**Status:** DONE
 
 ## Goal
 

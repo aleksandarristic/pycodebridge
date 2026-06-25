@@ -932,6 +932,10 @@ class Router:
         """Run gh helper commands."""
         await gh_handlers.handle_gh(self, sink, repo_path, rest)
 
+    async def handle_gh_create(self, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+        """Create or wire a GitHub repo for the current local repo."""
+        await gh_handlers.handle_gh_create(self, sink, repo_name, repo_path, rest)
+
     async def handle_download(self, sink: ResponseSink, repo_path: str, rel_path: str) -> None:
         """Send a file from the repo to the channel."""
         await self.file_transfers.handle_download(sink, repo_path, rel_path, self.reply_forbidden)

@@ -312,6 +312,91 @@ def test_download_allowed_when_capability_true(tmp_path):
     assert sink.files == [(str(target), "note.txt")]
 
 
+def test_download_rejects_missing_path(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    service = FileTransferService(cfg, logger=_FakeLogger())
+    sink = _FakeSink(Capabilities(downloads=True))
+
+    async def run():
+        await service.handle_download(sink, str(repo), "", _reply_forbidden)
+
+    asyncio.run(run())
+    assert "Usage: !c download <path>" in sink.sent[0]
+
+
+def test_download_rejects_missing_file(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    service = FileTransferService(cfg, logger=_FakeLogger())
+    sink = _FakeSink(Capabilities(downloads=True))
+
+    async def run():
+        await service.handle_download(sink, str(repo), "missing.txt", _reply_forbidden)
+
+    asyncio.run(run())
+    assert "File not found." in sink.sent[0]
+    assert not sink.files
+
+
+def test_download_rejects_directory(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    (repo / "docs").mkdir()
+
+    service = FileTransferService(cfg, logger=_FakeLogger())
+    sink = _FakeSink(Capabilities(downloads=True))
+
+    async def run():
+        await service.handle_download(sink, str(repo), "docs", _reply_forbidden)
+
+    asyncio.run(run())
+    assert "Path is a directory; provide a file path." in sink.sent[0]
+    assert not sink.files
+
+
+def test_download_rejects_path_traversal(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.codex.code_root = str(tmp_path)
+    cfg.state.data_dir = str(tmp_path / "state")
+    cfg.state.log_dir = str(tmp_path / "logs")
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    (tmp_path / "outside.txt").write_text("secret", encoding="utf-8")
+
+    service = FileTransferService(cfg, logger=_FakeLogger())
+    sink = _FakeSink(Capabilities(downloads=True))
+
+    async def run():
+        await service.handle_download(sink, str(repo), "../outside.txt", _reply_forbidden)
+
+    asyncio.run(run())
+    assert "Invalid path:" in sink.sent[0]
+    assert not sink.files
+
+
 def test_upload_sanitizes_attachment_filename_before_save(tmp_path):
     cfg = cfgmod.Config()
     cfg.codex.code_root = str(tmp_path)

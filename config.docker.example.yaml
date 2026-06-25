@@ -91,7 +91,7 @@ files:
   max_upload_mb: 200
 
 repo_bootstrap:
-  agents_template: ""
+  agents_template: "./AGENTS.sample.md"
   spec_prompt: ""  # optional prompt profile override for `!c spec`
 
 dispatch:

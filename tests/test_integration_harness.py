@@ -1317,6 +1317,25 @@ def test_integration_resume_and_download(tmp_path):
     assert sink.files == [(str(target), "note.txt", None, None)]
 
 
+def test_integration_download_alias_and_usage(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    target = repo / "note.txt"
+    target.write_text("hi")
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c dl note.txt", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c download", "code-repo"), sink)
+
+    asyncio.run(run())
+    assert sink.files == [(str(target), "note.txt", None, None)]
+    assert any("Usage: !c download <path>" in msg for msg, _, _ in sink.sent)
+
+
 def test_integration_workflow_command_expands_prompt_and_respects_session(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
