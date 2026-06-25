@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0121] DM assistant: per-user memory service.
+  - Completed: 2026-06-25
+  - Notes: Added `DmMemoryService` with default/configured memory directory resolution, safe per-user markdown paths, missing-file read fallback, router wiring, and focused unit coverage.
+
 - [TASK-0120] DM assistant: config section (`dm_assistant.*`).
   - Completed: 2026-06-25
   - Notes: Added `DmAssistantConfig`, YAML parsing/defaults/path expansion, commented config example blocks, and focused config coverage for defaults plus explicit field parsing.

@@ -37,6 +37,7 @@ from ..handlers import system_helpers
 from ..commands import registry as command_registry
 from ..commands.parse import parse_session_quit_alias, parse_session_slash_prompt
 from ..commands.shortcuts import normalize_bang_shortcut
+from ..services.dm_memory import DmMemoryService
 from ..services.file_transfer import FileTransferService
 from ..util.ansi import strip_control_codes
 from ..util.chunk import chunk_text
@@ -301,6 +302,7 @@ class Router:
         self.coordinator = coordinator
         self._command_registry, self._command_specs = command_registry.build_registry()
         self.file_transfers = FileTransferService(cfg, logger)
+        self.dm_memory = DmMemoryService(cfg)
         self._commit = _git_commit_hash()
         self._redactor = getattr(audit, "redactor", None)
         if self._redactor is None and self.cfg.audit.redact:

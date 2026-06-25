@@ -1,5 +1,7 @@
 # TASK-0121 — DM assistant: per-user memory service
 
+**Status:** DONE
+
 ## Intent
 
 Persist a per-user markdown memory file so the assistant retains
