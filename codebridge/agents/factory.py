@@ -49,5 +49,6 @@ def build_backend(cfg: "cfgmod.Config", name: str = DEFAULT_BACKEND) -> AgentBac
             cfg.gemini.approval_mode,
             cfg.gemini.env,
             cfg.gemini.model,
+            cfg.gemini.api_key_env,
         )
     raise ValueError(f"unknown agent backend: {name!r}")

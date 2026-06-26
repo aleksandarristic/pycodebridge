@@ -38,6 +38,13 @@ codex:
     Discord bridge session for {{REPO_NAME}}. Work only in this repo and keep replies concise.
   env: {}
 
+# gemini:
+#   binary: "gemini"
+#   approval_mode: "yolo"
+#   model: ""
+#   api_key_env: "GEMINI_API_KEY"  # host env var to read; passed to Gemini as GEMINI_API_KEY
+#   env: {}
+
 # dm_assistant:
 #   enabled: false  # route unbound DM messages to the bridge assistant
 #   default_backend: ""  # empty falls back to agent.default_backend

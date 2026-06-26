@@ -4,7 +4,9 @@ Implements :class:`AgentBackend` for `gemini -p --output-format stream-json`.
 Stream-json schema documented in .task-management/TASK-0020-gemini-stream-json-schema.md.
 """
 
+from dataclasses import replace
 import json
+import os
 from typing import Dict, List, Optional
 
 from .base import AgentBackend, NormalizedEvent
@@ -31,10 +33,12 @@ class GeminiBackend(AgentBackend):
         approval_mode: str = "yolo",
         base_env: Optional[Dict[str, str]] = None,
         model: str = "",
+        api_key_env: str = "",
     ) -> None:
         super().__init__(binary or "gemini", base_env)
         self.approval_mode = approval_mode or "yolo"
         self.default_model = model or ""
+        self.api_key_env = (api_key_env or "").strip()
         self._last_error_msg: str = ""
 
     def _base_args(self, model: str) -> List[str]:
@@ -54,6 +58,19 @@ class GeminiBackend(AgentBackend):
 
     def build_resume_last_args(self, repo_path: str, prompt: str, model: str, reasoning_effort: str) -> List[str]:
         return self._base_args(model) + ["--resume", "latest", "-p", prompt]
+
+    async def run(self, opts):
+        if not self.api_key_env:
+            return await super().run(opts)
+        api_key = os.environ.get(self.api_key_env, "")
+        if not api_key:
+            raise ValueError(
+                f"Gemini API key env var '{self.api_key_env}' is not set. "
+                "Set it in the bridge process environment or clear `gemini.api_key_env` to use `gemini.env`/other Gemini auth."
+            )
+        env = dict(opts.env or {})
+        env["GEMINI_API_KEY"] = api_key
+        return await super().run(replace(opts, env=env))
 
     def parse(self, line: str) -> Optional[NormalizedEvent]:
         """Parse one stream-json line into a backend-neutral event."""

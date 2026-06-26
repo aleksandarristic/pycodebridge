@@ -183,6 +183,7 @@ class GeminiConfig:
     binary: str = "gemini"
     approval_mode: str = "yolo"  # default|auto_edit|yolo|plan
     model: str = ""
+    api_key_env: str = ""
     env: Dict[str, str] = field(default_factory=dict)
 
 
@@ -371,6 +372,7 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.gemini.binary = gemini.get("binary", cfg.gemini.binary)
     cfg.gemini.approval_mode = gemini.get("approval_mode", cfg.gemini.approval_mode)
     cfg.gemini.model = gemini.get("model", cfg.gemini.model)
+    cfg.gemini.api_key_env = str(gemini.get("api_key_env", cfg.gemini.api_key_env) or "").strip()
     cfg.gemini.env = dict(gemini.get("env", cfg.gemini.env) or {})
 
     agent = raw.get("agent", {}) or {}
@@ -553,6 +555,8 @@ def _apply_defaults(cfg: Config) -> None:
         cfg.gemini.binary = "gemini"
     if not cfg.gemini.approval_mode:
         cfg.gemini.approval_mode = "yolo"
+    if cfg.gemini.api_key_env is None:
+        cfg.gemini.api_key_env = ""
     if cfg.gemini.env is None:
         cfg.gemini.env = {}
     if not cfg.agent.default_backend:

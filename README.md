@@ -122,6 +122,7 @@ network_access = true
 - `binary` (default `gemini`) — path/name of Gemini CLI.
 - `approval_mode` (default `yolo`) — Gemini approval mode (`default|auto_edit|yolo|plan`).
 - `model` (default empty) — default Gemini model for Gemini sessions.
+- `api_key_env` (default empty) — optional host env var name whose value the bridge injects into Gemini runs as `GEMINI_API_KEY`. Recommended when you want API-key auth without storing secrets in YAML. Example: `GEMINI_API_KEY` or a host-specific secret name like `PYCODEBRIDGE_GEMINI_KEY`.
 - `env` (default `{}`) — extra environment variables for Gemini CLI.
 
 ### `agent`

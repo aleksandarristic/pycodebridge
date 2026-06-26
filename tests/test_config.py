@@ -44,6 +44,37 @@ def test_load_config_dm_assistant_defaults_when_absent():
     assert cfg.dm_assistant.effort == ""
     assert cfg.dm_assistant.memory_dir == ""
     assert cfg.dm_assistant.start_prompt == cfgmod.DEFAULT_DM_ASSISTANT_START_PROMPT
+    assert cfg.gemini.api_key_env == ""
+
+
+def test_load_config_gemini_api_key_env_field(tmp_path, monkeypatch):
+    code_root = tmp_path / "code"
+    data_dir = tmp_path / "data"
+    code_root.mkdir()
+    data_dir.mkdir()
+
+    monkeypatch.setenv("CODE_ROOT", str(code_root))
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        """
+        discord:
+          guild_id: "123"
+          allowed_user_ids: ["1"]
+        codex:
+          code_root: "$CODE_ROOT"
+        state:
+          data_dir: "%DATA_DIR%"
+          log_dir: "%DATA_DIR%/logs"
+        gemini:
+          api_key_env: BRIDGE_GEMINI_API_KEY
+        """,
+        encoding="utf-8",
+    )
+
+    cfg = cfgmod.load(str(cfg_path))
+    assert cfg.gemini.api_key_env == "BRIDGE_GEMINI_API_KEY"
 
 
 def test_load_config_dm_assistant_fields_and_path_expansion(tmp_path, monkeypatch):

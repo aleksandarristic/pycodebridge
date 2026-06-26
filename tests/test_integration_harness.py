@@ -4312,6 +4312,30 @@ def test_run_codex_wraps_gemini_model_not_found_stderr(tmp_path):
     assert "Agent exited with code" not in output
 
 
+def test_integration_gemini_missing_configured_api_key_env_is_actionable(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    router.cfg.gemini.api_key_env = "BRIDGE_GEMINI_KEY"
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        router.set_session_backend("chan", "default", "gemini")
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
+        for _ in range(200):
+            if sink.sent:
+                break
+            await asyncio.sleep(0.01)
+
+    asyncio.run(run())
+    output = "\n".join(msg for msg, _, _ in sink.sent)
+    assert "Agent failed to start:" in output
+    assert "BRIDGE_GEMINI_KEY" in output
+    assert "gemini.api_key_env" in output
+
+
 def test_run_codex_wraps_unsupported_model_stderr_error(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()

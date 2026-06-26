@@ -1,9 +1,11 @@
 """Focused tests for GeminiBackend — arg building and stream-json parsing."""
 
+import asyncio
 import json
 
 import pytest
 
+from codebridge.agents.base import AgentBackend, Options
 from codebridge.agents.gemini import GeminiBackend
 
 
@@ -92,6 +94,35 @@ class TestBuildArgs:
         args = b.build_start_args("/repo", "hello", "", "high")
         assert "--effort" not in args
         assert "high" not in args
+
+    def test_run_injects_configured_api_key_env(self, monkeypatch):
+        b = _backend(api_key_env="BRIDGE_GEMINI_KEY")
+        monkeypatch.setenv("BRIDGE_GEMINI_KEY", "secret-123")
+        captured = {}
+
+        async def fake_run(self, opts):
+            captured["env"] = dict(opts.env)
+            return object()
+
+        monkeypatch.setattr(AgentBackend, "run", fake_run)
+
+        async def run():
+            await b.run(Options(repo_path="/repo", args=["-p", "hi"], env={}))
+
+        asyncio.run(run())
+        assert captured["env"]["GEMINI_API_KEY"] == "secret-123"
+
+    def test_run_raises_when_configured_api_key_env_is_missing(self, monkeypatch):
+        b = _backend(api_key_env="BRIDGE_GEMINI_KEY")
+        monkeypatch.delenv("BRIDGE_GEMINI_KEY", raising=False)
+
+        async def run():
+            with pytest.raises(ValueError) as exc:
+                await b.run(Options(repo_path="/repo", args=["-p", "hi"], env={}))
+            assert "BRIDGE_GEMINI_KEY" in str(exc.value)
+            assert "gemini.api_key_env" in str(exc.value)
+
+        asyncio.run(run())
 
 
 # ---------------------------------------------------------------------------

@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0129] Add first-class Gemini API key configuration.
+  - Completed: 2026-06-26
+  - Notes: Added `gemini.api_key_env` so the bridge can read a host env var and inject its value into Gemini runs as `GEMINI_API_KEY`, without storing secrets in YAML or requiring `gemini.env.GEMINI_API_KEY`. Kept the default empty to preserve existing Gemini auth setups, added actionable startup errors when the configured source env var is missing, documented the new field, and covered config, backend, and router-level failure behavior.
+
 - [TASK-0128] Add `!c clear` channel default-session escape hatch.
   - Completed: 2026-06-26
   - Notes: Added a repo-resolution-free `clear` command for the channel `default` session that kills the tracked process, cancels queued jobs, removes persisted sticky/session state, and clears session-local runtime maps before the next fresh start. Documented the command and added regression coverage for active-process teardown, queued-job cancellation, runtime cleanup, and broken-repo operation.
