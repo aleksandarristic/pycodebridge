@@ -88,6 +88,33 @@ def test_session_service_update_state_preserves_existing_repo_context_on_empty_u
     assert sess.thread_id == "thread-1"
 
 
+def test_session_service_fresh_start_marker_survives_empty_thread_and_clears_on_new_thread(tmp_path):
+    store = Store(str(tmp_path))
+    cfg = config.Config()
+    service = SessionService(store, cfg)
+    service.update_state("chan", "default", "repo", "/tmp/repo", "thread-1", "", "")
+
+    cleared = service.clear_session_thread("chan", "default", fresh_start_required=True)
+    state = store.load()
+    sess = state.channels["chan"].sessions["default"]
+    assert cleared is True
+    assert sess.thread_id == ""
+    assert sess.fresh_start_required is True
+
+    cleared = service.clear_session_thread("chan", "default", fresh_start_required=True)
+    state = store.load()
+    sess = state.channels["chan"].sessions["default"]
+    assert cleared is False
+    assert sess.thread_id == ""
+    assert sess.fresh_start_required is True
+
+    service.update_state("chan", "default", "repo", "/tmp/repo", "thread-2", "", "")
+    state = store.load()
+    sess = state.channels["chan"].sessions["default"]
+    assert sess.thread_id == "thread-2"
+    assert sess.fresh_start_required is False
+
+
 def test_session_service_update_state_does_not_persist_configured_defaults(tmp_path):
     store = Store(str(tmp_path))
     cfg = config.Config()

@@ -129,8 +129,12 @@ class SessionCoordinator:
     def get_activity(self, channel_id: str, session: str) -> Optional[str]:
         return self._sessions.get_activity(channel_id, session)
 
-    def clear_session_thread(self, channel_id: str, session: str) -> bool:
-        return self._sessions.clear_session_thread(channel_id, session)
+    def clear_session_thread(self, channel_id: str, session: str, *, fresh_start_required: bool = False) -> bool:
+        return self._sessions.clear_session_thread(
+            channel_id,
+            session,
+            fresh_start_required=fresh_start_required,
+        )
 
     def current_session_for_user(self, user_id: str, channel_id: str, default_session: str = "default") -> str:
         return self._sessions.current_session_for_user(user_id, channel_id, default_session)

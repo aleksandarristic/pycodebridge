@@ -138,6 +138,17 @@ def session_exists(state, channel_id: str, session: str) -> bool:
     return session in ch.sessions
 
 
+def session_requires_fresh_start(state, channel_id: str, session: str) -> bool:
+    """Return True when a session must start fresh instead of resuming backend history."""
+    ch = state.channels.get(channel_id)
+    if not ch:
+        return False
+    sess = ch.sessions.get(session or DEFAULT_SESSION)
+    if not sess:
+        return False
+    return bool(getattr(sess, "fresh_start_required", False))
+
+
 def existing_thread(state, channel_id: str, session: str) -> str:
     """Return the thread id for a session, if any."""
     ch = state.channels.get(channel_id)

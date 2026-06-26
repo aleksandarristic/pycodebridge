@@ -27,6 +27,7 @@ class SessionState:
     task_branch: str = ""
     created_at: str = ""
     last_used_at: str = ""
+    fresh_start_required: bool = False
 
 
 @dataclass
@@ -176,6 +177,7 @@ def _from_dict(data: Dict[str, Any]) -> FileState:
                 task_branch=s.get("task_branch", ""),
                 created_at=s.get("created_at", ""),
                 last_used_at=s.get("last_used_at", ""),
+                fresh_start_required=parse_bool(s.get("fresh_start_required", False)),
             )
         channels[channel_id] = ChannelState(sessions=sessions, sticky=dict(sticky))
 
@@ -231,6 +233,7 @@ def _to_dict(state: FileState) -> Dict[str, Any]:
                 "task_branch": s.task_branch,
                 "created_at": s.created_at,
                 "last_used_at": s.last_used_at,
+                "fresh_start_required": bool(s.fresh_start_required),
             }
         channels[channel_id] = {
             "sessions": sessions,

@@ -260,6 +260,48 @@ def test_models_refresh_forces_codex_query(tmp_path, monkeypatch):
     asyncio.run(run())
 
 
+def test_models_refresh_starts_fresh_when_session_requires_fresh_start(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    monkeypatch.setattr(command_registry, "_read_models_cache", lambda: [])
+
+    def _seed(fs):
+        from codebridge.sessions.state import ChannelState, SessionState
+
+        ch = fs.channels.get("chan") or ChannelState()
+        ch.sessions["default"] = SessionState(
+            repo_name="repo",
+            repo_path=str(repo),
+            thread_id="",
+            fresh_start_required=True,
+        )
+        fs.channels["chan"] = ch
+
+    router.state.update(_seed)
+
+    async def run():
+        await router.handle_message(_discord_event("!models --refresh", "code-repo"), sink)
+        for _ in range(200):
+            if runner.calls:
+                break
+            await asyncio.sleep(0.01)
+        assert runner.calls
+        assert runner.calls[0][0] == "start"
+        assert runner.calls[0][1] == "/model"
+        assert not any(args and args[0] == "resume-last" for args in runner.calls)
+        runner.finish_blocking()
+        for _ in range(200):
+            if await router.get_active("chan", "default") is None:
+                break
+            await asyncio.sleep(0.01)
+
+    asyncio.run(run())
+
+
 def test_codex_effort_aliases_match_cli_config_values():
     assert command_registry._effort_list_for_backend("codex") == ("minimal", "low", "medium", "high", "xhigh")
     assert command_registry._normalize_effort_for_backend("minimal", "codex") == "minimal"

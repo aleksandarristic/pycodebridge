@@ -10,22 +10,6 @@ Rules:
 
 ## Active tasks
 
-- [TASK-0127] Prevent `new`/replace recovery from falling back to stale backend session history.
-  - Reported: 2026-06-26.
-  - Context:
-    - `handle_choose(..., "new")` clears only the stored `thread_id` while leaving the session record present.
-    - If the fresh start dies before a new thread id is recorded, later resumes see that the session exists but has no thread id and call backend `resume_last`.
-    - For Codex this is `resume --last`; for Claude this is `--continue`. Both can reattach to stale backend history after the user explicitly chose a fresh session.
-  - Relevant code:
-    - `codebridge/handlers/core.py::handle_choose` clears `thread_id` before starting replacement.
-    - `codebridge/handlers/core.py::handle_resume` uses `build_resume_last_args` when a session record exists without a thread id.
-    - `codebridge/routing/router.py::on_thread` records the new thread id only after the backend emits one.
-  - Acceptance criteria:
-    - Choosing `new` or `compact` marks the next run as explicitly fresh and cannot later degrade into `resume --last` / `--continue` if startup fails.
-    - Session metadata needed for backend/model/effort is preserved or intentionally reset, but stale thread/history linkage is not reused.
-    - Fresh-start failure leaves state in a safe, inspectable condition with a clear user-facing recovery path.
-    - Tests cover failed fresh start followed by resume for Codex and Claude backends.
-
 - [TASK-0128] Add `!c clear` channel default-session escape hatch.
   - Requested: 2026-06-26.
   - Goal: provide a programmatic operator command that clears/stops the current channel's default session without routing anything to Codex, Claude, Gemini, or any other LLM backend.

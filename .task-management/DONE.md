@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0127] Prevent `new`/replace recovery from falling back to stale backend session history.
+  - Completed: 2026-06-26
+  - Notes: Added a persisted `fresh_start_required` session marker set by explicit `new`/`compact` choices and cleared only when a backend emits a new thread id. Resume and model-refresh paths now start fresh instead of using Codex `resume --last` or Claude `--continue` while the marker is set. Added Codex and Claude failed-fresh-start regression coverage.
+
 - [TASK-0126] Fix expired-session choice routing for `!new`, `!c new`, and DM assistant flows.
   - Completed: 2026-06-26
   - Notes: Added pending-conflict routing for prefixed `!c new`, DM `!new`/`choose` handling for assistant and bound-repo flows, invalid choice rejection, and safe plain-text handling while a conflict is pending. Added channel, DM assistant, and bound-DM regression coverage.

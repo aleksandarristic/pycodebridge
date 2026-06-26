@@ -233,12 +233,50 @@ class _ImmediateExitRunner:
         return _ProcDone(self.rc)
 
 
+class _NoThreadExitRunner(_FakeRunner):
+    def __init__(self, *, jsonl_lines=(), stderr_lines=(), rc: int = 1) -> None:
+        super().__init__()
+        self.jsonl_lines = list(jsonl_lines)
+        self.stderr_lines = list(stderr_lines)
+        self.rc = rc
+
+    async def run(self, opts: Options):
+        self.calls.append(list(opts.args))
+        if opts.on_jsonl:
+            for line in self.jsonl_lines:
+                await opts.on_jsonl(line)
+        if opts.on_stderr:
+            for line in self.stderr_lines:
+                await opts.on_stderr(line)
+        return _ProcDone(self.rc)
+
+
 class _ClaudeImmediateExitRunner(_ImmediateExitRunner):
     ask_prefix = "Claude asks:"
 
     def __init__(self, *, jsonl_lines=(), stderr_lines=(), rc: int = 1) -> None:
         super().__init__(jsonl_lines=jsonl_lines, stderr_lines=stderr_lines, rc=rc)
         self._backend = ClaudeBackend(binary="claude")
+
+    def parse(self, line: str):
+        return self._backend.parse(line)
+
+
+class _ClaudeNoThreadExitRunner(_NoThreadExitRunner):
+    ask_prefix = "Claude asks:"
+
+    def __init__(self, *, jsonl_lines=(), stderr_lines=(), rc: int = 1) -> None:
+        super().__init__(jsonl_lines=jsonl_lines, stderr_lines=stderr_lines, rc=rc)
+        self._backend = ClaudeBackend(binary="claude")
+
+    def build_start_args(self, repo_path: str, prompt: str, model: str, reasoning: str) -> list[str]:
+        return self._backend.build_start_args(repo_path, prompt, model, reasoning)
+
+    def build_resume_args(self, repo_path: str, thread_id: str, prompt: str, model: str, reasoning: str) -> list[str]:
+        return self._backend.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
+
+    def build_resume_last_args(self, repo_path: str, prompt: str, model: str, reasoning: str) -> list[str]:
+        return self._backend.build_resume_last_args(repo_path, prompt, model, reasoning)
 
     def parse(self, line: str):
         return self._backend.parse(line)
@@ -2297,6 +2335,149 @@ def test_integration_start_conflict_prefixed_new_resolves_pending_choice(tmp_pat
     assert any("Starting a new session" in t for t in texts)
     assert any(args == ["start"] for args in runner.calls)
     assert not any(args == ["resume", "thread-old"] for args in runner.calls)
+
+
+def test_integration_failed_fresh_start_does_not_resume_last_for_codex(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    runner = _NoThreadExitRunner(rc=1)
+    router, runner = _build_router(tmp_path, runner=runner)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    def _seed(fs):
+        from codebridge.sessions.state import ChannelState, SessionState
+
+        ch = fs.channels.get("chan") or ChannelState()
+        ch.sessions["default"] = SessionState(
+            repo_name="repo",
+            repo_path=str(repo),
+            thread_id="thread-old",
+        )
+        fs.channels["chan"] = ch
+
+    router.state.update(_seed)
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
+        await router.handle_message(_discord_event("!new", "code-repo"), sink)
+        for _ in range(200):
+            if len(runner.calls) >= 1 and await router.get_active("chan", "default") is None:
+                break
+            await asyncio.sleep(0.01)
+
+        state = router.state.load()
+        sess = state.channels["chan"].sessions["default"]
+        assert sess.thread_id == ""
+        assert sess.fresh_start_required is True
+
+        await router.handle_message(_discord_event("!c resume default try again after failed fresh start", "code-repo"), sink)
+        for _ in range(200):
+            if len(runner.calls) >= 2 and await router.get_active("chan", "default") is None:
+                break
+            await asyncio.sleep(0.01)
+
+    asyncio.run(run())
+    assert runner.calls[:2] == [["start"], ["start"]]
+    assert not any(args == ["resume", "--last"] for args in runner.calls)
+    assert not any(args == ["resume", "thread-old"] for args in runner.calls)
+
+
+def test_integration_failed_compact_start_does_not_resume_last_for_codex(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    runner = _NoThreadExitRunner(rc=1)
+    router, runner = _build_router(tmp_path, runner=runner)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    def _seed(fs):
+        from codebridge.sessions.state import ChannelState, SessionState
+
+        ch = fs.channels.get("chan") or ChannelState()
+        ch.sessions["default"] = SessionState(
+            repo_name="repo",
+            repo_path=str(repo),
+            thread_id="thread-old",
+        )
+        fs.channels["chan"] = ch
+
+    router.state.update(_seed)
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
+        await router.handle_message(_discord_event("!compact", "code-repo"), sink)
+        for _ in range(200):
+            if len(runner.calls) >= 1 and await router.get_active("chan", "default") is None:
+                break
+            await asyncio.sleep(0.01)
+
+        state = router.state.load()
+        sess = state.channels["chan"].sessions["default"]
+        assert sess.thread_id == ""
+        assert sess.fresh_start_required is True
+
+        await router.handle_message(_discord_event("!c resume default try again after failed compact", "code-repo"), sink)
+        for _ in range(200):
+            if len(runner.calls) >= 2 and await router.get_active("chan", "default") is None:
+                break
+            await asyncio.sleep(0.01)
+
+    asyncio.run(run())
+    assert runner.calls[:2] == [["start"], ["start"]]
+    assert not any(args == ["resume", "--last"] for args in runner.calls)
+    assert not any(args == ["resume", "thread-old"] for args in runner.calls)
+
+
+def test_integration_failed_fresh_start_does_not_continue_last_for_claude(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    runner = _ClaudeNoThreadExitRunner(rc=1)
+    router, runner = _build_router(tmp_path, runner=runner)
+    router.cfg.agent.default_backend = "claude"
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    def _seed(fs):
+        from codebridge.sessions.state import ChannelState, SessionState
+
+        ch = fs.channels.get("chan") or ChannelState()
+        ch.sessions["default"] = SessionState(
+            repo_name="repo",
+            repo_path=str(repo),
+            thread_id="thread-old",
+        )
+        fs.channels["chan"] = ch
+
+    router.state.update(_seed)
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
+        await router.handle_message(_discord_event("!new", "code-repo"), sink)
+        for _ in range(200):
+            if len(runner.calls) >= 1 and await router.get_active("chan", "default") is None:
+                break
+            await asyncio.sleep(0.01)
+
+        state = router.state.load()
+        sess = state.channels["chan"].sessions["default"]
+        assert sess.thread_id == ""
+        assert sess.fresh_start_required is True
+
+        await router.handle_message(_discord_event("!c resume default try again after failed fresh start", "code-repo"), sink)
+        for _ in range(200):
+            if len(runner.calls) >= 2 and await router.get_active("chan", "default") is None:
+                break
+            await asyncio.sleep(0.01)
+
+    asyncio.run(run())
+    assert len(runner.calls) >= 2
+    assert not any("--continue" in args for args in runner.calls)
+    assert not any("--resume" in args for args in runner.calls)
+    assert all(args and args[0] == "-p" for args in runner.calls[:2])
 
 
 def test_integration_choose_invalid_choice_preserves_pending_conflict(tmp_path):

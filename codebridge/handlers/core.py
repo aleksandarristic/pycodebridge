@@ -20,6 +20,7 @@ from ..routing.helpers import (
     parse_github_clone_url,
     run_limited_command,
     session_exists,
+    session_requires_fresh_start,
 )
 from ..platform.transport import MessageEvent, ResponseSink
 from ..services.dm_assistant import DM_ASSISTANT_SESSION
@@ -129,10 +130,13 @@ async def handle_resume(
     backend = _session_backend_from_state(router, state, channel_id, session)
     if thread_id:
         args = backend.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
-    elif session_exists(state, channel_id, session):
+    elif (
+        session_exists(state, channel_id, session)
+        and not session_requires_fresh_start(state, channel_id, session)
+    ):
         args = backend.build_resume_last_args(repo_path, prompt, model, reasoning)
     else:
-        # No existing session in this channel: start a fresh run with the prompt.
+        # No resumable channel thread/history is available: start a fresh run with the prompt.
         args = backend.build_start_args(repo_path, prompt, model, reasoning)
 
     async def job() -> None:
@@ -348,7 +352,7 @@ async def handle_choose(
             repo_path,
             (conflict.prompt or "").strip(),
         )
-        router.clear_session_thread(event.channel_id, conflict.session)
+        router.clear_session_thread(event.channel_id, conflict.session, fresh_start_required=True)
         args = backend.build_start_args(repo_path, start_prompt, model, reasoning)
 
         async def job() -> None:
@@ -373,7 +377,7 @@ async def handle_choose(
     model, reasoning = _session_model_reasoning_from_state(router, state, event.channel_id, conflict.session)
     backend = _session_backend_from_state(router, state, event.channel_id, conflict.session)
     start_prompt = router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name)
-    router.clear_session_thread(event.channel_id, conflict.session)
+    router.clear_session_thread(event.channel_id, conflict.session, fresh_start_required=True)
     args = backend.build_start_args(repo_path, start_prompt, model, reasoning)
 
     async def job() -> None:

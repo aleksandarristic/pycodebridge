@@ -232,6 +232,7 @@ class SessionService:
                 sess.repo_path = repo_path
             if thread_id:
                 sess.thread_id = thread_id
+                sess.fresh_start_required = False
             if model and (sess.model or model != self._cfg.codex.model):
                 sess.model = model
             if reasoning_effort and (
@@ -244,8 +245,8 @@ class SessionService:
 
         self._state.update(mutator)
 
-    def clear_session_thread(self, channel_id: str, session: str) -> bool:
-        """Clear stored thread id for a session; return True when changed."""
+    def clear_session_thread(self, channel_id: str, session: str, *, fresh_start_required: bool = False) -> bool:
+        """Clear stored thread id for a session; return True when a thread id was cleared."""
         session = _normalize_session_default(session)
         cleared = False
 
@@ -259,9 +260,11 @@ class SessionService:
                 return
             if sess.thread_id:
                 sess.thread_id = ""
-                ch.sessions[session] = sess
-                fs.channels[channel_id] = ch
                 cleared = True
+            if fresh_start_required:
+                sess.fresh_start_required = True
+            ch.sessions[session] = sess
+            fs.channels[channel_id] = ch
 
         self._state.update(mutator)
         return cleared

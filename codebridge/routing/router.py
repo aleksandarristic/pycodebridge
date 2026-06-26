@@ -4301,9 +4301,13 @@ caveats.
         """Return last output time for a session."""
         return self.coordinator.get_activity(channel_id, session or DEFAULT_SESSION)
 
-    def clear_session_thread(self, channel_id: str, session: str) -> bool:
-        """Clear stored thread id for a session when resume thread is stale."""
-        return self.coordinator.clear_session_thread(channel_id, session or DEFAULT_SESSION)
+    def clear_session_thread(self, channel_id: str, session: str, *, fresh_start_required: bool = False) -> bool:
+        """Clear stored thread id, optionally marking the next run as explicitly fresh."""
+        return self.coordinator.clear_session_thread(
+            channel_id,
+            session or DEFAULT_SESSION,
+            fresh_start_required=fresh_start_required,
+        )
 
     async def set_active(self, channel_id: str, session: str, proc: Any) -> None:
         """Track a running Codex process for a session."""

@@ -19,6 +19,7 @@ from ..routing.helpers import (
     existing_thread,
     normalize_session,
     session_exists,
+    session_requires_fresh_start,
 )
 from ..platform.transport import MessageEvent, ResponseSink
 from ..util import path as pathutil
@@ -1146,8 +1147,11 @@ async def _cmd_models(router: Any, message: MessageEvent, sink: ResponseSink, re
     if thread_id:
         args = backend.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
     else:
-        # If the session exists but thread id is missing, prefer resume --last to avoid creating a new session.
-        if session_exists(state, channel_id, session_name):
+        # Existing sessions without a thread normally use backend history, unless a fresh start is pending.
+        if (
+            session_exists(state, channel_id, session_name)
+            and not session_requires_fresh_start(state, channel_id, session_name)
+        ):
             args = backend.build_resume_last_args(repo_path, prompt, model, reasoning)
         else:
             args = backend.build_start_args(repo_path, prompt, model, reasoning)
