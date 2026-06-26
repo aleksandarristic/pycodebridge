@@ -32,6 +32,7 @@ from codebridge.agents.gemini import GeminiBackend
 from codebridge.codex import CodexBackend, Options, Runner
 from codebridge.observability.audit import Logger as AuditLogger, Redactor
 from codebridge.routing.event_context import build_contextual_sink
+from codebridge.routing.helpers import PendingConflict, UsageStats
 from codebridge.routing.router import Router
 from codebridge.sessions.coordinator import SessionCoordinator
 from codebridge.sessions.state import Store
@@ -1098,6 +1099,121 @@ def test_integration_reset_session_clears_context_and_allows_fresh_start(tmp_pat
     asyncio.run(run())
     assert len(runner.calls) >= 2
     assert not any("already exists" in msg for msg, _, _ in sink.sent)
+
+
+def test_integration_clear_default_session_kills_cancels_and_scrubs_runtime(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
+        first_proc = None
+        for _ in range(100):
+            first_proc = await router.get_active("chan", "default")
+            if first_proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        assert first_proc is not None
+
+        async def queued_job():
+            return None
+
+        _, _, queued_future = await router.coordinator.enqueue("chan", "default", queued_job)
+        for _ in range(100):
+            snapshot = await router.coordinator.snapshot("chan")
+            if any(s.status == "queued" and s.session == "default" for s in snapshot):
+                break
+            await asyncio.sleep(0.01)
+
+        conflict = PendingConflict(
+            repo_name="repo",
+            session="default",
+            thread_id="thread-1",
+            user_id="user",
+            expires_at=time.time() + 60,
+        )
+        await router.coordinator.set_pending_conflict("chan", "default", conflict)
+        router.coordinator.set_sticky("chan", "user", "default")
+        router._mark_awaiting_input("chan", "default")
+        router._usage.setdefault("chan", {})["default"] = UsageStats(total_tokens=10)
+        router._budget_thresholds_session.setdefault("chan", {})["default"] = (5, 10)
+        router._budget_thresholds_run.setdefault("chan", {})["default"] = (3, 6)
+        router._budget_last_run_total.setdefault("chan", {})["default"] = 10
+
+        await router.handle_message(_discord_event("!c clear", "code-repo"), sink)
+        for _ in range(100):
+            if await router.get_active("chan", "default") is None:
+                break
+            await asyncio.sleep(0.01)
+        assert first_proc.killed is True
+
+        try:
+            await queued_future
+            assert False, "queued future should be cancelled by clear"
+        except RuntimeError as exc:
+            assert str(exc) == "cancelled"
+
+        state = router.state.load()
+        ch = state.channels.get("chan")
+        assert ch is not None
+        assert "default" not in ch.sessions
+        assert ch.sticky == {}
+        assert router._awaiting_input.get("chan", {}).get("default") is None
+        assert router._usage.get("chan", {}).get("default") is None
+        assert router._budget_thresholds_session.get("chan", {}).get("default") is None
+        assert router._budget_thresholds_run.get("chan", {}).get("default") is None
+        assert router._budget_last_run_total.get("chan", {}).get("default") is None
+        assert await router.consume_pending("chan", "default") is None
+        assert len(runner.calls) == 1
+
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
+        for _ in range(200):
+            if len(runner.calls) >= 2:
+                break
+            await asyncio.sleep(0.01)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("cancelled 1 queued job(s)" in text for text in texts)
+    assert any("cleared session-local runtime state" in text for text in texts)
+    assert len(runner.calls) >= 2
+
+
+def test_integration_clear_works_without_repo_resolution(tmp_path):
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    def _seed(fs):
+        from codebridge.sessions.state import ChannelState, SessionState
+
+        ch = fs.channels.get("chan") or ChannelState()
+        ch.sessions["default"] = SessionState(
+            repo_name="repo",
+            repo_path=str(tmp_path / "missing-repo"),
+            thread_id="thread-old",
+        )
+        ch.sticky["user"] = "default"
+        fs.channels["chan"] = ch
+
+    router.state.update(_seed)
+    router._usage.setdefault("chan", {})["default"] = UsageStats(total_tokens=5)
+
+    async def run():
+        await router.handle_message(_discord_event("!c clear", "code-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert not any("Repo error" in text for text in texts)
+    state = router.state.load()
+    ch = state.channels.get("chan")
+    assert ch is not None
+    assert "default" not in ch.sessions
+    assert ch.sticky == {}
+    assert runner.calls == []
 
 
 def test_integration_bang_reset_alias_clears_context_and_allows_fresh_start(tmp_path):

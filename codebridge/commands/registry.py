@@ -60,6 +60,7 @@ COMMAND_MODEL_META: Dict[str, Dict[str, str]] = {
     "efforts": {"surface": SURFACE_ADVANCED, "namespace": "session"},
     "thread": {"surface": SURFACE_ADMIN, "namespace": "session"},
     "reset": {"surface": SURFACE_CORE, "namespace": "session"},
+    "clear": {"surface": SURFACE_CORE, "namespace": "session"},
     "workflow": {"surface": SURFACE_SUPPORT, "namespace": "session"},
     "purge": {"surface": SURFACE_ADMIN, "namespace": "session"},
     "session": {"surface": SURFACE_ADMIN, "namespace": "session"},
@@ -448,6 +449,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         CommandSpec("efforts", "efforts [session]", "list valid effort levels for current backend", "Sessions", _cmd_efforts, AUTH_OPEN),
         CommandSpec("thread", "thread [session] <id>", "set thread id", "Sessions", _cmd_thread, AUTH_UNLOCK, aliases=("tid",)),
         CommandSpec("reset", "reset [session]", "reset session context", "Sessions", _cmd_reset, AUTH_UNLOCK),
+        CommandSpec("clear", "clear", "clear the channel default session", "Sessions", _cmd_clear, AUTH_UNLOCK),
         CommandSpec(
             "workflow",
             "workflow [session] <inspect|fix|review|ship> [focus] | workflow list",
@@ -1204,6 +1206,14 @@ async def _cmd_reset(router: Any, message: MessageEvent, sink: ResponseSink, rep
     if not session:
         return
     await router.handle_reset_session(sink, message.channel_id, session)
+
+
+async def _cmd_clear(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    _ = (repo_name, repo_path)
+    if (rest or "").strip():
+        await router.reply_forbidden(sink, "Usage: !c clear")
+        return
+    await router.handle_clear_session(sink, message.channel_id)
 
 
 async def _cmd_purge(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

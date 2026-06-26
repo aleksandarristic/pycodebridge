@@ -47,6 +47,7 @@ Source of truth: `codebridge/commands/registry.py`.
 | `models [session]` | `mdls` | Channel | repo channel/thread | open | codex/cache | convenience |
 | `thread [session] <id>` | `tid` | Channel | repo channel/thread | unlock/default | state | admin-only |
 | `reset [session]` | none | Channel | repo channel/thread | unlock/default | state | essential |
+| `clear` | none | Channel | repo channel/thread | unlock/default | state/runtime | essential |
 | `workflow [session] <inspect\|fix\|review\|ship> [focus]` | `wf` | Channel | repo channel/thread | unlock/default | codex | convenience |
 | `purge [session] \| purge stale <ttl>` | none | Channel | repo channel/thread | unlock/default | state/filesystem | admin-only |
 | `session ...` | `sess` | Channel | repo channel/thread | unlock/default | state/filesystem | admin-only |

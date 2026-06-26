@@ -266,6 +266,7 @@ TOTP required unless the chat is unlocked:
 - `!c effort [session] <level|default>`
 - `!c thread [session] <id>`
 - `!c reset [session]`
+- `!c clear`
 - `!c purge [session]`
 - `!c purge stale <ttl>`
 - `!c spec [session]`
@@ -306,6 +307,7 @@ TOTP required unless the chat is unlocked:
 - Any other prompt-style `!c ...` command that is not in the read-only list
 
 - `!c reset [session]` clears scoped session context/runtime. The next `start`/`resume` in that scope starts fresh.
+- `!c clear` clears the current channel's `default` session escape-hatch style without resolving the repo or invoking an agent backend. It kills the tracked process when present, cancels queued work for that session, and removes the persisted session entry.
 - `!c agent`, `!c model`, and `!c effort` with no args show the current effective backend/model/effort for the active session.
 - Plain prompts in mapped channels when `allow_plain_prompts: true`
 

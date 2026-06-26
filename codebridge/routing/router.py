@@ -627,6 +627,13 @@ class Router:
             await self.handle_create_repo(event, sink, repo_name, repo_path)
             return
 
+        if canonical_cmd == "clear":
+            if rest:
+                await self.reply_forbidden(sink, "Usage: !c clear")
+                return
+            await self.handle_clear_session(sink, event.channel_id)
+            return
+
         repo_path = await self._repo_path_or_forbidden(sink, repo_name)
         if repo_path is None:
             return
@@ -1563,6 +1570,45 @@ caveats.
             },
         )
 
+    async def handle_clear_session(self, sink: ResponseSink, channel_id: str, session: str = DEFAULT_SESSION) -> None:
+        """Clear a session escape-hatch style without repo/backend routing."""
+        result = await self.control_clear_session(channel_id, session)
+        if result.get("blocked_running"):
+            await self.reply_forbidden(
+                sink,
+                f"Session '{result['session']}' has a running non-interruptible job and no tracked process. "
+                f"Cancelled {result['cancelled_jobs']} queued job(s), but state was left intact.",
+            )
+            return
+        details = []
+        if result["removed"]:
+            details.append("cleared stored context")
+        else:
+            details.append("no stored context was found")
+        if result["killed"]:
+            details.append("killed tracked active process")
+        else:
+            details.append("no tracked active process was found")
+        if result["cancelled_jobs"]:
+            details.append(f"cancelled {result['cancelled_jobs']} queued job(s)")
+        if result["cleared_sticky"]:
+            details.append(f"cleared {result['cleared_sticky']} sticky selection(s)")
+        if result["cleared_runtime_state"]:
+            details.append("cleared session-local runtime state")
+        await self.reply(sink, f"Session '{result['session']}' cleared: {', '.join(details)}.")
+        self.logger.info(
+            "session.clear",
+            extra={
+                "channel_id": result["channel_id"],
+                "session": result["session"],
+                "removed": result["removed"],
+                "killed": result["killed"],
+                "cancelled_jobs": result["cancelled_jobs"],
+                "cleared_sticky": result["cleared_sticky"],
+                "cleared_runtime_state": result["cleared_runtime_state"],
+            },
+        )
+
     async def handle_purge_session(self, sink: ResponseSink, channel_id: str, session: str) -> None:
         """Purge a session by resetting state/runtime and removing session artifacts."""
         result = await self.control_reset_session(channel_id, session, purge=True)
@@ -1939,6 +1985,19 @@ caveats.
             "blocked_running": blocked_running,
             "purged_artifacts": purged_artifacts,
         }
+
+    async def control_clear_session(self, channel_id: str, session: str = DEFAULT_SESSION) -> dict[str, Any]:
+        """Transport-agnostic clear hook that also scrubs sticky and session-local runtime state."""
+        session = normalize_session(session or DEFAULT_SESSION)
+        result = await self.control_reset_session(channel_id, session, purge=False)
+        cleared_sticky = 0
+        cleared_runtime_state = False
+        if not result.get("blocked_running"):
+            cleared_sticky = self.coordinator.clear_sticky_session(channel_id, session)
+            cleared_runtime_state = self._clear_session_runtime_state(channel_id, session)
+        result["cleared_sticky"] = cleared_sticky
+        result["cleared_runtime_state"] = cleared_runtime_state
+        return result
 
     async def api_reset_session(self, channel_id: str, session: str, purge: bool = False) -> dict[str, Any]:
         """Future web API hook for session reset/purge operations."""
@@ -3268,6 +3327,45 @@ caveats.
     def _clear_run_relay(self, channel_id: str, session: str) -> Optional[_RunRelayState]:
         return self._run_relays.pop(self._run_relay_key(channel_id, session), None)
 
+    def _clear_session_runtime_state(self, channel_id: str, session: str) -> bool:
+        """Clear router-local runtime maps keyed by a session."""
+        session = session or DEFAULT_SESSION
+        cleared = False
+
+        waiting = self._awaiting_input.get(channel_id)
+        if waiting and session in waiting:
+            self.clear_awaiting_input(channel_id, session)
+            cleared = True
+
+        if self._clear_run_relay(channel_id, session) is not None:
+            cleared = True
+
+        channel_usage = self._usage.get(channel_id)
+        if channel_usage and channel_usage.pop(session, None) is not None:
+            cleared = True
+            if not channel_usage:
+                self._usage.pop(channel_id, None)
+
+        session_thresholds = self._budget_thresholds_session.get(channel_id)
+        if session_thresholds and session_thresholds.pop(session, None) is not None:
+            cleared = True
+            if not session_thresholds:
+                self._budget_thresholds_session.pop(channel_id, None)
+
+        run_thresholds = self._budget_thresholds_run.get(channel_id)
+        if run_thresholds and run_thresholds.pop(session, None) is not None:
+            cleared = True
+            if not run_thresholds:
+                self._budget_thresholds_run.pop(channel_id, None)
+
+        last_run = self._budget_last_run_total.get(channel_id)
+        if last_run and last_run.pop(session, None) is not None:
+            cleared = True
+            if not last_run:
+                self._budget_last_run_total.pop(channel_id, None)
+
+        return cleared
+
     async def _emit_output(
         self,
         sink: ResponseSink,
@@ -4347,6 +4445,10 @@ caveats.
     async def consume_pending(self, channel_id: str, session: str) -> Optional[PendingConflict]:
         """Consume a pending conflict if present and not expired."""
         return await self.coordinator.consume_pending(channel_id, session)
+
+    def clear_sticky_session(self, channel_id: str, session: str) -> int:
+        """Clear persisted sticky selections that point at a session."""
+        return self.coordinator.clear_sticky_session(channel_id, session or DEFAULT_SESSION)
 
     def current_session_for_user(self, user_id: str, channel_id: str, default_session: str = DEFAULT_SESSION) -> str:
         """Return sticky session selection for a user or default."""

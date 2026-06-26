@@ -81,6 +81,7 @@ def test_command_registry_help_text():
     assert "**`!c help [command]`**" in text
     assert "**`!c use <session>`**" in text
     assert "**`!c reset [session]`**" in text
+    assert "**`!c clear`**" in text
     assert "**`!c workflow [session] <inspect|fix|review|ship> [focus]`**" in text
     assert "**`!a <text>`**" in text
     assert "**`!s <text>`**" in text

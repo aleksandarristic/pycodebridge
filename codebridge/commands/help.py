@@ -107,6 +107,13 @@ COMMAND_DETAILS = {
             "!c workflow fix failing tests",
         ),
     },
+    "clear": {
+        "details": "Clears the channel's default session without resolving the repo or invoking an agent backend.",
+        "examples": (
+            "!c clear",
+            "!clear",
+        ),
+    },
 }
 
 

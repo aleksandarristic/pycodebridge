@@ -122,6 +122,26 @@ class SessionService:
         self._state.update(mutator)
         return removed
 
+    def clear_sticky_session(self, channel_id: str, session: str) -> int:
+        """Remove sticky selections that point at a session; return removed count."""
+        session = _normalize_session_default(session)
+        removed = 0
+
+        def mutator(fs):
+            nonlocal removed
+            ch = fs.channels.get(channel_id)
+            if ch is None or not ch.sticky:
+                return
+            for user_id, sticky_session in list(ch.sticky.items()):
+                if sticky_session != session:
+                    continue
+                ch.sticky.pop(user_id, None)
+                removed += 1
+            fs.channels[channel_id] = ch
+
+        self._state.update(mutator)
+        return removed
+
     async def migrate_channel_scope(self, from_channel_id: str, to_channel_id: str) -> bool:
         """Move runtime and persisted state from one channel scope key to another."""
         if not from_channel_id or not to_channel_id or from_channel_id == to_channel_id:

@@ -76,6 +76,9 @@ class SessionCoordinator:
     async def reset_session(self, channel_id: str, session: str) -> bool:
         return await self._sessions.reset_session(channel_id, session)
 
+    def clear_sticky_session(self, channel_id: str, session: str) -> int:
+        return self._sessions.clear_sticky_session(channel_id, session)
+
     def update_state(
         self,
         channel_id: str,

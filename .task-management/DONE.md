@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0128] Add `!c clear` channel default-session escape hatch.
+  - Completed: 2026-06-26
+  - Notes: Added a repo-resolution-free `clear` command for the channel `default` session that kills the tracked process, cancels queued jobs, removes persisted sticky/session state, and clears session-local runtime maps before the next fresh start. Documented the command and added regression coverage for active-process teardown, queued-job cancellation, runtime cleanup, and broken-repo operation.
+
 - [TASK-0127] Prevent `new`/replace recovery from falling back to stale backend session history.
   - Completed: 2026-06-26
   - Notes: Added a persisted `fresh_start_required` session marker set by explicit `new`/`compact` choices and cleared only when a backend emits a new thread id. Resume and model-refresh paths now start fresh instead of using Codex `resume --last` or Claude `--continue` while the marker is set. Added Codex and Claude failed-fresh-start regression coverage.
