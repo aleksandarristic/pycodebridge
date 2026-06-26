@@ -13,6 +13,7 @@ logs/
 config.yaml
 config.docker.yaml
 screenshots
+.session-nuke-backups/
 
 # ignore project management specific instructions
 instructions/
