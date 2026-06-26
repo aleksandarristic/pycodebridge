@@ -523,10 +523,11 @@ class Router:
         if pending_conflict is not None:
             pending_conflict.prompt = content.strip() or (pending_conflict.prompt or "").strip()
             await self.coordinator.set_pending_conflict(event.channel_id, pending_conflict.session, pending_conflict)
-            repo_path = await self._repo_path_or_forbidden(sink, repo_name)
-            if repo_path is None:
-                return True
-            await self.handle_choose(event, sink, repo_name, repo_path, pending_conflict.session, "new")
+            await self.reply(
+                sink,
+                f"Session '{pending_conflict.session}' is waiting for a choice. "
+                "Use `!cont`, `!new`, or `!compact`.",
+            )
             return True
         allow_plain = self._transport_allow_plain_prompts(event)
         if self._totp_enabled(event) and self._totp_is_unlocked(event):
@@ -609,6 +610,16 @@ class Router:
                 "user_id": event.author_id,
             },
         )
+        if canonical_cmd == "create" and cmd == "new" and not rest:
+            pending_session = self.current_session_for_event(event)
+            pending_conflict = await self.consume_pending(event.channel_id, pending_session)
+            if pending_conflict is not None:
+                await self.coordinator.set_pending_conflict(event.channel_id, pending_conflict.session, pending_conflict)
+                repo_path = await self._repo_path_or_forbidden(sink, repo_name)
+                if repo_path is None:
+                    return
+                await self.handle_choose(event, sink, repo_name, repo_path, pending_conflict.session, "new")
+                return
         if canonical_cmd == "create":
             repo_path = await self._repo_path_or_forbidden(sink, repo_name, for_create=True)
             if repo_path is None:

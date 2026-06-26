@@ -26,4 +26,3 @@ Rules:
     - Cached tokens are tracked and visible in stats/summary output.
     - Tests cover the corrected accounting and cached-token parsing; existing usage/budget tests pass.
   - Blocked-on: a real `codex exec --json` usage line (field names + cumulative-vs-incremental) before the summation fix can be implemented safely. Moved to backlog 2026-05-30 pending that sample.
-

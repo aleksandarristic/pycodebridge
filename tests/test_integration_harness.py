@@ -2267,6 +2267,108 @@ def test_integration_start_conflict_bang_new_shortcut_starts_fresh(tmp_path):
     assert not any(args == ["resume", "thread-old"] for args in runner.calls)
 
 
+def test_integration_start_conflict_prefixed_new_resolves_pending_choice(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    def _seed(fs):
+        from codebridge.sessions.state import ChannelState, SessionState
+
+        ch = fs.channels.get("chan") or ChannelState()
+        ch.sessions["default"] = SessionState(
+            repo_name="repo",
+            repo_path=str(repo),
+            thread_id="thread-old",
+        )
+        fs.channels["chan"] = ch
+
+    router.state.update(_seed)
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c new", "code-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Starting a new session" in t for t in texts)
+    assert any(args == ["start"] for args in runner.calls)
+    assert not any(args == ["resume", "thread-old"] for args in runner.calls)
+
+
+def test_integration_choose_invalid_choice_preserves_pending_conflict(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    def _seed(fs):
+        from codebridge.sessions.state import ChannelState, SessionState
+
+        ch = fs.channels.get("chan") or ChannelState()
+        ch.sessions["default"] = SessionState(
+            repo_name="repo",
+            repo_path=str(repo),
+            thread_id="thread-old",
+        )
+        fs.channels["chan"] = ch
+
+    router.state.update(_seed)
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
+        await router.handle_message(_discord_event("!c choose banana", "code-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Usage: !c choose" in t for t in texts)
+    assert not runner.calls
+    pending = asyncio.run(router.consume_pending("chan", "default"))
+    assert pending is not None
+
+
+def test_integration_plain_text_during_pending_conflict_does_not_choose_new(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    router.cfg.state.session_idle_ttl_seconds = 3600
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    old_ts = (datetime.now(timezone.utc) - timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def _seed(fs):
+        from codebridge.sessions.state import ChannelState, SessionState
+
+        ch = fs.channels.get("chan") or ChannelState()
+        ch.sessions["default"] = SessionState(
+            repo_name="repo",
+            repo_path=str(repo),
+            thread_id="thread-old",
+            last_used_at=old_ts,
+        )
+        fs.channels["chan"] = ch
+
+    router.state.update(_seed)
+
+    async def run():
+        await router.handle_message(_discord_event("!c resume default original prompt", "code-repo"), sink)
+        await router.handle_message(_discord_event("updated pending prompt", "code-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("waiting for a choice" in t for t in texts)
+    assert not runner.calls
+    pending = asyncio.run(router.consume_pending("chan", "default"))
+    assert pending is not None
+    assert pending.prompt == "updated pending prompt"
+
+
 def test_integration_start_conflict_bang_cont_shortcut_continues(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -2817,6 +2919,60 @@ def test_dm_assistant_expired_session_prompts_for_choice(tmp_path):
     pending = asyncio.run(router.consume_pending("dm-1", "dm"))
     assert pending is not None
     assert pending.prompt == "continue this"
+
+
+def test_dm_assistant_expired_session_bang_new_starts_fresh(tmp_path):
+    repo = tmp_path / "pycodebridge"
+    repo.mkdir()
+    router, runner = _build_router(tmp_path)
+    router.cfg.dm_assistant.enabled = True
+    router.cfg.state.session_idle_ttl_seconds = 1
+    old = (datetime.now(timezone.utc) - timedelta(seconds=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    router.update_state("dm-1", "dm", "pycodebridge", str(repo), "thread-old", "", "")
+
+    def _mark_old(state):
+        state.channels["dm-1"].sessions["dm"].last_used_at = old
+
+    router.state.update(_mark_old)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_dm_event("continue this"), sink)
+        await router.handle_message(_discord_dm_event("!new"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Starting a new session in 'dm'" in msg for msg in texts)
+    assert any(args == ["start"] for args in runner.calls)
+    assert not any(args == ["resume", "thread-old"] for args in runner.calls)
+
+
+def test_bound_dm_expired_session_bang_new_starts_fresh(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    router, runner = _build_router(tmp_path)
+    router.cfg.state.session_idle_ttl_seconds = 1
+    event = _discord_dm_event("!c bind repo")
+    router.set_dm_binding(event, "repo")
+    old = (datetime.now(timezone.utc) - timedelta(seconds=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    router.update_state("dm-1", "default", "repo", str(repo), "thread-old", "", "")
+
+    def _mark_old(state):
+        state.channels["dm-1"].sessions["default"].last_used_at = old
+
+    router.state.update(_mark_old)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_dm_event("continue this"), sink)
+        await router.handle_message(_discord_dm_event("!new"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Starting a new session in 'default'" in msg for msg in texts)
+    assert any(args == ["start"] for args in runner.calls)
+    assert not any(args == ["resume", "thread-old"] for args in runner.calls)
 
 
 def test_dm_assistant_prompt_requires_default_totp_when_enabled(tmp_path, monkeypatch):

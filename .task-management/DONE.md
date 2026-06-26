@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0126] Fix expired-session choice routing for `!new`, `!c new`, and DM assistant flows.
+  - Completed: 2026-06-26
+  - Notes: Added pending-conflict routing for prefixed `!c new`, DM `!new`/`choose` handling for assistant and bound-repo flows, invalid choice rejection, and safe plain-text handling while a conflict is pending. Added channel, DM assistant, and bound-DM regression coverage.
+
 - [TASK-0125] DM assistant: help text and README docs.
   - Completed: 2026-06-25
   - Notes: Added enabled-only DM assistant help text, README usage/config documentation, fully commented config example blocks, and integration coverage for the assistant help section.

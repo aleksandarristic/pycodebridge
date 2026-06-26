@@ -320,6 +320,10 @@ async def handle_choose(
         "summary": "compact",
     }
     choice = aliases.get(choice, choice)
+    if choice not in {"resume", "replace", "compact"}:
+        await router.reply_forbidden(sink, "Usage: !c choose [session] continue|new|compact")
+        await router.coordinator.set_pending_conflict(event.channel_id, conflict.session, conflict)
+        return
     if choice == "resume":
         resume_prompt = (conflict.prompt or "").strip() or "Resumed."
         await router.reply(sink, f"Continuing session '{conflict.session}'...")

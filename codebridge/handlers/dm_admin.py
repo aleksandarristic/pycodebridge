@@ -55,6 +55,7 @@ _DM_SHORTCUT_COMMANDS = {
     "config",
     "copy",
     "create",
+    "choose",
     "deleterepo",
     "deny",
     "gh",
@@ -214,6 +215,20 @@ _DM_ASSISTANT_COMMANDS = {
 def _dm_shortcut_cmdline(content: str) -> str:
     """Translate DM-only top-level shortcuts into canonical command text."""
     return normalize_bang_shortcut(content, _DM_SHORTCUT_COMMANDS, aliases=_DM_SHORTCUT_ALIASES)
+
+
+async def _consume_pending_conflict(router: "Router", channel_id: str, session: str):
+    consume = getattr(router, "consume_pending", None)
+    if consume is None:
+        return None
+    return await consume(channel_id, session)
+
+
+async def _restore_pending_conflict(router: "Router", channel_id: str, session: str, conflict) -> None:
+    coordinator = getattr(router, "coordinator", None)
+    if coordinator is None or not hasattr(coordinator, "set_pending_conflict"):
+        return
+    await coordinator.set_pending_conflict(channel_id, session, conflict)
 
 
 def _normalize_dm_help_token(token: str) -> str:
@@ -615,6 +630,18 @@ async def _handle_dm_unprefixed(
         await router.handle_answer(event, sink, relay_session, relay_text)
         return True
     bound_repo = router.get_dm_binding(event)
+    pending_session = router.current_session_for_user(event.author_id, event.channel_id)
+    if not bound_repo and router.cfg.dm_assistant.enabled:
+        pending_session = DM_ASSISTANT_SESSION
+    pending_conflict = await _consume_pending_conflict(router, event.channel_id, pending_session)
+    if pending_conflict is not None:
+        pending_conflict.prompt = content.strip() or (pending_conflict.prompt or "").strip()
+        await _restore_pending_conflict(router, event.channel_id, pending_conflict.session, pending_conflict)
+        await sink.send(
+            f"Session '{pending_conflict.session}' is waiting for a choice. "
+            "Use `!cont`, `!new`, or `!compact`."
+        )
+        return True
     if not bound_repo:
         if router.cfg.dm_assistant.enabled and not event.attachments:
             await handle_dm_assistant_prompt(router, event, sink, content)
@@ -829,6 +856,33 @@ async def _dispatch_prefixed_dm_command(
         return
 
     if await _handle_dm_assistant_command(router, event, sink, cmd, rest, cmdline, send_forbidden):
+        return
+
+    if cmd == "choose":
+        if not router._transport_user_allowed(event):
+            await send_forbidden("You are not allowed to use this bot.")
+            return
+        bound_repo = router.get_dm_binding(event)
+        if not bound_repo:
+            await send(dm_binding_help_text())
+            return
+        try:
+            repo_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, bound_repo)
+        except Exception as exc:
+            await send_forbidden(f"Repo error: {exc}")
+            return
+        handled = await command_registry.dispatch(
+            router._command_registry,
+            router,
+            event,
+            _PrefixedSink(sink, bound_repo),
+            bound_repo,
+            repo_path,
+            cmd,
+            rest,
+        )
+        if not handled:
+            await send_forbidden("Usage: !c choose [session] continue|new|compact")
         return
 
     if cmd in admin_commands:
@@ -1178,8 +1232,13 @@ async def handle_dm_message(router: "Router", event: MessageEvent, sink: Respons
         return
     cmdline = router._normalize_unlock_totp_syntax(cmdline)
     fields = cmdline.split()
-    cmd = _DM_COMMAND_ALIASES.get(fields[0].lower(), fields[0].lower())
+    raw_cmd = fields[0].lower()
+    cmd = _DM_COMMAND_ALIASES.get(raw_cmd, raw_cmd)
     rest = cmdline[len(fields[0]) :].strip()
+    if raw_cmd == "new" and not rest:
+        cmd = "choose"
+        rest = "new"
+        cmdline = "choose new"
 
     entry = dm_audit_start(router, event, cmd, rest)
 
