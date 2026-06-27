@@ -141,6 +141,7 @@ Behavior:
 ## Notes
 
 - The Docker image installs `codex` via npm (`@openai/codex`).
+- The Docker image includes `uv` and uses it to install Python dependencies during the image build.
 - The image preinstalls common CLI tools used by Codex/agents: `ripgrep` (`rg`), `fd-find` (`fdfind`), `bat` (`batcat`), `gh`, `jq`, `less`, `procps`, `git`, `curl`.
 - Compose runs as `HOST_UID:HOST_GID` and sets `HOME=/workspace/home` to avoid host bind-mount permission mismatches.
 - If Discord sessions report `bwrap`/namespace errors while trying to read files, check `config.docker.yaml`: `codex.sandbox` should usually be `danger-full-access` for containerized runs.
