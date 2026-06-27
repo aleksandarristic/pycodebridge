@@ -283,6 +283,8 @@ def _merge_env(base: Dict[str, str], extra: Dict[str, str]) -> Dict[str, str]:
         "GOCACHE",
         "GOMODCACHE",
         "GOPATH",
+        "PIP_CACHE_DIR",
+        "UV_CACHE_DIR",
         "XDG_CACHE_HOME",
         "XDG_CONFIG_HOME",
         "XDG_DATA_HOME",

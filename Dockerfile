@@ -2,6 +2,10 @@ FROM python:3.12-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -25,7 +29,7 @@ RUN npm install -g @openai/codex @anthropic-ai/claude-code @google/gemini-cli
 WORKDIR /app
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN uv pip install --system --no-cache -r requirements.txt
 
 COPY . .
 
