@@ -81,7 +81,7 @@ Auth persistence:
 - Both run modes mount Codex auth to `$HOME/.codex` inside container (`HOME=/workspace/home`)
 - Compose source is `${CODEX_AUTH_HOST:-./.docker-codex-auth}`
 - If Compose auth was not persisted and `run_docker.sh` auth worked, set `CODEX_AUTH_HOST=$HOME/.codex` and restart Compose.
-- Both run modes set `XDG_CONFIG_HOME=/workspace/home/.config` and `GH_CONFIG_DIR=/workspace/home/.config/gh`.
+- Both run modes set `XDG_CACHE_HOME=/workspace/state/cache`, `PIP_CACHE_DIR=/workspace/state/cache/pip`, `UV_CACHE_DIR=/workspace/state/cache/uv`, `XDG_CONFIG_HOME=/workspace/home/.config`, and `GH_CONFIG_DIR=/workspace/home/.config/gh`.
 
 ## GitHub CLI (`gh`) in Docker
 
@@ -143,7 +143,7 @@ Behavior:
 - The Docker image installs `codex` via npm (`@openai/codex`).
 - The Docker image includes `uv` and uses it to install Python dependencies during the image build.
 - The image preinstalls common CLI tools used by Codex/agents: `ripgrep` (`rg`), `fd-find` (`fdfind`), `bat` (`batcat`), `gh`, `jq`, `less`, `procps`, `git`, `curl`.
-- Compose runs as `HOST_UID:HOST_GID` and sets `HOME=/workspace/home` to avoid host bind-mount permission mismatches.
+- Compose runs as `HOST_UID:HOST_GID`, sets `HOME=/workspace/home`, and sends caches to `/workspace/state/cache` to avoid host bind-mount permission mismatches.
 - If Discord sessions report `bwrap`/namespace errors while trying to read files, check `config.docker.yaml`: `codex.sandbox` should usually be `danger-full-access` for containerized runs.
 - If Codex reports workspace read-only while config says `workspace-write`, run `!c health` and check `Runtime uid:gid` plus `Env sanity` path statuses (`ok(rw)` expected for `code_root`).
 - If `~/.codex` is not mounted or not authenticated, exec into the container and run Codex login flow there.

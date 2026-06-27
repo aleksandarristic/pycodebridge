@@ -9,7 +9,10 @@ services:
       - .env
     environment:
       - HOME=/workspace/home
+      - XDG_CACHE_HOME=/workspace/state/cache
       - XDG_CONFIG_HOME=/workspace/home/.config
+      - PIP_CACHE_DIR=/workspace/state/cache/pip
+      - UV_CACHE_DIR=/workspace/state/cache/uv
       - GH_CONFIG_DIR=/workspace/home/.config/gh
       - CLAUDE_CONFIG_DIR=/workspace/home/.claude
     command: ["-config", "/app/config.docker.yaml"]

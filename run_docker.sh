@@ -95,7 +95,10 @@ docker_args=(
   --name "$CONTAINER_NAME"
   -u "$HOST_UID:$HOST_GID"
   -e HOME=/workspace/home
+  -e XDG_CACHE_HOME=/workspace/state/cache
   -e XDG_CONFIG_HOME=/workspace/home/.config
+  -e PIP_CACHE_DIR=/workspace/state/cache/pip
+  -e UV_CACHE_DIR=/workspace/state/cache/uv
   -e GH_CONFIG_DIR=/workspace/home/.config/gh
   -v "$ROOT_DIR:/app"
   -v "$CODE_ROOT_HOST:/workspace/code_root"
@@ -114,6 +117,7 @@ if [[ "$MODE" == "check" ]]; then
   echo "OK: docker available"
   echo "OK: code root mount source: $CODE_ROOT_HOST"
   echo "OK: state mount source: $STATE_DIR_HOST"
+  echo "OK: cache path in container: /workspace/state/cache"
   echo "OK: container runtime uid:gid = $HOST_UID:$HOST_GID"
   echo "OK: Codex auth mount source: $CODEX_AUTH_HOST"
   echo "OK: GitHub CLI config mount source: $GH_CONFIG_HOST"
