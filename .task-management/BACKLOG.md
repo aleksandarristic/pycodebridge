@@ -26,3 +26,17 @@ Rules:
     - Cached tokens are tracked and visible in stats/summary output.
     - Tests cover the corrected accounting and cached-token parsing; existing usage/budget tests pass.
   - Blocked-on: a real `codex exec --json` usage line (field names + cumulative-vs-incremental) before the summation fix can be implemented safely. Moved to backlog 2026-05-30 pending that sample.
+
+- [TASK-0130] Detect auto-compaction and signal it to the Discord user.
+  - Context: Both the Claude Code CLI (`claude -p --output-format stream-json`) and Codex CLI (`codex exec --json`) can auto-compact the conversation context when it approaches the context window limit. The bridge currently does not detect or surface this event, leaving the user unaware that their session history was summarised and truncated.
+  - Goal: When auto-compaction fires (for either backend), send a brief status message to the Discord channel notifying the user that context was compacted and the session continues.
+  - Scope:
+    - **Claude backend:** Identify the stream-json event emitted on auto-compact (likely a `system` event with a `subtype` like `compact` or `auto_compact`). Add a case to `ClaudeBackend.parse` in `codebridge/agents/claude.py` to emit a `NormalizedEvent` with `type="compact"` (or similar).
+    - **Codex backend:** Identify the equivalent JSONL event shape from `codex exec --json`. Add handling in `CodexBackend.parse` in `codebridge/codex.py` if Codex emits such an event.
+    - **Router:** In `run_codex` (`codebridge/routing/router.py`), detect `type=="compact"` events in the `on_jsonl` callback and relay a user-visible status message (e.g. `"[session] Context was auto-compacted — session continues."`) via the sink.
+    - Keep the message short and clearly non-alarming; do not interrupt or block the run.
+  - Acceptance criteria:
+    - A Discord message is sent when auto-compaction occurs for both Claude and Codex backends.
+    - The bridge continues the run normally after signalling.
+    - Unit tests cover compact-event detection and relay for both backends.
+  - Note: The exact event shape for auto-compact needs to be confirmed from live logs or CLI documentation before implementation.
