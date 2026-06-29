@@ -27,7 +27,9 @@ Always use the project venv — never system Python:
 
 ## Branch and remote hygiene
 
-Worktrees are for local parallel work only.
+In direct chat (including via Discord), never create worktrees or session/task branches — work directly on the current branch.
+
+Worktrees are for local parallel agent work only, and only when explicitly requested.
 
 - Never `git push` a worktree or session branch to remote. Worktree branches (prefixed `session/`, `task/`, or similar) are ephemeral and must stay local.
 - Never push any branch to remote unless the user explicitly asks.
