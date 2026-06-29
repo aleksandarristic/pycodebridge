@@ -6,7 +6,7 @@ This document inventories all operator-facing command entry points in `pycodebri
 
 The inventory below is still the full compatibility surface, but the preferred help/docs order is now:
 
-- Golden path: `help`, `status`, `start`, `resume`, `use`, `reset`, `answer`, `steer`, `approve`, `deny`, `stop`, `wait`, `show`, `changes`, `tests`, `branch`, `git`, `gh`
+- Golden path: `help`, `status`, `start`, `resume`, `use`, `reset`, `answer`, `steer`, `approve`, `deny`, `stop`, `wait`, `show`, `changes`, `tests`, `branch`, `feature`, `git`, `gh`
 - Promoted run shortcuts only: `!a`, `!s`, `!y`, `!n`
 - Support/advanced commands after the golden path: `choose`, `workflow`, `interrupt`, `/quit`, `cancel`, `ps`, `model`, `models`, `spec`, `download`, `rerun`, `peek`, `updates`, `health`
 - Admin/maintenance commands last: security/runtime config, session maintenance, repo lifecycle, audit/log inspection
@@ -68,6 +68,7 @@ Source of truth: `codebridge/commands/registry.py`.
 | `changes` | `showchanges` | Channel | repo channel/thread | open | git | convenience |
 | `tests` | `test` | Channel | repo channel/thread | unlock/default | pytest | convenience |
 | `branch` | none | Channel | repo channel/thread | open | git | convenience |
+| `feature <branch-name>` | none | Channel | repo channel/thread | unlock/default | git | convenience |
 | `git <...>` | none | Channel | repo channel/thread | unlock/default | git | essential |
 | `gh <args>` | none | Channel | repo channel/thread | unlock/gh | gh | essential |
 | `gh-create [--public]` | none | Channel | repo channel/thread | unlock/gh | gh/git | convenience |

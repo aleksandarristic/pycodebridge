@@ -40,6 +40,14 @@ async def handle_start(
     """Start a new Codex session for a channel/session."""
     channel_id = event.channel_id
     session = normalize_session(session)
+    if router.direct_repo_sessions_enabled():
+        if await router.repo_busy(repo_name, exclude_channel_id=channel_id, exclude_session=session):
+            await router.reply_forbidden(
+                sink,
+                f"Repo '{repo_name}' already has a running or queued direct session. "
+                "Wait for it to finish or enable `worktrees.session_isolation`.",
+            )
+            return
     state = router.state.load()
     if count_active_sessions(state, channel_id) >= MAX_SESSIONS_PER_CHANNEL:
         if not session_exists(state, channel_id, session):
@@ -69,6 +77,7 @@ async def handle_start(
 
     model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)
     backend = _session_backend_from_state(router, state, channel_id, session)
+    router.coordinator.update_state(channel_id, session, repo_name, repo_path, thread_id or "", model, reasoning)
     args = backend.build_start_args(
         repo_path, router.cfg.codex.start_prompt.replace("{{REPO_NAME}}", repo_name), model, reasoning
     )
@@ -93,6 +102,14 @@ async def handle_resume(
     """Resume a Codex session with a prompt."""
     channel_id = event.channel_id
     session = normalize_session(session)
+    if router.direct_repo_sessions_enabled():
+        if await router.repo_busy(repo_name, exclude_channel_id=channel_id, exclude_session=session):
+            await router.reply_forbidden(
+                sink,
+                f"Repo '{repo_name}' already has a running or queued direct session. "
+                "Wait for it to finish or enable `worktrees.session_isolation`.",
+            )
+            return
     state = router.state.load()
     idle_ttl_seconds = max(0, int(getattr(router.cfg.state, "session_idle_ttl_seconds", 0) or 0))
     sess = state.channels.get(channel_id).sessions.get(session) if state.channels.get(channel_id) else None
@@ -128,6 +145,7 @@ async def handle_resume(
     thread_id = existing_thread(state, channel_id, session)
     model, reasoning = _session_model_reasoning_from_state(router, state, channel_id, session)
     backend = _session_backend_from_state(router, state, channel_id, session)
+    router.coordinator.update_state(channel_id, session, repo_name, repo_path, thread_id or "", model, reasoning)
     if thread_id:
         args = backend.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
     elif (

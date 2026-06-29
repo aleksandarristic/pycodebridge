@@ -550,6 +550,31 @@ def test_integration_start_stop(tmp_path):
     assert runner.last_proc.interrupted is True
 
 
+def test_integration_direct_mode_blocks_second_session_on_same_repo(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, runner = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_event("!c start", "code-repo"), sink)
+        for _ in range(50):
+            proc = await router.get_active("chan", "default")
+            if proc is not None:
+                break
+            await asyncio.sleep(0.01)
+        await router.handle_message(_discord_event("!c start", "code-repo", channel_id="chan-2"), sink)
+
+    asyncio.run(run())
+    assert runner.last_proc is not None
+    assert any(
+        "already has a running or queued direct session" in message
+        for message, _, _ in sink.sent
+    )
+
+
 def test_integration_start_builds_exec_args_in_expected_order(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -634,7 +659,7 @@ def test_integration_discord_thread_uses_parent_repo_mapping_and_room_scope(tmp_
     assert any(thread_id == "thread-a" for _, thread_id, _ in sink.sent)
 
 
-def test_integration_discord_sibling_threads_are_isolated(tmp_path):
+def test_integration_discord_sibling_threads_conflict_in_direct_mode(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
@@ -672,9 +697,11 @@ def test_integration_discord_sibling_threads_are_isolated(tmp_path):
         for _ in range(100):
             proc_a = await router.get_active(room_a, session_a)
             proc_b = await router.get_active(room_b, session_b)
-            if proc_a is not None and proc_b is not None:
+            if proc_a is not None:
                 break
             await asyncio.sleep(0.01)
+        assert await router.get_active(room_a, session_a) is not None
+        assert await router.get_active(room_b, session_b) is None
 
         await router.handle_message(
             _discord_event(
@@ -692,23 +719,13 @@ def test_integration_discord_sibling_threads_are_isolated(tmp_path):
                 break
             await asyncio.sleep(0.01)
         assert await router.get_active(room_a, session_a) is None
-        assert await router.get_active(room_b, session_b) is not None
-
-        await router.handle_message(
-            _discord_event(
-                "!c stop",
-                "topic-b",
-                channel_id="thread-b",
-                platform_thread_id="thread-b",
-                parent_channel_id="chan-parent",
-                parent_channel_name="code-repo",
-            ),
-            sink,
-        )
 
     asyncio.run(run())
     assert any(thread_id == "thread-a" for _, thread_id, _ in sink.sent)
-    assert any(thread_id == "thread-b" for _, thread_id, _ in sink.sent)
+    assert any(
+        "already has a running or queued direct session" in message
+        for message, _, _ in sink.sent
+    )
 
 
 def test_integration_discord_thread_session_name_falls_back_to_default_when_not_normalizable(tmp_path):
@@ -754,7 +771,7 @@ def test_integration_discord_thread_session_name_falls_back_to_default_when_not_
     asyncio.run(run())
 
 
-def test_integration_discord_parent_channel_remains_backward_compatible_with_thread_rooms(tmp_path):
+def test_integration_discord_parent_channel_and_thread_conflict_in_direct_mode(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
@@ -781,9 +798,11 @@ def test_integration_discord_parent_channel_remains_backward_compatible_with_thr
         for _ in range(100):
             parent_proc = await router.get_active(parent_channel_id, "default")
             thread_proc = await router.get_active(thread_room, thread_session)
-            if parent_proc is not None and thread_proc is not None:
+            if parent_proc is not None:
                 break
             await asyncio.sleep(0.01)
+        assert await router.get_active(parent_channel_id, "default") is not None
+        assert await router.get_active(thread_room, thread_session) is None
 
         await router.handle_message(_discord_event("!c stop", "code-repo", channel_id=parent_channel_id), sink)
         for _ in range(100):
@@ -791,24 +810,14 @@ def test_integration_discord_parent_channel_remains_backward_compatible_with_thr
                 break
             await asyncio.sleep(0.01)
         assert await router.get_active(parent_channel_id, "default") is None
-        assert await router.get_active(thread_room, thread_session) is not None
-
-        await router.handle_message(
-            _discord_event(
-                "!c stop",
-                "topic-a",
-                channel_id="thread-a",
-                platform_thread_id="thread-a",
-                parent_channel_id=parent_channel_id,
-                parent_channel_name="code-repo",
-            ),
-            sink,
-        )
 
     asyncio.run(run())
     state = router.state.load()
     assert parent_channel_id in state.channels
-    assert thread_room in state.channels
+    assert any(
+        "already has a running or queued direct session" in message
+        for message, _, _ in sink.sent
+    )
 
 
 def test_integration_discord_thread_stop_rekeys_legacy_thread_scope(tmp_path):

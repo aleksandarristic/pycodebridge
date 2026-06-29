@@ -118,6 +118,32 @@ async def handle_branch(router: "Router", sink: ResponseSink, repo_path: str) ->
     await router.reply(sink, rendered)
 
 
+async def handle_feature(router: "Router", sink: ResponseSink, repo_path: str, rest: str) -> None:
+    """Create and switch to an explicit feature branch."""
+    raw_name = (rest or "").strip()
+    if not raw_name:
+        await router.reply_forbidden(sink, "Usage: !c feature <branch-name>")
+        return
+    if any(ch.isspace() for ch in raw_name):
+        await router.reply_forbidden(sink, "Branch names cannot contain whitespace.")
+        return
+    branch_name = raw_name if "/" in raw_name else f"feature/{raw_name}"
+    _, err = await run_limited_command(repo_path, ["git", "check-ref-format", "--branch", branch_name])
+    if err:
+        await router.reply_forbidden(sink, f"Invalid branch name: {branch_name}")
+        return
+    out, err = await run_limited_command(repo_path, ["git", "switch", "-c", branch_name])
+    if err:
+        detail = strip_control_codes(err).strip() or "git switch failed."
+        await router.reply_forbidden(sink, detail)
+        return
+    text = strip_control_codes(out).strip()
+    if text:
+        await router.reply(sink, text)
+        return
+    await router.reply(sink, f"Switched to new branch: {branch_name}")
+
+
 def _summarize_branch_status(text: str) -> tuple[str, bool]:
     """Parse `git status --short --branch` output into branch + clean flag."""
     lines = [line.rstrip() for line in (text or "").splitlines() if line.strip()]

@@ -948,6 +948,10 @@ class Router:
         """Show current git branch and clean/not-clean state."""
         await git_handlers.handle_branch(self, sink, repo_path)
 
+    async def handle_feature(self, sink: ResponseSink, repo_path: str, rest: str) -> None:
+        """Create and switch to an explicit feature branch."""
+        await git_handlers.handle_feature(self, sink, repo_path, rest)
+
     async def handle_gh(self, sink: ResponseSink, repo_path: str, rest: str) -> None:
         """Run gh helper commands."""
         await gh_handlers.handle_gh(self, sink, repo_path, rest)
@@ -2352,7 +2356,7 @@ caveats.
             stderr_tail.clear()
 
             effective_repo_path = repo_path
-            if self._wt_manager is not None:
+            if self._wt_manager is not None and getattr(self.cfg.worktrees, "session_isolation", False):
                 session_key = f"{channel_id}-{session or DEFAULT_SESSION}"
                 try:
                     active_worktree_path = await self._wt_manager.create(
@@ -4227,12 +4231,20 @@ caveats.
             prompt = "Please ask me for a project spec."
         return prompt.replace("{{REPO_NAME}}", repo_name)
 
-    async def repo_busy(self, repo_name: str) -> bool:
+    async def repo_busy(
+        self,
+        repo_name: str,
+        *,
+        exclude_channel_id: str = "",
+        exclude_session: str = "",
+    ) -> bool:
         """Return True if a repo has active or queued jobs."""
         repo_key = self._repo_key(repo_name)
         state = self.state.load()
         for channel_id, ch in state.channels.items():
             for sess_name, sess in ch.sessions.items():
+                if channel_id == exclude_channel_id and sess_name == (exclude_session or DEFAULT_SESSION):
+                    continue
                 if self._repo_key(sess.repo_name) == repo_key:
                     if await self.get_active(channel_id, sess_name):
                         return True
@@ -4240,6 +4252,10 @@ caveats.
                     if any(s.session == sess_name for s in statuses):
                         return True
         return False
+
+    def direct_repo_sessions_enabled(self) -> bool:
+        """Return True when regular sessions run in the mapped repo checkout."""
+        return not bool(getattr(self.cfg.worktrees, "session_isolation", False))
 
     def _repo_key(self, repo_name: str) -> str:
         raw = (repo_name or "").strip()

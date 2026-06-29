@@ -205,3 +205,62 @@ def test_branch_helper_reports_dirty_branch(monkeypatch):
         assert router.messages == ["Current branch: feature/x\nWorking tree: not clean"]
 
     asyncio.run(run())
+
+
+def test_feature_helper_prefixes_plain_name_and_switches(monkeypatch):
+    async def run():
+        router = _Router()
+        sink = _Sink()
+        seen: list[list[str]] = []
+
+        async def _fake_run(repo_path: str, args: list[str], timeout: float = 30.0, env=None):
+            _ = (repo_path, timeout, env)
+            seen.append(args)
+            return "", None
+
+        monkeypatch.setattr(git_helpers, "run_limited_command", _fake_run)
+        await git_helpers.handle_feature(router, sink, "/tmp/repo", "auth-refresh")
+        assert not router.forbidden
+        assert seen == [
+            ["git", "check-ref-format", "--branch", "feature/auth-refresh"],
+            ["git", "switch", "-c", "feature/auth-refresh"],
+        ]
+        assert router.messages == ["Switched to new branch: feature/auth-refresh"]
+
+    asyncio.run(run())
+
+
+def test_feature_helper_preserves_slashed_name(monkeypatch):
+    async def run():
+        router = _Router()
+        sink = _Sink()
+        seen: list[list[str]] = []
+
+        async def _fake_run(repo_path: str, args: list[str], timeout: float = 30.0, env=None):
+            _ = (repo_path, timeout, env)
+            seen.append(args)
+            return "", None
+
+        monkeypatch.setattr(git_helpers, "run_limited_command", _fake_run)
+        await git_helpers.handle_feature(router, sink, "/tmp/repo", "bugfix/auth-refresh")
+        assert not router.forbidden
+        assert seen[0][-1] == "bugfix/auth-refresh"
+        assert seen[1][-1] == "bugfix/auth-refresh"
+
+    asyncio.run(run())
+
+
+def test_feature_helper_rejects_invalid_name(monkeypatch):
+    async def run():
+        router = _Router()
+        sink = _Sink()
+
+        async def _fake_run(repo_path: str, args: list[str], timeout: float = 30.0, env=None):
+            _ = (repo_path, args, timeout, env)
+            return "", "fatal: invalid branch name"
+
+        monkeypatch.setattr(git_helpers, "run_limited_command", _fake_run)
+        await git_helpers.handle_feature(router, sink, "/tmp/repo", "bad..name")
+        assert router.forbidden == ["Invalid branch name: feature/bad..name"]
+
+    asyncio.run(run())

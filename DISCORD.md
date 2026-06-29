@@ -82,7 +82,7 @@ If you prefer the UI: in OAuth2 -> URL Generator, check `bot` and `applications.
    - Channel commands that do NOT require TOTP: `help`, `status`, `stats`, `peek`, `updates`, `models`, `branch`, `show`/`showrepo`, `changes`/`showchanges`, `ps`, `unlock [gh|all] status`, `lock [gh|all]`
    - Channel commands that always require TOTP: `unlock [gh|all] [ttl]`, `create`/`createrepo`/`new`, `clone`/`clonerepo`, `copy`/`copyrepo`/`cp` (when `totp.command_groups.high_risk=true`)
    - `gh` requires TOTP unless `unlock gh` (or `unlock all`) is active (when `totp.command_groups.gh=true`)
-   - Channel commands that require TOTP unless the channel is unlocked: `start`, `resume`, `choose`, `use/select`, `model`, `thread`, `spec`, `stop`, `kill`, `/quit`, `answer`, `approve`, `deny`, `cancel`, `rerun`, `config`, `tests`, `download`, `logs`, `git` (including `!git` shortcut), and plain prompts
+   - Channel commands that require TOTP unless the channel is unlocked: `start`, `resume`, `choose`, `use/select`, `model`, `thread`, `spec`, `stop`, `kill`, `/quit`, `answer`, `approve`, `deny`, `cancel`, `rerun`, `config`, `tests`, `download`, `logs`, `feature`, `git` (including `!git` shortcut), and plain prompts
    - Upload flows always require TOTP: attachment submit and upload-path response
    - DM commands that always require TOTP: `unlock [gh|all] [ttl]`, `create`/`createrepo`/`new`, `clone`/`clonerepo`, `copy`/`copyrepo`/`cp`, `deleterepo/delete/del`, `renamerepo/rename/ren`, and DM upload flows
    - `gh` in DMs requires TOTP unless `unlock gh` (or `unlock all`) is active
@@ -94,6 +94,8 @@ From the repo root:
 `./.venv/bin/python -m cmd.bridge -config config.yaml`
 
 In a `code-<repo>` channel: send `!c config` to verify config, then `!c start`. If you get no response, re-check Message Content intent, token in `.env`, channel naming, and that the repo exists under `code_root`.
+
+Regular chat runs in the mapped repo checkout by default. If you want a dedicated branch first, run `!c feature <name>` before chatting. `worktrees.enabled: true` is still required for `@agent` dispatch isolation; set `worktrees.session_isolation: true` only if you also want ordinary `start`/`resume` sessions to create `session/...` worktrees.
 
 ## Approval relay
 - When Codex outputs `Codex asks: ...`, reply in plain text and the bridge relays it to the active session stdin.

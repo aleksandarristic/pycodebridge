@@ -191,6 +191,7 @@ class GeminiConfig:
 class WorktreeConfig:
     """Git worktree isolation configuration."""
     enabled: bool = False
+    session_isolation: bool = False
     base_dir: str = DEFAULT_WORKTREE_BASE_DIR
     max_per_repo: int = DEFAULT_WORKTREE_MAX_PER_REPO
     cleanup_on_end: str = DEFAULT_WORKTREE_CLEANUP_ON_END
@@ -476,6 +477,10 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
         worktrees.get("enabled", cfg.worktrees.enabled),
         "worktrees.enabled",
     )
+    cfg.worktrees.session_isolation = _coerce_bool(
+        worktrees.get("session_isolation", cfg.worktrees.session_isolation),
+        "worktrees.session_isolation",
+    )
     cfg.worktrees.base_dir = str(worktrees.get("base_dir", cfg.worktrees.base_dir) or "")
     cfg.worktrees.max_per_repo = int(worktrees.get("max_per_repo", cfg.worktrees.max_per_repo))
     cfg.worktrees.cleanup_on_end = str(
@@ -598,6 +603,10 @@ def _apply_defaults(cfg: Config) -> None:
     if not cfg.repo_bootstrap.spec_prompt:
         cfg.repo_bootstrap.spec_prompt = DEFAULT_SPEC_PROMPT
     cfg.worktrees.enabled = _coerce_bool(cfg.worktrees.enabled, "worktrees.enabled")
+    cfg.worktrees.session_isolation = _coerce_bool(
+        cfg.worktrees.session_isolation,
+        "worktrees.session_isolation",
+    )
     if not cfg.worktrees.cleanup_on_end:
         cfg.worktrees.cleanup_on_end = DEFAULT_WORKTREE_CLEANUP_ON_END
     if not cfg.dispatch.output_mode:

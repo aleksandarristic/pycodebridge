@@ -88,6 +88,7 @@ def test_command_registry_help_text():
     assert "**`!y`**" in text
     assert "**`!n`**" in text
     assert "**`!c branch`**" in text
+    assert "**`!c feature <branch-name>`**" in text
     assert "**`!c git <status|log|branches|branch|show|diff|remote|fetch|pull|add|commit|push|merge>`**" in text
     assert "**`!c gh <args>`**" in text
     assert "**`!c unlock [gh|all] [status|ttl]`**" in text
@@ -106,6 +107,15 @@ def test_command_registry_detailed_help_uses_examples():
     assert "Namespace:" in text
     assert "Examples:" in text
     assert "`!c git status`" in text
+
+
+def test_command_registry_feature_help_uses_examples():
+    registry, _ = build_registry()
+    from codebridge.commands.help import render_help_command
+
+    text = render_help_command(registry["feature"], prefix="!c")
+    assert "**Help: `feature`**" in text
+    assert "`!c feature auth-refresh`" in text
 
 
 def test_command_registry_workflow_help_uses_examples():

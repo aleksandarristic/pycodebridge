@@ -30,6 +30,7 @@ def _write_cfg(tmp_path, monkeypatch, extra: str = "") -> str:
 def test_worktrees_defaults_when_absent(tmp_path, monkeypatch):
     cfg = cfgmod.load(_write_cfg(tmp_path, monkeypatch))
     assert cfg.worktrees.enabled is False
+    assert cfg.worktrees.session_isolation is False
     assert cfg.worktrees.base_dir == ""
     assert cfg.worktrees.max_per_repo == cfgmod.DEFAULT_WORKTREE_MAX_PER_REPO
     assert cfg.worktrees.cleanup_on_end == "remove"
@@ -44,15 +45,22 @@ def test_worktrees_all_fields(tmp_path, monkeypatch):
     extra = """\
         worktrees:
           enabled: true
+          session_isolation: true
           base_dir: "/tmp/wt"
           max_per_repo: 4
           cleanup_on_end: keep
         """
     cfg = cfgmod.load(_write_cfg(tmp_path, monkeypatch, extra))
     assert cfg.worktrees.enabled is True
+    assert cfg.worktrees.session_isolation is True
     assert cfg.worktrees.base_dir == "/tmp/wt"
     assert cfg.worktrees.max_per_repo == 4
     assert cfg.worktrees.cleanup_on_end == "keep"
+
+
+def test_worktrees_session_isolation_explicit_false(tmp_path, monkeypatch):
+    cfg = cfgmod.load(_write_cfg(tmp_path, monkeypatch, "worktrees:\n  session_isolation: false"))
+    assert cfg.worktrees.session_isolation is False
 
 
 def test_worktrees_base_dir_expands_env(tmp_path, monkeypatch):

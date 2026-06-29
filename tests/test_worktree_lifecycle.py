@@ -192,10 +192,32 @@ def test_no_worktree_when_manager_is_none(tmp_path):
     assert captured_paths == [str(repo_dir)]
 
 
-def test_worktree_created_when_manager_present(tmp_path):
+def test_no_worktree_when_session_isolation_disabled(tmp_path):
     wt = _FakeWorktreeManager(wt_path=str(tmp_path / "myrepo-wt-ch1"))
     captured = []
     router, coordinator, captured_paths = _build_router(tmp_path, wt_manager=wt, captured_paths=captured)
+    repo_dir = tmp_path / "myrepo"
+    repo_dir.mkdir()
+
+    sink = _FakeSink()
+    run(router.run_codex(
+        _event(), sink,
+        repo_name="myrepo",
+        repo_path=str(repo_dir),
+        session="default",
+        model="", reasoning_effort="",
+        args=["--start"],
+    ))
+
+    assert wt.create_calls == []
+    assert captured_paths == [str(repo_dir)]
+
+
+def test_worktree_created_when_session_isolation_enabled(tmp_path):
+    wt = _FakeWorktreeManager(wt_path=str(tmp_path / "myrepo-wt-ch1"))
+    captured = []
+    router, coordinator, captured_paths = _build_router(tmp_path, wt_manager=wt, captured_paths=captured)
+    router.cfg.worktrees.session_isolation = True
     repo_dir = tmp_path / "myrepo"
     repo_dir.mkdir()
 
@@ -219,6 +241,7 @@ def test_worktree_removed_on_exit_when_cleanup_remove(tmp_path):
     wt = _FakeWorktreeManager(wt_path=wt_path)
     wt.cleanup_on_end = "remove"
     router, coordinator, _ = _build_router(tmp_path, wt_manager=wt)
+    router.cfg.worktrees.session_isolation = True
     repo_dir = tmp_path / "myrepo"
     repo_dir.mkdir()
 
@@ -242,6 +265,7 @@ def test_worktree_not_removed_when_cleanup_keep(tmp_path):
     wt = _FakeWorktreeManager(wt_path=wt_path)
     wt.cleanup_on_end = "keep"
     router, coordinator, _ = _build_router(tmp_path, wt_manager=wt)
+    router.cfg.worktrees.session_isolation = True
     repo_dir = tmp_path / "myrepo"
     repo_dir.mkdir()
 
@@ -263,6 +287,7 @@ def test_worktree_create_error_aborts_run(tmp_path):
     wt = _FakeWorktreeManager(raise_on_create=True)
     captured = []
     router, coordinator, captured_paths = _build_router(tmp_path, wt_manager=wt, captured_paths=captured)
+    router.cfg.worktrees.session_isolation = True
     repo_dir = tmp_path / "myrepo"
     repo_dir.mkdir()
 

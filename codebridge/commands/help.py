@@ -44,6 +44,13 @@ COMMAND_DETAILS = {
             "!branch",
         ),
     },
+    "feature": {
+        "details": "Creates and switches to a new feature branch without changing the default single-session checkout policy.",
+        "examples": (
+            "!c feature auth-refresh",
+            "!feature feature/auth-refresh",
+        ),
+    },
     "git": {
         "details": "Runs safe git helper commands from the mapped repository.",
         "examples": (

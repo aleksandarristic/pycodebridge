@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0131] Make single-mode repo execution direct by default.
+  - Completed: 2026-06-29
+  - Notes: Split regular-session worktree policy from dispatch by adding `worktrees.session_isolation` (default `false`). Ordinary chat, `start`, and `resume` now run in the mapped repo checkout unless that flag is explicitly enabled, while `@agent` dispatch still uses isolated task/worker worktrees. Added a direct-checkout repo conflict guard across channel/thread scopes, an explicit `!c feature <branch-name>` helper for optional branch creation, updated config/help/docs to explain the new policy, and covered the behavior with focused config, router, git-helper, command, and integration tests.
+
 - [TASK-0129] Add first-class Gemini API key configuration.
   - Completed: 2026-06-26
   - Notes: Added `gemini.api_key_env` so the bridge can read a host env var and inject its value into Gemini runs as `GEMINI_API_KEY`, without storing secrets in YAML or requiring `gemini.env.GEMINI_API_KEY`. Kept the default empty to preserve existing Gemini auth setups, added actionable startup errors when the configured source env var is missing, documented the new field, and covered config, backend, and router-level failure behavior.

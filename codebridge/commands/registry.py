@@ -81,6 +81,7 @@ COMMAND_MODEL_META: Dict[str, Dict[str, str]] = {
     "changes": {"surface": SURFACE_CORE, "namespace": "repo"},
     "tests": {"surface": SURFACE_CORE, "namespace": "repo"},
     "branch": {"surface": SURFACE_CORE, "namespace": "repo"},
+    "feature": {"surface": SURFACE_CORE, "namespace": "repo"},
     "git": {"surface": SURFACE_CORE, "namespace": "repo"},
     "gh": {"surface": SURFACE_CORE, "namespace": "repo"},
     "gh-create": {"surface": SURFACE_ADVANCED, "namespace": "repo-admin"},
@@ -541,6 +542,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
         ),
         CommandSpec("tests", "tests", "run pytest -q", "Repo helpers", _cmd_tests, AUTH_UNLOCK, aliases=("test",)),
         CommandSpec("branch", "branch", "show current git branch and working tree status", "Repo helpers", _cmd_branch, AUTH_OPEN),
+        CommandSpec("feature", "feature <branch-name>", "create and switch to an explicit feature branch", "Repo helpers", _cmd_feature, AUTH_UNLOCK),
         CommandSpec(
             "git",
             "git <status|log|branches|branch|show|diff|remote|fetch|pull|add|commit|push|merge>",
@@ -1545,6 +1547,10 @@ async def _cmd_branch(router: Any, message: MessageEvent, sink: ResponseSink, re
         await router.reply_forbidden(sink, "Usage: !c branch")
         return
     await router.handle_branch(sink, repo_path)
+
+
+async def _cmd_feature(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    await router.handle_feature(sink, repo_path, rest)
 
 
 async def _cmd_git(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

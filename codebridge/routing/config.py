@@ -19,6 +19,8 @@ def render_config_text(cfg: Config) -> str:
         f"git_user_name_set: {bool((cfg.git.user_name or '').strip())}\n"
         f"git_user_email_set: {bool((cfg.git.user_email or '').strip())}\n"
         f"git_credential_helper_set: {bool((cfg.git.credential_helper or '').strip())}\n"
+        f"worktrees_enabled: {cfg.worktrees.enabled}\n"
+        f"worktrees_session_isolation: {cfg.worktrees.session_isolation}\n"
         f"prefix: {cfg.discord.prefix}\n"
         f"allow_plain_prompts: {cfg.discord.allow_plain_prompts}\n"
         f"channel regex: {cfg.discord.channel_name_regex}\n"

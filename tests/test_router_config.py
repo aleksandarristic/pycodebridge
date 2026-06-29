@@ -15,6 +15,8 @@ def test_render_config_text_includes_core_fields():
     cfg.git.user_name = "Dev"
     cfg.git.user_email = "dev@example.com"
     cfg.git.credential_helper = "!gh auth git-credential"
+    cfg.worktrees.enabled = True
+    cfg.worktrees.session_isolation = False
     cfg.discord.prefix = "!c"
     cfg.discord.allow_plain_prompts = True
     cfg.discord.channel_name_regex = "^code-(.*)$"
@@ -45,6 +47,8 @@ def test_render_config_text_includes_core_fields():
     assert "git_user_name_set: True" in text
     assert "git_user_email_set: True" in text
     assert "git_credential_helper_set: True" in text
+    assert "worktrees_enabled: True" in text
+    assert "worktrees_session_isolation: False" in text
     assert "prefix: !c" in text
     assert "allow_plain_prompts: True" in text
     assert "channel regex: ^code-(.*)$" in text

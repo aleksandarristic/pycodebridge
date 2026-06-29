@@ -175,6 +175,13 @@ network_access = true
 - `require_confirmation_for_dangerous_ops` (default `true`) — require explicit confirmation token for dangerous git helper operations.
 - `dangerous_confirmation_token` (default `--confirm-dangerous`) — confirmation token required when dangerous git helper operations are enabled.
 
+### `worktrees`
+- `enabled` (default `false`) — enable git worktree support for multi-agent dispatch and optional regular-session isolation.
+- `session_isolation` (default `false`) — when `true`, normal `start`/`resume` sessions use `session/...` worktrees; when `false`, ordinary chat runs directly in the mapped repo checkout.
+- `base_dir` (default empty) — optional parent directory for created worktrees; empty creates sibling directories next to the repo.
+- `max_per_repo` (default `8`) — refuse new worktree-backed sessions when this many managed worktrees already exist for the repo.
+- `cleanup_on_end` (default `remove`) — what to do with regular-session worktrees after the run ends (`remove|keep|pr`).
+
 ### `files`
 - `max_upload_mb` (default `200`) — maximum size for a single uploaded file.
 - `max_upload_total_mb` (default `200`) — maximum total size for one upload batch.
@@ -304,6 +311,7 @@ TOTP required unless the chat is unlocked:
 - Shortcut: `!log [n]` (maps to `!c logs [n]`)
 - `!c unpin`
 - `!c git <status|log|branches|branch|show|diff|remote|fetch|pull|add|commit|push|merge>`
+- `!c feature <name>` creates and switches to `feature/<name>` before you chat; pass a slash yourself to keep a custom prefix such as `bugfix/auth`.
 - Shortcut: `!git ...` (maps to `!c git ...`)
 - Any other prompt-style `!c ...` command that is not in the read-only list
 
@@ -487,10 +495,13 @@ Backward-compatible top-level module shims are retained (for example `codebridge
 ## Concurrent session isolation (worktrees)
 
 Without isolation, two sessions on the same repo share one working directory and can
-clobber each other's in-progress changes. Enable `worktrees` to give each session its
-own `git worktree` on a dedicated branch.
+clobber each other's in-progress changes. The default single-session mode now runs
+directly in the mapped repo checkout. Enable `worktrees.session_isolation` only when
+you want ordinary `start`/`resume` runs to use dedicated `session/...` worktrees.
 
-- **How it works** — on session start, `git worktree add -b session/<key>/<ts> <path>` creates an isolated checkout. The agent subprocess runs there. On exit the branch and directory are removed (or kept, depending on `cleanup_on_end`).
+- **Single mode default** — plain chat, `!c start`, and `!c resume` run in the mapped repo checkout as-is. The bridge does not auto-create branches or worktrees for these runs.
+- **Optional branch step** — run `!c feature <name>` first if you want the session to work on a dedicated branch while staying in the main checkout.
+- **How isolated sessions work** — when `worktrees.session_isolation: true`, `git worktree add -b session/<key>/<ts> <path>` creates an isolated checkout for regular sessions. The agent subprocess runs there. On exit the branch and directory are removed (or kept, depending on `cleanup_on_end`).
 - **Branch names** — `session/<channel-slug>/<yyyymmdd-hhmmss>`, visible in `git branch -a`.
 - **Worktree paths** — siblings of the repo by default (`myapp-wt-<key>/`), or under `base_dir` if set.
 - **Cleanup modes**
@@ -504,6 +515,7 @@ Enable in config:
 ```yaml
 worktrees:
   enabled: true
+  session_isolation: true
   cleanup_on_end: remove  # remove | keep | pr
 ```
 

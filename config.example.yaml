@@ -122,9 +122,13 @@ dispatch:
   #   You are the orchestrator for a multi-agent coding session...
 
 worktrees:
-  # Give each session its own git worktree so concurrent sessions on the same
-  # repo cannot interfere with each other's uncommitted changes.
+  # Enable git worktree support for dispatch and optional per-session isolation.
   enabled: false
+
+  # Isolate regular single-session chat runs in session/... worktrees.
+  # false = default single-mode behavior: run directly in the mapped repo
+  # checkout (for example on main or the currently checked-out feature branch).
+  session_isolation: false
 
   # Directory where worktree copies are created.
   # Leave empty to create them as siblings of the repo directory
