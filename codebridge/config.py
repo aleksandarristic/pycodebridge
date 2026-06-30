@@ -164,6 +164,7 @@ class FilesConfig:
 class RepoBootstrapConfig:
     """Repo bootstrap configuration for create/spec flows."""
     agents_template: str = ""
+    agent_env_template: str = ""
     spec_prompt: str = DEFAULT_SPEC_PROMPT
 
 
@@ -470,6 +471,9 @@ def _apply_dict(cfg: Config, raw: dict) -> None:
     cfg.repo_bootstrap.agents_template = repo_bootstrap.get(
         "agents_template", cfg.repo_bootstrap.agents_template
     )
+    cfg.repo_bootstrap.agent_env_template = repo_bootstrap.get(
+        "agent_env_template", cfg.repo_bootstrap.agent_env_template
+    )
     cfg.repo_bootstrap.spec_prompt = repo_bootstrap.get("spec_prompt", cfg.repo_bootstrap.spec_prompt)
 
     worktrees = raw.get("worktrees", {}) or {}
@@ -626,6 +630,7 @@ def _expand_paths(cfg: Config) -> None:
     cfg.state.log_dir = _expand_path(cfg.state.log_dir)
     cfg.git.global_config_path = _expand_path(cfg.git.global_config_path)
     cfg.repo_bootstrap.agents_template = _expand_path(cfg.repo_bootstrap.agents_template)
+    cfg.repo_bootstrap.agent_env_template = _expand_path(cfg.repo_bootstrap.agent_env_template)
     cfg.worktrees.base_dir = _expand_path(cfg.worktrees.base_dir)
     cfg.dm_assistant.memory_dir = _expand_path(cfg.dm_assistant.memory_dir)
 

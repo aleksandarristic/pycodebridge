@@ -102,6 +102,7 @@ files:
 
 repo_bootstrap:
   agents_template: ""
+  agent_env_template: "./.agent-env.local.sample.md"
   spec_prompt: ""  # optional prompt profile override for `!c spec`
 
 dispatch:

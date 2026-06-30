@@ -96,6 +96,11 @@ _FINAL_RESULT_EXIT_GRACE_SECONDS = 2.0
 _RUNTIME_OPTION_KEYS = ("run_heartbeat_seconds", "run_completion_min_seconds", "run_idle_timeout_seconds", "show_reasoning_details", "show_tool_calls")
 LOCAL_AGENT_ENV_FILENAME = ".agent-env.local.md"
 LOCAL_AGENT_EXCLUDE_LINES = (LOCAL_AGENT_ENV_FILENAME, ".venv/")
+_AGENT_ENV_AGENTS_NOTE = """## Local Environment
+
+- Check `.agent-env.local.md` for machine-local tooling and runtime notes.
+- Treat `.agent-env.local.md` as a cache only and verify relevant commands in the current session before relying on it.
+"""
 _TOP_LEVEL_SHORTCUT_ALIASES = (("!reset", "reset"),)
 _CODEX_UNSUPPORTED_CHATGPT_MODEL_RE = re.compile(
     r"The ['\"]([^'\"]+)['\"] model is not supported when using Codex with a ChatGPT account",
@@ -983,7 +988,7 @@ class Router:
                 self._ensure_exclude_line(exclude_path, line)
         env_path = repo / LOCAL_AGENT_ENV_FILENAME
         if not env_path.exists():
-            env_path.write_text(self._agent_env_content(repo), encoding="utf-8")
+            env_path.write_text(self._render_agent_env_content(repo), encoding="utf-8")
 
     @classmethod
     def _agent_env_content(cls, repo: Path) -> str:
@@ -1026,6 +1031,43 @@ caveats.
   verification commands.
 """
 
+    @classmethod
+    def _agent_env_template_vars(cls, repo: Path) -> dict[str, str]:
+        checked = datetime.now(timezone.utc).date().isoformat()
+        return {
+            "CHECKED_DATE": checked,
+            "PYTHON_STATUS": cls._repo_tool_detail(repo, ".venv/bin/python", ["--version"]),
+            "PIP_STATUS": cls._repo_tool_detail(repo, ".venv/bin/pip", ["--version"]),
+            "PYTEST_STATUS": cls._repo_tool_detail(repo, ".venv/bin/pytest"),
+            "RUFF_VENV_STATUS": cls._repo_tool_detail(repo, ".venv/bin/ruff", ["--version"]),
+            "GIT_STATUS": cls._external_tool_detail("git", ["--version"]),
+            "GH_STATUS": cls._gh_tool_detail(),
+            "UV_STATUS": cls._external_tool_detail("uv", ["--version"]),
+            "PYTHON3_STATUS": cls._external_tool_detail("python3", ["--version"]),
+            "RUFF_SYSTEM_STATUS": cls._external_tool_detail("ruff", ["--version"]),
+            "DOCKER_STATUS": cls._external_tool_detail("docker", ["--version"]),
+            "MISE_STATUS": cls._external_tool_detail("mise", ["--version"]),
+            "RUBY_STATUS": cls._external_tool_detail("ruby", ["--version"]),
+            "BUNDLE_STATUS": cls._external_tool_detail("bundle", ["--version"]),
+            "NODE_STATUS": cls._external_tool_detail("node", ["--version"]),
+            "NPM_STATUS": cls._external_tool_detail("npm", ["--version"]),
+            "NODE_NPM_STATUS": cls._combined_tool_detail(("node", ["--version"]), ("npm", ["--version"])),
+        }
+
+    @classmethod
+    def _render_agent_env_template(cls, template: str, repo: Path) -> str:
+        content = template
+        for key, value in cls._agent_env_template_vars(repo).items():
+            content = content.replace(f"{{{{{key}}}}}", value)
+        return content
+
+    def _render_agent_env_content(self, repo: Path) -> str:
+        tmpl = (self.cfg.repo_bootstrap.agent_env_template or "").strip()
+        if tmpl:
+            data = Path(tmpl).read_text(encoding="utf-8")
+            return self._render_agent_env_template(data, repo)
+        return self._agent_env_content(repo)
+
     @staticmethod
     def _repo_tool_status(repo: Path, rel_path: str) -> str:
         path = repo / rel_path
@@ -1040,6 +1082,77 @@ caveats.
     @staticmethod
     def _external_tool_status(command: str) -> str:
         return "available" if shutil.which(command) else "missing"
+
+    @classmethod
+    def _repo_tool_detail(cls, repo: Path, rel_path: str, version_args: Optional[list[str]] = None) -> str:
+        path = repo / rel_path
+        base = cls._repo_tool_status(repo, rel_path)
+        if base != "available":
+            return base
+        return cls._format_tool_detail(path.name, cls._command_output([str(path)] + list(version_args or [])))
+
+    @classmethod
+    def _external_tool_detail(cls, command: str, version_args: Optional[list[str]] = None) -> str:
+        base = cls._external_tool_status(command)
+        if base != "available":
+            return "unavailable"
+        path = shutil.which(command) or command
+        return cls._format_tool_detail(command, cls._command_output([path] + list(version_args or [])))
+
+    @classmethod
+    def _combined_tool_detail(
+        cls,
+        first: tuple[str, list[str]],
+        second: tuple[str, list[str]],
+    ) -> str:
+        first_name, first_args = first
+        second_name, second_args = second
+        first_detail = cls._external_tool_detail(first_name, first_args)
+        second_detail = cls._external_tool_detail(second_name, second_args)
+        return f"{first_detail}; {second_detail}"
+
+    @classmethod
+    def _gh_tool_detail(cls) -> str:
+        status = cls._external_tool_detail("gh", ["--version"])
+        if status == "unavailable":
+            return status
+        login = cls._command_output(["gh", "api", "user", "--jq", ".login"])
+        if login.ok and login.text:
+            return f"{status} - authenticated as `{login.text}`"
+        return status
+
+    @staticmethod
+    def _format_tool_detail(label: str, result: "Router._CommandResult") -> str:
+        if not result.ok or not result.text:
+            return "available"
+        return f"available (`{result.text}`)"
+
+    @dataclass
+    class _CommandResult:
+        ok: bool
+        text: str = ""
+
+    @classmethod
+    def _command_output(cls, args: list[str]) -> "Router._CommandResult":
+        try:
+            proc = subprocess.run(
+                args,
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+        except Exception:
+            return cls._CommandResult(ok=False, text="")
+        if proc.returncode != 0:
+            return cls._CommandResult(ok=False, text="")
+        text = (proc.stdout or proc.stderr or "").strip().splitlines()
+        if not text:
+            return cls._CommandResult(ok=False, text="")
+        line = strip_control_codes(text[0]).strip()
+        if len(line) > 120:
+            line = line[:117] + "..."
+        return cls._CommandResult(ok=True, text=line)
 
     @staticmethod
     def _git_info_exclude_path(repo: Path) -> Optional[Path]:
@@ -4326,6 +4439,18 @@ caveats.
             return
         data = Path(tmpl).read_text(encoding="utf-8")
         Path(agents_path).write_text(data, encoding="utf-8")
+
+    def ensure_agent_env_reference(self, repo_path: str) -> None:
+        """Ensure AGENTS.md references the gitignored local agent env cache."""
+        agents_path = Path(repo_path) / "AGENTS.md"
+        if not agents_path.exists():
+            agents_path.write_text("# AGENTS\n\n" + _AGENT_ENV_AGENTS_NOTE + "\n", encoding="utf-8")
+            return
+        existing = agents_path.read_text(encoding="utf-8")
+        if _AGENT_ENV_AGENTS_NOTE.strip() in existing:
+            return
+        suffix = "" if existing.endswith("\n") else "\n"
+        agents_path.write_text(f"{existing}{suffix}\n{_AGENT_ENV_AGENTS_NOTE}\n", encoding="utf-8")
 
     def spec_prompt(self, repo_name: str) -> str:
         """Render the spec capture prompt template."""

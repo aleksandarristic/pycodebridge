@@ -23,4 +23,7 @@
 - Keep repo intent, constraints, commands, and conventions in this `AGENTS.md` file so every agent has the same operating context.
 
 ## Notes
+- Check `.agent-env.local.md` for machine-local tooling and runtime notes.
+- Treat `.agent-env.local.md` as a cache only; verify relevant commands in the
+  current session before relying on it.
 - Add repo-specific context to keep sessions aligned.

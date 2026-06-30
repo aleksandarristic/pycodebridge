@@ -426,6 +426,7 @@ async def dm_create_repo(
     try:
         router.bootstrap_agent_env_cache(repo_path)
         router.seed_agents_template(repo_path)
+        router.ensure_agent_env_reference(repo_path)
     except Exception as exc:
         return exc
     await dm_reply(router, sink, entry, f"Created repo at {repo_path}. Continue in #code-{repo_name}")
@@ -460,6 +461,8 @@ async def dm_clone_repo(
     await router.bootstrap_repo_git_config(repo_path)
     try:
         router.bootstrap_agent_env_cache(repo_path)
+        router.seed_agents_template(repo_path)
+        router.ensure_agent_env_reference(repo_path)
     except Exception as exc:
         return exc
     await dm_reply(router, sink, entry, f"Clone complete: {clone_url} -> {repo_path}. Use `#code-{repo_name}` for prompts.")
@@ -496,6 +499,8 @@ async def dm_copy_repo(
     await router.bootstrap_repo_git_config(dst_path)
     try:
         router.bootstrap_agent_env_cache(dst_path)
+        router.seed_agents_template(dst_path)
+        router.ensure_agent_env_reference(dst_path)
     except Exception as exc:
         return exc
     await dm_reply(router, sink, entry, f"Copied repo to {dst_path}. Continue in #code-{to_name}")
