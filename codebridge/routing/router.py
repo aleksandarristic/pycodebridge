@@ -2297,23 +2297,29 @@ caveats.
             ]
             for name, sess in ch.sessions.items():
                 active = await self.get_active(sink.channel_id, name) is not None
+                backend_name = self.coordinator.session_backend(sink.channel_id, name)
+                model = self.session_model(sink.channel_id, name)
+                reasoning = self.session_reasoning_effort(sink.channel_id, name)
                 lines.append(
                     format_session_line(
                         name,
                         sess,
                         active,
-                        self.cfg.codex.model,
-                        self.cfg.codex.model_reasoning_effort,
+                        backend_name,
+                        model,
+                        reasoning,
                         bool(self._runtime_option_value(sink.channel_id, "show_reasoning_details")),
                     )
                 )
             current = self.current_session_for_user("", sink.channel_id)
             if current:
+                current_backend = self.coordinator.session_backend(sink.channel_id, current)
                 current_model = self.session_model(sink.channel_id, current)
                 current_reasoning = self.session_reasoning_effort(sink.channel_id, current)
                 lines.append(
                     format_current_selection_line(
                         current,
+                        current_backend,
                         current_model,
                         current_reasoning,
                         bool(self._runtime_option_value(sink.channel_id, "show_reasoning_details")),
@@ -4380,12 +4386,14 @@ caveats.
     async def update_pinned_status(self, sink: ResponseSink, user_id: str, session: str) -> None:
         """Update or pin the current session status message."""
         sess = session or DEFAULT_SESSION
+        backend = self.coordinator.session_backend(sink.channel_id, sess)
         model = self.session_model(sink.channel_id, sess)
         reasoning = self.session_reasoning_effort(sink.channel_id, sess)
+        backend_info = f" agent {backend}" if backend else ""
         model_info = f" model {model}" if model else ""
         show_reasoning = bool(self._runtime_option_value(sink.channel_id, "show_reasoning_details"))
         reasoning_info = f" reasoning {reasoning}" if show_reasoning and reasoning else ""
-        text = f"User {user_id} current session: {sess}{model_info}{reasoning_info}"
+        text = f"User {user_id} current session: {sess}{backend_info}{model_info}{reasoning_info}"
         await sink.update_pinned_status(user_id, session, text)
 
     def seed_agents_template(self, repo_path: str) -> None:

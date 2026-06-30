@@ -54,6 +54,7 @@ COMMAND_MODEL_META: Dict[str, Dict[str, str]] = {
     "choose": {"surface": SURFACE_SUPPORT, "namespace": "session"},
     "use": {"surface": SURFACE_CORE, "namespace": "session"},
     "agent": {"surface": SURFACE_ADVANCED, "namespace": "session"},
+    "which-agent": {"surface": SURFACE_SUPPORT, "namespace": "session"},
     "agents": {"surface": SURFACE_ADVANCED, "namespace": "session"},
     "model": {"surface": SURFACE_ADVANCED, "namespace": "session"},
     "models": {"surface": SURFACE_ADVANCED, "namespace": "session"},
@@ -436,7 +437,8 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             aliases=("pick",),
         ),
         CommandSpec("use", "use <session>", "set your sticky session", "Sessions", _cmd_use, AUTH_UNLOCK, aliases=("select",)),
-        CommandSpec("agent", "agent [session] <backend> [model] [effort]", "set session agent backend (optionally with model and effort)", "Sessions", _cmd_agent, AUTH_UNLOCK),
+        CommandSpec("agent", "agent [session] <backend> [model] [effort]", "show or set session agent backend", "Sessions", _cmd_agent, AUTH_UNLOCK),
+        CommandSpec("which-agent", "which-agent [session]", "show session backend, model, and effort", "Sessions", _cmd_which_agent, AUTH_OPEN, aliases=("whichagent",)),
         CommandSpec("agents", "agents", "list available agent backends with usage", "Sessions", _cmd_agents, AUTH_OPEN),
         CommandSpec("model", "model [session] <id|default> [reasoning|default]", "set or clear session model", "Sessions", _cmd_model, AUTH_UNLOCK, aliases=("mdl",)),
         CommandSpec(
@@ -706,6 +708,16 @@ async def _cmd_resume(router: Any, message: MessageEvent, sink: ResponseSink, re
     await router.handle_resume(message, sink, repo_name, repo_path, session_name, prompt)
 
 
+async def _show_session_agent_info(router: Any, message: MessageEvent, sink: ResponseSink, session_name: str) -> None:
+    backend = router.coordinator.session_backend(message.channel_id, session_name)
+    model = router.session_model(message.channel_id, session_name) or "(none configured)"
+    effort = router.session_reasoning_effort(message.channel_id, session_name) or "(none configured)"
+    await router.reply(
+        sink,
+        f"Session '{session_name}' backend: {backend}. Model: {model}. Effort: {effort}.",
+    )
+
+
 async def _cmd_choose(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
     choice, sess = parse_choose(rest)
     if not choice:
@@ -878,8 +890,10 @@ async def _cmd_agent(router: Any, message: MessageEvent, sink: ResponseSink, rep
     effort_override = ""
 
     if not parts:
-        prefix = getattr(router, "_transport_prefix", lambda e: "!c")(message)
-        await router.reply_forbidden(sink, f"Usage: {prefix} agent [session] <backend> [model] [effort]\nAvailable: {', '.join(sorted(KNOWN_BACKENDS))}")
+        session_name = await _resolve_session_name(router, message, sink, session_name)
+        if not session_name:
+            return
+        await _show_session_agent_info(router, message, sink, session_name)
         return
 
     # Disambiguate: first token is a backend name or a session name
@@ -942,6 +956,13 @@ async def _cmd_agent(router: Any, message: MessageEvent, sink: ResponseSink, rep
         return
 
     await apply_backend()
+
+
+async def _cmd_which_agent(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    session_name = await _resolve_session_name(router, message, sink, rest.strip())
+    if not session_name:
+        return
+    await _show_session_agent_info(router, message, sink, session_name)
 
 
 async def _cmd_effort(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

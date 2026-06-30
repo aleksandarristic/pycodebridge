@@ -86,6 +86,18 @@ async def handle_start(
         await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args, backend=backend)
 
     pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, job)
+    backend_name = router.coordinator.session_backend(channel_id, session)
+    effort_text = f" reasoning {reasoning}" if reasoning else ""
+    if pos <= 1:
+        await router.reply(
+            sink,
+            f"Starting session '{session}' with {backend_name}{f' model {model}' if model else ''}{effort_text}.",
+        )
+    else:
+        await router.reply(
+            sink,
+            f"Queued start for session '{session}' with {backend_name} as {job_id} (pos {pos}).",
+        )
     router.logger.info("enqueue.start", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
 
 
@@ -148,19 +160,40 @@ async def handle_resume(
     router.coordinator.update_state(channel_id, session, repo_name, repo_path, thread_id or "", model, reasoning)
     if thread_id:
         args = backend.build_resume_args(repo_path, thread_id, prompt, model, reasoning)
+        action = "resume"
     elif (
         session_exists(state, channel_id, session)
         and not session_requires_fresh_start(state, channel_id, session)
     ):
         args = backend.build_resume_last_args(repo_path, prompt, model, reasoning)
+        action = "resume"
     else:
         # No resumable channel thread/history is available: start a fresh run with the prompt.
         args = backend.build_start_args(repo_path, prompt, model, reasoning)
+        action = "fresh-start"
 
     async def job() -> None:
         await router.run_codex(event, sink, repo_name, repo_path, session, model, reasoning, args, backend=backend)
 
     pos, job_id, _ = await router.coordinator.enqueue(channel_id, session, job)
+    backend_name = router.coordinator.session_backend(channel_id, session)
+    effort_text = f" reasoning {reasoning}" if reasoning else ""
+    if pos <= 1:
+        if action == "fresh-start":
+            await router.reply(
+                sink,
+                f"Starting a new session in '{session}' with {backend_name}{f' model {model}' if model else ''}{effort_text}.",
+            )
+        else:
+            await router.reply(
+                sink,
+                f"Resuming session '{session}' with {backend_name}{f' model {model}' if model else ''}{effort_text}.",
+            )
+    else:
+        await router.reply(
+            sink,
+            f"Queued resume for session '{session}' with {backend_name} as {job_id} (pos {pos}).",
+        )
     router.logger.info("enqueue.resume", extra={"channel_id": channel_id, "repo": repo_name, "session": session, "job": job_id, "pos": pos})
 
 

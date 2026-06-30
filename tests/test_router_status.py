@@ -16,34 +16,37 @@ def _make_session(model: str = "", reasoning: str = "", thread_id: str = "thread
 
 def test_format_session_line_includes_active_suffix():
     sess = _make_session(model="gpt-5.2")
-    line = format_session_line("default", sess, True, "gpt-5", "medium")
+    line = format_session_line("default", sess, True, "codex", "gpt-5.2", "medium")
     assert " (active)" in line
+    assert "agent codex" in line
     assert "model gpt-5.2" in line
     assert "reasoning medium" in line
 
 
 def test_format_session_line_falls_back_to_defaults():
     sess = _make_session()
-    line = format_session_line("default", sess, False, "gpt-5", "high")
+    line = format_session_line("default", sess, False, "claude", "gpt-5", "high")
     assert " (active)" not in line
+    assert "agent claude" in line
     assert "model gpt-5" in line
     assert "reasoning high" in line
 
 
 def test_format_current_selection_line_allows_empty_values():
-    line = format_current_selection_line("default", "gpt-5", "")
+    line = format_current_selection_line("default", "codex", "gpt-5", "")
+    assert "agent codex" in line
     assert "model gpt-5" in line
     assert "reasoning" not in line
 
 
 def test_format_current_selection_line_includes_reasoning():
-    line = format_current_selection_line("foo", "gpt-5", "extra-high")
+    line = format_current_selection_line("foo", "gemini", "gpt-5", "extra-high")
     assert line.endswith("reasoning extra-high")
 
 
 def test_format_lines_can_hide_reasoning():
     sess = _make_session(reasoning="high")
-    session_line = format_session_line("default", sess, False, "gpt-5", "medium", show_reasoning=False)
-    current_line = format_current_selection_line("default", "gpt-5", "high", show_reasoning=False)
+    session_line = format_session_line("default", sess, False, "codex", "gpt-5", "medium", show_reasoning=False)
+    current_line = format_current_selection_line("default", "codex", "gpt-5", "high", show_reasoning=False)
     assert "reasoning" not in session_line
     assert "reasoning" not in current_line

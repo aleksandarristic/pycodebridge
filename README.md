@@ -237,6 +237,7 @@ TOTP not required (open in channel):
 - `!c doctor [session]`
 - `!c updates`
 - `!c agents`
+- `!c which-agent [session]`
 - `!c models [session] [refresh|--refresh]`
 - `!c efforts [session]`
 - `!c branch`
@@ -477,6 +478,7 @@ Assistant controls in unbound DMs:
 - `!c model <id|default>`
 - `!c effort <level|default>`
 - `!c status`
+- `!c which-agent`
 - `!c reset`
 - `!c choose continue|new|compact`
 - `!c logs [n]`

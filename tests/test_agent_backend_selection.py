@@ -305,14 +305,26 @@ def test_cmd_agent_rejects_unknown_backend(tmp_path):
     asyncio.run(run())
 
 
-def test_cmd_agent_no_args_shows_usage(tmp_path):
+def test_cmd_agent_no_args_shows_current_backend(tmp_path):
     router, runner, _ = _make_router(tmp_path)
     sink = _FakeSink()
 
     async def run():
         await router.handle_message(_discord_event("!c agent"), sink)
         await asyncio.sleep(0)
-        assert any("Usage" in s for s in sink.sent)
+        assert any("Session 'default' backend: codex." in s for s in sink.sent)
+
+    asyncio.run(run())
+
+
+def test_cmd_which_agent_shows_current_backend(tmp_path):
+    router, runner, _ = _make_router(tmp_path)
+    sink = _FakeSink()
+
+    async def run():
+        await router.handle_message(_discord_event("!c which-agent"), sink)
+        await asyncio.sleep(0)
+        assert any("Session 'default' backend: codex." in s for s in sink.sent)
 
     asyncio.run(run())
 

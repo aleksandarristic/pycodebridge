@@ -147,6 +147,7 @@ _DM_ADMIN_HELP_OVERVIEW_ORDER = (
 
 _DM_ASSISTANT_HELP_ORDER = (
     "agent",
+    "which-agent",
     "model",
     "effort",
     "reset",
@@ -157,6 +158,7 @@ _DM_ASSISTANT_HELP_ORDER = (
 
 _DM_ASSISTANT_HELP_DETAILS: dict[str, tuple[str, str]] = {
     "agent": ("agent [codex|claude|gemini] [model] [effort]", "show or switch assistant backend"),
+    "which-agent": ("which-agent", "show assistant backend, model, and effort"),
     "model": ("model <id|default>", "show or set assistant model"),
     "effort": ("effort <level|default>", "show or set assistant effort"),
     "reset": ("reset", "clear the assistant session"),
@@ -195,6 +197,7 @@ _DM_HELP_DETAILS: dict[str, tuple[str, str]] = {
 
 _DM_ASSISTANT_COMMANDS = {
     "agent",
+    "which-agent",
     "agents",
     "model",
     "models",
@@ -738,7 +741,7 @@ async def _handle_dm_assistant_command(
         return True
 
     dispatch_rest = _dm_assistant_command_rest(cmd, rest)
-    if cmd == "agent" and not (rest or "").strip():
+    if cmd in {"agent", "which-agent"} and not (rest or "").strip():
         await _send_dm_assistant_agent_info(router, event, sink)
         return True
     if router._totp_enabled(event) and router._totp_required_for_command(event, cmd, dispatch_rest):
@@ -793,15 +796,17 @@ def _dm_assistant_command_rest(cmd: str, rest: str) -> str:
         if parts[0] == DM_ASSISTANT_SESSION:
             return raw
         return f"{DM_ASSISTANT_SESSION} {raw}"
-    if cmd == "agent":
+    if cmd in {"agent", "which-agent"}:
         if not raw:
             return raw
         from ..agents.factory import KNOWN_BACKENDS
 
         parts = raw.split()
-        if parts[0].lower() in KNOWN_BACKENDS:
+        if cmd == "agent" and parts[0].lower() in KNOWN_BACKENDS:
             return f"{DM_ASSISTANT_SESSION} {raw}"
-        return raw
+        if parts[0] == DM_ASSISTANT_SESSION:
+            return raw
+        return f"{DM_ASSISTANT_SESSION} {raw}"
     return raw
 
 

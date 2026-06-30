@@ -3367,6 +3367,21 @@ def test_dm_assistant_model_and_effort_default_to_dm_session(tmp_path):
     assert router.session_reasoning_effort("dm-1", "dm") == "low"
 
 
+def test_dm_assistant_which_agent_reports_current_backend(tmp_path):
+    repo = tmp_path / "pycodebridge"
+    repo.mkdir()
+    router, _ = _build_router(tmp_path)
+    router.cfg.dm_assistant.enabled = True
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+
+    async def run():
+        await router.handle_message(_discord_dm_event("!c which-agent"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Session 'dm' backend: codex." in msg for msg in texts)
+
+
 def test_dm_assistant_status_reflects_dm_session(tmp_path):
     repo = tmp_path / "pycodebridge"
     repo.mkdir()
@@ -3383,6 +3398,7 @@ def test_dm_assistant_status_reflects_dm_session(tmp_path):
     assert "Repo: pycodebridge" in text
     assert "Sessions (1/" in text
     assert "dm" in text
+    assert "agent codex" in text
 
 
 def test_dm_assistant_reset_clears_dm_session_only(tmp_path):
