@@ -1085,19 +1085,15 @@ caveats.
 
     @classmethod
     def _repo_tool_detail(cls, repo: Path, rel_path: str, version_args: Optional[list[str]] = None) -> str:
-        path = repo / rel_path
         base = cls._repo_tool_status(repo, rel_path)
-        if base != "available":
-            return base
-        return cls._format_tool_detail(path.name, cls._command_output([str(path)] + list(version_args or [])))
+        return base
 
     @classmethod
     def _external_tool_detail(cls, command: str, version_args: Optional[list[str]] = None) -> str:
         base = cls._external_tool_status(command)
         if base != "available":
             return "unavailable"
-        path = shutil.which(command) or command
-        return cls._format_tool_detail(command, cls._command_output([path] + list(version_args or [])))
+        return "available"
 
     @classmethod
     def _combined_tool_detail(
@@ -1109,50 +1105,13 @@ caveats.
         second_name, second_args = second
         first_detail = cls._external_tool_detail(first_name, first_args)
         second_detail = cls._external_tool_detail(second_name, second_args)
-        return f"{first_detail}; {second_detail}"
+        if first_detail == second_detail:
+            return first_detail
+        return f"{first_name}: {first_detail}; {second_name}: {second_detail}"
 
     @classmethod
     def _gh_tool_detail(cls) -> str:
-        status = cls._external_tool_detail("gh", ["--version"])
-        if status == "unavailable":
-            return status
-        login = cls._command_output(["gh", "api", "user", "--jq", ".login"])
-        if login.ok and login.text:
-            return f"{status} - authenticated as `{login.text}`"
-        return status
-
-    @staticmethod
-    def _format_tool_detail(label: str, result: "Router._CommandResult") -> str:
-        if not result.ok or not result.text:
-            return "available"
-        return f"available (`{result.text}`)"
-
-    @dataclass
-    class _CommandResult:
-        ok: bool
-        text: str = ""
-
-    @classmethod
-    def _command_output(cls, args: list[str]) -> "Router._CommandResult":
-        try:
-            proc = subprocess.run(
-                args,
-                capture_output=True,
-                text=True,
-                timeout=5,
-                check=False,
-            )
-        except Exception:
-            return cls._CommandResult(ok=False, text="")
-        if proc.returncode != 0:
-            return cls._CommandResult(ok=False, text="")
-        text = (proc.stdout or proc.stderr or "").strip().splitlines()
-        if not text:
-            return cls._CommandResult(ok=False, text="")
-        line = strip_control_codes(text[0]).strip()
-        if len(line) > 120:
-            line = line[:117] + "..."
-        return cls._CommandResult(ok=True, text=line)
+        return cls._external_tool_detail("gh", ["--version"])
 
     @staticmethod
     def _git_info_exclude_path(repo: Path) -> Optional[Path]:

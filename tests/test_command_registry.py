@@ -1,4 +1,5 @@
 from codebridge.commands.registry import (
+    AUTH_UNLOCK,
     SURFACE_ADMIN,
     SURFACE_CORE,
     SURFACE_SUPPORT,
@@ -25,6 +26,7 @@ def test_command_registry_aliases():
     assert "diag" in registry
     assert registry["diag"] is registry["health"]
     assert "doctor" in registry
+    assert registry["doctor"].auth == AUTH_UNLOCK
     assert "updates" in registry
     assert "u" in registry
     assert registry["u"] is registry["updates"]

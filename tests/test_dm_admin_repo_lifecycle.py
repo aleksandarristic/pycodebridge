@@ -54,8 +54,6 @@ class _FakeRouter:
     _external_tool_status = staticmethod(Router._external_tool_status)
     _combined_tool_detail = classmethod(Router._combined_tool_detail.__func__)
     _gh_tool_detail = classmethod(Router._gh_tool_detail.__func__)
-    _format_tool_detail = staticmethod(Router._format_tool_detail)
-    _CommandResult = Router._CommandResult
     _git_info_exclude_path = staticmethod(Router._git_info_exclude_path)
     _ensure_exclude_line = staticmethod(Router._ensure_exclude_line)
 
@@ -120,7 +118,7 @@ def test_dm_create_repo_applies_git_bootstrap(tmp_path, monkeypatch):
     assert "`./.venv/bin/python`: missing" in content
     assert "Python virtualenv policy" in content
     assert "keep it gitignored" in content
-    assert "`./.venv/bin/ruff`:" in content
+    assert "`./.venv/bin/pytest`: missing" in content
     assert "`ruby`:" in content
     agents = (tmp_path / "repo" / "AGENTS.md").read_text(encoding="utf-8")
     assert "## Intent" in agents
@@ -234,7 +232,7 @@ def test_agent_env_bootstrap_uses_common_exclude_for_linked_worktree(tmp_path):
         assert exclude_lines.count(line) == 1
 
 
-def test_agent_env_bootstrap_uses_template_when_configured(tmp_path, monkeypatch):
+def test_agent_env_bootstrap_uses_template_when_configured(tmp_path):
     cfg = cfgmod.Config()
     template = tmp_path / ".agent-env.local.sample.md"
     template.write_text(
@@ -245,27 +243,15 @@ def test_agent_env_bootstrap_uses_template_when_configured(tmp_path, monkeypatch
     router = _FakeRouter(cfg)
     repo = tmp_path / "repo"
     (repo / ".git" / "info").mkdir(parents=True)
-
-    def fake_command_output(args):
-        joined = " ".join(args)
-        if "gh api user" in joined:
-            return Router._CommandResult(ok=True, text="octocat")
-        if "gh --version" in joined:
-            return Router._CommandResult(ok=True, text="gh version 2.46.0")
-        if "python3 --version" in joined:
-            return Router._CommandResult(ok=True, text="Python 3.12.13")
-        return Router._CommandResult(ok=True, text="tool 1.0.0")
-
-    monkeypatch.setattr(_FakeRouter, "_command_output", classmethod(lambda cls, args: fake_command_output(args)), raising=False)
     router.bootstrap_agent_env_cache(str(repo))
 
     content = (repo / LOCAL_AGENT_ENV_FILENAME).read_text(encoding="utf-8")
     assert "{{CHECKED_DATE}}" not in content
     assert "python: missing" in content
-    assert "git: available (`tool 1.0.0`)" in content
+    assert "git: available" in content
 
 
-def test_agent_env_bootstrap_renders_rich_default_template(tmp_path, monkeypatch):
+def test_agent_env_bootstrap_renders_rich_default_template(tmp_path):
     cfg = cfgmod.Config()
     router = _FakeRouter(cfg)
     repo = tmp_path / "repo"
@@ -276,32 +262,12 @@ def test_agent_env_bootstrap_renders_rich_default_template(tmp_path, monkeypatch
         path = venv_bin / name
         path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         path.chmod(0o755)
-
-    def fake_command_output(args):
-        joined = " ".join(args)
-        mapping = {
-            ".venv/bin/python --version": "Python 3.12.13",
-            ".venv/bin/pip --version": "pip 25.0.1",
-            ".venv/bin/ruff --version": "ruff 0.5.0",
-            "gh --version": "gh version 2.46.0",
-            "gh api user --jq .login": "aleksandarristic",
-            "git --version": "git version 2.47.3",
-            "uv --version": "uv 0.11.25",
-            "python3 --version": "Python 3.12.13",
-        }
-        for key, value in mapping.items():
-            if key in joined:
-                return Router._CommandResult(ok=True, text=value)
-        return Router._CommandResult(ok=False, text="")
-
-    monkeypatch.setattr(_FakeRouter, "_command_output", classmethod(lambda cls, args: fake_command_output(args)), raising=False)
     sample = (Path(__file__).resolve().parents[1] / ".agent-env.local.sample.md").read_text(encoding="utf-8")
     content = router._render_agent_env_template(sample, repo)
     assert "Treat it as an advisory cache only" in content
-    assert "`./.venv/bin/python`: available (`Python 3.12.13`)" in content
-    assert "`./.venv/bin/ruff`: available (`ruff 0.5.0`)" in content
-    assert "`gh`: available (`gh version 2.46.0`) - authenticated as `aleksandarristic`" in content
-    assert "`uv`: available (`uv 0.11.25`)" in content
+    assert "`./.venv/bin/python`: available" in content
+    assert "`./.venv/bin/ruff`: available" in content
+    assert "`git`: available" in content
     assert "## Worktrees and remote hygiene" in content
     assert "## Multi-agent dispatch" in content
 

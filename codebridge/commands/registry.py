@@ -377,7 +377,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             aliases=("budgets",),
         ),
         CommandSpec("peek", "peek [session]", "show active status and last output time", "General", _cmd_peek, AUTH_OPEN, aliases=("pk",)),
-        CommandSpec("doctor", "doctor [session]", "show stuck-run diagnostics for a session", "General", _cmd_doctor, AUTH_OPEN),
+        CommandSpec("doctor", "doctor [session]", "show stuck-run diagnostics for a session", "General", _cmd_doctor, AUTH_UNLOCK),
         CommandSpec(
             "updates",
             "updates",
