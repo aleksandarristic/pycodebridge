@@ -8,7 +8,7 @@ The inventory below is still the full compatibility surface, but the preferred h
 
 - Golden path: `help`, `status`, `start`, `resume`, `use`, `reset`, `answer`, `steer`, `approve`, `deny`, `stop`, `wait`, `show`, `changes`, `tests`, `branch`, `feature`, `git`, `gh`
 - Promoted run shortcuts only: `!a`, `!s`, `!y`, `!n`
-- Support/advanced commands after the golden path: `choose`, `workflow`, `interrupt`, `/quit`, `cancel`, `ps`, `model`, `models`, `spec`, `download`, `rerun`, `peek`, `updates`, `health`
+- Support/advanced commands after the golden path: `choose`, `workflow`, `interrupt`, `/quit`, `cancel`, `ps`, `model`, `models`, `spec`, `download`, `rerun`, `peek`, `doctor`, `updates`, `health`
 - Admin/maintenance commands last: security/runtime config, session maintenance, repo lifecycle, audit/log inspection
 
 Docs and help should prefer canonical `!c ...` examples for most commands and treat generic top-level `!<command>` forms as compatibility surface rather than the main interface.
@@ -32,6 +32,7 @@ Source of truth: `codebridge/commands/registry.py`.
 | `stats [session]` | `usage` | Channel | repo channel/thread | open | audit/state | likely redundant |
 | `budget ...` | `budgets` | Channel | repo channel/thread | open | audit/state | admin-only |
 | `peek [session]` | `pk` | Channel | repo channel/thread | open | state | likely redundant |
+| `doctor [session]` | none | Channel | repo channel/thread | open | bridge-local | convenience |
 | `updates` | `update`, `version`, `u` | Channel | repo channel/thread | open | bridge-local | convenience |
 | `health` | `diag` | Channel | repo channel/thread | open | bridge-local | convenience |
 | `config` | `cfg` | Channel | repo channel/thread | unlock/default | bridge-local | admin-only |

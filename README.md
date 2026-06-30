@@ -231,6 +231,7 @@ TOTP not required (open in channel):
 - `!c stats [session]`
 - `!c budget [status]`
 - `!c peek [session]`
+- `!c doctor [session]`
 - `!c updates`
 - `!c agents`
 - `!c models [session] [refresh|--refresh]`

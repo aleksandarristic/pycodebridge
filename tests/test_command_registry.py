@@ -24,6 +24,7 @@ def test_command_registry_aliases():
     assert "health" in registry
     assert "diag" in registry
     assert registry["diag"] is registry["health"]
+    assert "doctor" in registry
     assert "updates" in registry
     assert "u" in registry
     assert registry["u"] is registry["updates"]
@@ -79,6 +80,7 @@ def test_command_registry_help_text():
     assert "Advanced and support:" in text
     assert "Admin and maintenance:" in text
     assert "**`!c help [command]`**" in text
+    assert "**`!c doctor [session]`**" in text
     assert "**`!c use <session>`**" in text
     assert "**`!c reset [session]`**" in text
     assert "**`!c clear`**" in text

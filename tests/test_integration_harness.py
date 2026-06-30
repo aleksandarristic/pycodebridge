@@ -2028,6 +2028,34 @@ def test_integration_run_heartbeat_message(tmp_path, monkeypatch):
     assert any("working for" in t for t in texts)
 
 
+def test_integration_doctor_reports_stuck_run_diagnostics(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    router.update_state("chan", "default", "repo", str(repo), "thread-1", "", "")
+    router._usage.setdefault("chan", {})["default"] = UsageStats(input_tokens=11, output_tokens=7, total_tokens=18)
+    router._begin_run_relay("chan", "default")
+    router._session_log.append("chan", "default", "run.start", {"ok": True}, repo_name="repo")
+    router.update_activity("chan", "default")
+    stale = SimpleNamespace(is_running=True, returncode=None, thread_id="proc-thread")
+
+    async def run():
+        await router.set_active("chan", "default", stale)
+        await router.handle_message(_discord_event("!c doctor", "code-repo"), sink)
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Doctor for session 'default':" in t for t in texts)
+    assert any("- Active process: yes" in t for t in texts)
+    assert any("- Queue status: none" in t for t in texts)
+    assert any("- Run relay: present" in t for t in texts)
+    assert any("- Session logs:" in t for t in texts)
+    assert any("- Suggested next step:" in t for t in texts)
+
+
 def test_integration_late_progress_is_suppressed_after_terminal_summary(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()

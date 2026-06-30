@@ -42,6 +42,7 @@ COMMAND_MODEL_META: Dict[str, Dict[str, str]] = {
     "stats": {"surface": SURFACE_ADMIN, "namespace": "diag"},
     "budget": {"surface": SURFACE_ADMIN, "namespace": "diag"},
     "peek": {"surface": SURFACE_ADVANCED, "namespace": "diag"},
+    "doctor": {"surface": SURFACE_SUPPORT, "namespace": "diag"},
     "updates": {"surface": SURFACE_ADVANCED, "namespace": "diag"},
     "health": {"surface": SURFACE_ADVANCED, "namespace": "diag"},
     "config": {"surface": SURFACE_ADMIN, "namespace": "admin"},
@@ -376,6 +377,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             aliases=("budgets",),
         ),
         CommandSpec("peek", "peek [session]", "show active status and last output time", "General", _cmd_peek, AUTH_OPEN, aliases=("pk",)),
+        CommandSpec("doctor", "doctor [session]", "show stuck-run diagnostics for a session", "General", _cmd_doctor, AUTH_OPEN),
         CommandSpec(
             "updates",
             "updates",
@@ -647,6 +649,13 @@ async def _cmd_peek(router: Any, message: MessageEvent, sink: ResponseSink, repo
     if not session:
         return
     await router.handle_peek(sink, session)
+
+
+async def _cmd_doctor(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
+    session = await _resolve_session_name(router, message, sink, rest.strip())
+    if not session:
+        return
+    await router.handle_doctor(sink, session, repo_name, repo_path)
 
 
 async def _cmd_unlock(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

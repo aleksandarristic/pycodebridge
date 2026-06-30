@@ -2102,6 +2102,109 @@ caveats.
             return
         await self.reply(sink, f"Agent is running for session '{session}'.")
 
+    async def handle_doctor(self, sink: ResponseSink, session: str, repo_name: str, repo_path: str) -> None:
+        """Show bridge-local diagnostics for a potentially stuck session."""
+        session = normalize_session(session or DEFAULT_SESSION)
+        channel_id = sink.channel_id
+        state = self.state.load()
+        channel = state.channels.get(channel_id)
+        sess = channel.sessions.get(session) if channel else None
+        active = await self.get_active(channel_id, session)
+        statuses = await self.coordinator.snapshot(channel_id)
+        session_statuses = [s for s in statuses if (s.session or DEFAULT_SESSION) == session]
+        waiting = session in self._prune_awaiting_input(channel_id)
+        last_activity = self.get_activity(channel_id, session)
+        last_activity_idle = self._session_idle_seconds(last_activity) if last_activity else -1
+        run_state = self._run_relay(channel_id, session)
+        usage = self.get_usage(channel_id, session)
+        backend = self.coordinator.session_backend(channel_id, session) or getattr(self.cfg.agent, "default_backend", "codex")
+        model = self.session_model(channel_id, session) or self.cfg.codex.model or "default"
+        reasoning = self.session_reasoning_effort(channel_id, session) or self.cfg.codex.model_reasoning_effort or "default"
+        effective_repo_name = repo_name or (sess.repo_name if sess else "") or "n/a"
+        effective_repo_path = repo_path or (sess.repo_path if sess else "") or "n/a"
+        worktree_path = (getattr(sess, "worktree_path", "") if sess else "") or "n/a"
+        task_branch = (getattr(sess, "task_branch", "") if sess else "") or "n/a"
+        proc_running = getattr(active, "is_running", None)
+        proc_returncode = getattr(active, "returncode", None)
+        proc_thread = getattr(active, "thread_id", "") if active is not None else ""
+
+        queue_bits: list[str] = []
+        for status in session_statuses:
+            if status.status == "running":
+                queue_bits.append(f"{status.job_id} running")
+            else:
+                queue_bits.append(f"{status.job_id} queued@{status.position}")
+        queue_text = ", ".join(queue_bits) if queue_bits else "none"
+
+        session_paths: list[str] = []
+        for path in self._session_log.session_paths(channel_id, session, repo_name=effective_repo_name):
+            try:
+                if path.exists():
+                    session_paths.append(str(path))
+            except Exception:
+                continue
+        latest_session_paths = session_paths[-3:]
+        latest_audit = "none"
+        try:
+            summaries = self.audit.summaries(channel_id, session, 1)
+            if summaries:
+                summary = summaries[0]
+                latest_audit = (
+                    f"seq {summary.seq}, started {summary.started_at or 'n/a'}, "
+                    f"ended {summary.ended_at or 'n/a'}, path {summary.path}"
+                )
+        except Exception as exc:
+            latest_audit = f"unavailable ({exc})"
+
+        if last_activity_idle >= 0:
+            activity_text = f"{last_activity} ({self._format_duration(last_activity_idle)} ago)"
+        else:
+            activity_text = last_activity or "n/a"
+
+        run_state_text = "none"
+        if run_state is not None:
+            run_state_text = (
+                f"present, terminal={run_state.terminal_status or 'no'}, code={run_state.terminal_code if run_state.terminal_code is not None else 'n/a'}, "
+                f"friendly_error={'yes' if run_state.friendly_error else 'no'}, final_result_seen={'yes' if run_state.final_result_seen else 'no'}, "
+                f"final_result_error={'yes' if run_state.final_result_error else 'no'}, forced_exit={'yes' if run_state.final_result_forced_exit else 'no'}, "
+                f"suppressed_progress={run_state.suppressed_progress_events}"
+            )
+
+        next_step = "No obvious bridge-local fault."
+        if active is not None and not waiting and last_activity_idle >= 300:
+            next_step = "Likely stuck with no recent agent events. Try `!c interrupt`, then `!c stop`, then `!c kill`, then `!c reset`."
+        elif active is None and run_state is not None:
+            next_step = "Tracked process is gone but run relay still exists. `!c kill` or `!c reset` should clear stale state."
+        elif waiting:
+            next_step = "Bridge believes the session is waiting for input. Use `!c answer`, `!c approve`, or `!c deny`."
+
+        lines = [
+            f"Doctor for session '{session}':",
+            f"- Channel: {channel_id}",
+            f"- Repo: {effective_repo_name}",
+            f"- Repo path: {effective_repo_path}",
+            f"- State dir: {self.cfg.state.data_dir or 'n/a'}",
+            f"- Log dir: {self.cfg.state.log_dir or 'n/a'}",
+            f"- Stored session: {'yes' if sess is not None else 'no'}",
+            f"- Stored thread: {(sess.thread_id if sess else '') or 'n/a'}",
+            f"- Backend/model/effort: {backend} / {model} / {reasoning}",
+            f"- Worktree path: {worktree_path}",
+            f"- Task branch: {task_branch}",
+            f"- Active process: {'yes' if active is not None else 'no'}",
+            f"- Process running: {proc_running if proc_running is not None else 'unknown'}",
+            f"- Process return code: {proc_returncode if proc_returncode is not None else 'n/a'}",
+            f"- Process thread id: {proc_thread or 'n/a'}",
+            f"- Queue status: {queue_text}",
+            f"- Awaiting input: {'yes' if waiting else 'no'}",
+            f"- Last activity: {activity_text}",
+            f"- Run relay: {run_state_text}",
+            f"- Usage: input {usage.input_tokens}, output {usage.output_tokens}, total {usage.total_tokens}" if usage else "- Usage: n/a",
+            f"- Session logs: {', '.join(latest_session_paths)}" if latest_session_paths else "- Session logs: none found",
+            f"- Latest audit: {latest_audit}",
+            f"- Suggested next step: {next_step}",
+        ]
+        await self.reply(sink, "\n".join(lines))
+
     async def send_status(self, event: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str) -> None:
         """Send status summary for the channel and sessions."""
         state = self.state.load()
