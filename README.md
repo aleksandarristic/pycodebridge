@@ -422,6 +422,7 @@ Repo names passed to DM commands are normalized to lowercase (for example, `Prob
 - `!c copy/cp <from> <to>` (legacy: `copyrepo`)
 - `!c deleterepo/del <name>`
 - `!c renamerepo/ren <from> <to>`
+- `!c sync-agent-env <repo>|--all` (refresh `.agent-env.local.md` from the current template in one or every managed repo; preserves everything from `## Notes` onward, skips a repo if that heading is missing rather than overwrite it)
 - `!c unlock/ul [gh|all] [status|ttl]`
 - `!c lock/lk [gh|all]`
 

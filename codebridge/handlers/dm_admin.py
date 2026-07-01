@@ -143,6 +143,7 @@ _DM_ADMIN_HELP_OVERVIEW_ORDER = (
     "copy",
     "deleterepo",
     "renamerepo",
+    "sync-agent-env",
 )
 
 _DM_ASSISTANT_HELP_ORDER = (
@@ -193,6 +194,10 @@ _DM_HELP_DETAILS: dict[str, tuple[str, str]] = {
     "copy": ("copy/cp <from> <to>", "copy repo"),
     "deleterepo": ("deleterepo/del <name>", "delete repo"),
     "renamerepo": ("renamerepo/ren <from> <to>", "rename repo"),
+    "sync-agent-env": (
+        "sync-agent-env <repo>|--all",
+        "refresh .agent-env.local.md from the current template, preserving '## Notes' onward",
+    ),
 }
 
 _DM_ASSISTANT_COMMANDS = {
@@ -399,6 +404,41 @@ async def dm_status(router: "Router") -> str:
         for st in statuses:
             lines.append(f"{channel_id}: {st.job_id} [{st.status}] session:{st.session or DEFAULT_SESSION} pos:{st.position}")
     return "\n".join(lines) if lines else "No queued or running jobs."
+
+
+async def dm_sync_agent_env(
+    router: "Router",
+    event: MessageEvent,
+    sink: ResponseSink,
+    arg: str,
+    entry: Optional[Entry],
+) -> Optional[Exception]:
+    """Refresh .agent-env.local.md for one repo or every managed repo via DM admin command."""
+    arg = arg.strip()
+    if not arg:
+        return RuntimeError("Usage: !c sync-agent-env <repo>|--all")
+    if arg == "--all":
+        results = router.sync_all_agent_env_caches()
+        router.logger.info(
+            "dm.sync_agent_env.all", extra={"platform": event.platform, "user_id": event.author_id, "count": len(results)}
+        )
+        if not results:
+            await dm_reply(router, sink, entry, "No managed repos found under code_root.")
+            return None
+        lines = [f"{name}: {status}" for name, status in results]
+        await dm_reply(router, sink, entry, "Synced .agent-env.local.md:\n" + "\n".join(lines))
+        return None
+    repo_name = pathutil.normalize_repo_name(arg)
+    try:
+        repo_path = pathutil.resolve_repo_path(router.cfg.codex.code_root, repo_name)
+    except Exception as exc:
+        return exc
+    status = router.sync_agent_env_cache(repo_path)
+    router.logger.info(
+        "dm.sync_agent_env.ok", extra={"platform": event.platform, "user_id": event.author_id, "repo": repo_name, "status": status}
+    )
+    await dm_reply(router, sink, entry, f"{repo_name}: {status}")
+    return None
 
 
 async def dm_create_repo(
@@ -847,6 +887,7 @@ async def _dispatch_prefixed_dm_command(
         "copy",
         "deleterepo",
         "renamerepo",
+        "sync-agent-env",
     }
 
     if cmd == "help":
@@ -957,6 +998,11 @@ async def _dispatch_prefixed_dm_command(
             return
         if cmd == "unpin":
             await router.handle_unpin_all_channels(sink)
+            return
+        if cmd == "sync-agent-env":
+            err = await dm_sync_agent_env(router, event, sink, rest, entry)
+            if err:
+                await send_forbidden(str(err))
             return
         if cmd == "create":
             name = rest.strip()

@@ -48,8 +48,11 @@ class _FakeRouter:
     _render_agent_env_content = Router._render_agent_env_content
     _repo_tool_status = staticmethod(Router._repo_tool_status)
     _external_tool_status = staticmethod(Router._external_tool_status)
+    _split_at_notes = staticmethod(Router._split_at_notes)
     _git_info_exclude_path = staticmethod(Router._git_info_exclude_path)
     _ensure_exclude_line = staticmethod(Router._ensure_exclude_line)
+    sync_agent_env_cache = Router.sync_agent_env_cache
+    sync_all_agent_env_caches = Router.sync_all_agent_env_caches
 
     def __init__(self, cfg: cfgmod.Config) -> None:
         self.cfg = cfg
@@ -282,3 +285,133 @@ def test_ensure_agent_env_reference_appends_to_existing_agents(tmp_path):
     assert content.count("## Local Environment") == 1
     assert LOCAL_AGENT_ENV_FILENAME in content
     assert "## Intent" in content
+
+
+def test_sync_agent_env_cache_creates_when_missing(tmp_path):
+    cfg = cfgmod.Config()
+    router = _FakeRouter(cfg)
+    repo = tmp_path / "repo"
+    (repo / ".git" / "info").mkdir(parents=True)
+
+    status = router.sync_agent_env_cache(str(repo))
+
+    assert status == "created"
+    assert (repo / LOCAL_AGENT_ENV_FILENAME).exists()
+
+
+def test_sync_agent_env_cache_preserves_notes_and_refreshes_above(tmp_path):
+    cfg = cfgmod.Config()
+    router = _FakeRouter(cfg)
+    repo = tmp_path / "repo"
+    (repo / ".git" / "info").mkdir(parents=True)
+    env_path = repo / LOCAL_AGENT_ENV_FILENAME
+    env_path.write_text(
+        "# Local Agent Environment\n\nSTALE PLACEHOLDER CONTENT\n\n"
+        "## Notes\n\n- my custom note about this repo\n- another local caveat\n",
+        encoding="utf-8",
+    )
+
+    status = router.sync_agent_env_cache(str(repo))
+
+    assert status == "updated"
+    content = env_path.read_text(encoding="utf-8")
+    assert "STALE PLACEHOLDER CONTENT" not in content
+    assert "`git`: available" in content
+    assert content.endswith("## Notes\n\n- my custom note about this repo\n- another local caveat\n")
+
+
+def test_sync_agent_env_cache_skips_when_notes_heading_missing(tmp_path):
+    cfg = cfgmod.Config()
+    router = _FakeRouter(cfg)
+    repo = tmp_path / "repo"
+    (repo / ".git" / "info").mkdir(parents=True)
+    env_path = repo / LOCAL_AGENT_ENV_FILENAME
+    original = "# Local Agent Environment\n\nno notes heading here\n"
+    env_path.write_text(original, encoding="utf-8")
+
+    status = router.sync_agent_env_cache(str(repo))
+
+    assert status.startswith("skipped")
+    assert env_path.read_text(encoding="utf-8") == original
+
+
+def test_sync_agent_env_cache_reports_unchanged(tmp_path):
+    cfg = cfgmod.Config()
+    router = _FakeRouter(cfg)
+    repo = tmp_path / "repo"
+    (repo / ".git" / "info").mkdir(parents=True)
+    router.sync_agent_env_cache(str(repo))
+
+    status = router.sync_agent_env_cache(str(repo))
+
+    assert status == "unchanged"
+
+
+def test_sync_all_agent_env_caches_skips_non_git_dirs(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.codex.code_root = str(tmp_path)
+    router = _FakeRouter(cfg)
+    git_repo = tmp_path / "gitrepo"
+    (git_repo / ".git" / "info").mkdir(parents=True)
+    plain_dir = tmp_path / "notarepo"
+    plain_dir.mkdir()
+
+    results = router.sync_all_agent_env_caches()
+
+    assert results == [("gitrepo", "created")]
+    assert (git_repo / LOCAL_AGENT_ENV_FILENAME).exists()
+    assert not (plain_dir / LOCAL_AGENT_ENV_FILENAME).exists()
+
+
+def test_dm_sync_agent_env_single_repo(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.codex.code_root = str(tmp_path)
+    router = _FakeRouter(cfg)
+    sink = _FakeSink()
+    event = _dm_event()
+    repo = tmp_path / "repo"
+    (repo / ".git" / "info").mkdir(parents=True)
+
+    async def run():
+        return await dm_admin.dm_sync_agent_env(router, event, sink, "repo", entry=None)
+
+    err = asyncio.run(run())
+
+    assert err is None
+    assert sink.sent == ["repo: created"]
+    assert (repo / LOCAL_AGENT_ENV_FILENAME).exists()
+
+
+def test_dm_sync_agent_env_all(tmp_path):
+    cfg = cfgmod.Config()
+    cfg.codex.code_root = str(tmp_path)
+    router = _FakeRouter(cfg)
+    sink = _FakeSink()
+    event = _dm_event()
+    (tmp_path / "repo-a" / ".git" / "info").mkdir(parents=True)
+    (tmp_path / "repo-b" / ".git" / "info").mkdir(parents=True)
+
+    async def run():
+        return await dm_admin.dm_sync_agent_env(router, event, sink, "--all", entry=None)
+
+    err = asyncio.run(run())
+
+    assert err is None
+    assert len(sink.sent) == 1
+    assert "repo-a: created" in sink.sent[0]
+    assert "repo-b: created" in sink.sent[0]
+
+
+def test_dm_sync_agent_env_requires_argument(tmp_path):
+    cfg = cfgmod.Config()
+    router = _FakeRouter(cfg)
+    sink = _FakeSink()
+    event = _dm_event()
+
+    async def run():
+        return await dm_admin.dm_sync_agent_env(router, event, sink, "", entry=None)
+
+    err = asyncio.run(run())
+
+    assert isinstance(err, RuntimeError)
+    assert sink.sent == []

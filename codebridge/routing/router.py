@@ -101,6 +101,7 @@ LOCAL_AGENT_EXCLUDE_LINES = (LOCAL_AGENT_ENV_FILENAME, ".venv/")
 _DEFAULT_AGENT_ENV_TEMPLATE = Path(__file__).resolve().parents[2] / ".agent-env.local.sample.md"
 _AGENT_ENV_TOOL_RE = re.compile(r"\{\{TOOL:([^}]+)\}\}")
 _AGENT_ENV_REPO_TOOL_RE = re.compile(r"\{\{REPO_TOOL:([^}]+)\}\}")
+_AGENT_ENV_NOTES_HEADING_RE = re.compile(r"(?m)^##\s+Notes\s*$")
 _AGENT_ENV_AGENTS_NOTE = """## Local Environment
 
 - Check `.agent-env.local.md` for machine-local tooling and runtime notes.
@@ -1019,6 +1020,58 @@ class Router:
         template_path = Path(tmpl) if tmpl else _DEFAULT_AGENT_ENV_TEMPLATE
         data = template_path.read_text(encoding="utf-8")
         return self._render_agent_env_template(data, repo)
+
+    @staticmethod
+    def _split_at_notes(text: str) -> tuple[str, Optional[str]]:
+        """Split at the '## Notes' heading; return (before, from-heading-on) or (text, None) if absent."""
+        match = _AGENT_ENV_NOTES_HEADING_RE.search(text)
+        if not match:
+            return text, None
+        return text[: match.start()], text[match.start() :]
+
+    def sync_agent_env_cache(self, repo_path: str) -> str:
+        """Refresh the machine-managed part of .agent-env.local.md from the current template.
+
+        Everything from the '## Notes' heading onward is preserved byte-for-byte, since that
+        section (and anything appended below it) is the documented free-form area for manual
+        edits. Returns a short status: created/updated/unchanged/skipped: <reason>.
+        """
+        repo = Path(repo_path)
+        env_path = repo / LOCAL_AGENT_ENV_FILENAME
+        if not env_path.exists():
+            self.bootstrap_agent_env_cache(repo_path)
+            return "created"
+        existing = env_path.read_text(encoding="utf-8")
+        _, existing_notes = self._split_at_notes(existing)
+        if existing_notes is None:
+            return "skipped: no '## Notes' heading found"
+        tmpl = (self.cfg.repo_bootstrap.agent_env_template or "").strip()
+        template_path = Path(tmpl) if tmpl else _DEFAULT_AGENT_ENV_TEMPLATE
+        template_before, template_notes = self._split_at_notes(template_path.read_text(encoding="utf-8"))
+        if template_notes is None:
+            return "skipped: template has no '## Notes' heading"
+        new_content = self._render_agent_env_template(template_before, repo) + existing_notes
+        if new_content == existing:
+            return "unchanged"
+        env_path.write_text(new_content, encoding="utf-8")
+        return "updated"
+
+    def sync_all_agent_env_caches(self) -> list[tuple[str, str]]:
+        """Run sync_agent_env_cache over every managed repo under codex.code_root."""
+        base = self.cfg.codex.code_root
+        if not base or not os.path.isdir(base):
+            return []
+        results: list[tuple[str, str]] = []
+        for name in sorted(os.listdir(base)):
+            repo_path = os.path.join(base, name)
+            if not os.path.isdir(os.path.join(repo_path, ".git")):
+                continue
+            try:
+                status = self.sync_agent_env_cache(repo_path)
+            except Exception as exc:
+                status = f"error: {exc}"
+            results.append((name, status))
+        return results
 
     @staticmethod
     def _repo_tool_status(repo: Path, rel_path: str) -> str:
