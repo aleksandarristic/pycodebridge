@@ -189,14 +189,17 @@ network_access = true
 
 ### `repo_bootstrap`
 - `agents_template` (default empty) — optional AGENTS.md template for `!c create`.
-- `agent_env_template` (default empty) — optional template for seeding gitignored `.agent-env.local.md` in managed repos. This should point to a tracked sample file such as `./.agent-env.local.sample.md`, not to the gitignored target file itself.
+- `agent_env_template` (default empty) — optional override for the template used to seed gitignored `.agent-env.local.md` in managed repos. If empty, falls back to the tracked `.agent-env.local.sample.md` in this repo. Point overrides at a tracked sample file, not at the gitignored target file itself.
 - `spec_prompt` (default template) — prompt used by `!c spec`.
-- Managed create/clone/copy operations also seed `.agent-env.local.md` as a
-  gitignored local memory file with initial tool availability hints. Managed
-  create/clone/copy operations also ensure `AGENTS.md` references that local
-  file, creating `AGENTS.md` when needed. The ignore rules for
-  `.agent-env.local.md` and `.venv/` are written to `.git/info/exclude`, so
-  project `.gitignore` is not modified.
+- Managed create/clone/copy operations also seed `.agent-env.local.md` (once;
+  existing files are never overwritten) as a gitignored local memory file with
+  initial tool availability hints. The template supports `{{TOOL:<command>}}`
+  (checked on PATH) and `{{REPO_TOOL:<relative-path>}}` (checked inside the
+  repo checkout) placeholders — add a new line with either to track another
+  tool, no code changes needed. Managed create/clone/copy operations also
+  ensure `AGENTS.md` references that local file, creating `AGENTS.md` when
+  needed. The ignore rules for `.agent-env.local.md` and `.venv/` are written
+  to `.git/info/exclude`, so project `.gitignore` is not modified.
 
 ### Prompt profiles and model defaults
 - Routine coding/support tasks:

@@ -44,16 +44,10 @@ class _FakeLogger:
 
 
 class _FakeRouter:
-    _agent_env_content = classmethod(Router._agent_env_content.__func__)
-    _agent_env_template_vars = classmethod(Router._agent_env_template_vars.__func__)
     _render_agent_env_template = classmethod(Router._render_agent_env_template.__func__)
     _render_agent_env_content = Router._render_agent_env_content
-    _repo_tool_detail = classmethod(Router._repo_tool_detail.__func__)
     _repo_tool_status = staticmethod(Router._repo_tool_status)
-    _external_tool_detail = classmethod(Router._external_tool_detail.__func__)
     _external_tool_status = staticmethod(Router._external_tool_status)
-    _combined_tool_detail = classmethod(Router._combined_tool_detail.__func__)
-    _gh_tool_detail = classmethod(Router._gh_tool_detail.__func__)
     _git_info_exclude_path = staticmethod(Router._git_info_exclude_path)
     _ensure_exclude_line = staticmethod(Router._ensure_exclude_line)
 
@@ -236,7 +230,8 @@ def test_agent_env_bootstrap_uses_template_when_configured(tmp_path):
     cfg = cfgmod.Config()
     template = tmp_path / ".agent-env.local.sample.md"
     template.write_text(
-        "# Local Agent Environment\n\n- Last checked: {{CHECKED_DATE}}\n- python: {{PYTHON_STATUS}}\n- git: {{GIT_STATUS}}\n",
+        "# Local Agent Environment\n\n- Last checked: {{CHECKED_DATE}}\n"
+        "- python: {{REPO_TOOL:.venv/bin/python}}\n- git: {{TOOL:git}}\n",
         encoding="utf-8",
     )
     cfg.repo_bootstrap.agent_env_template = str(template)

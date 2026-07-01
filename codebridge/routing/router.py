@@ -98,6 +98,9 @@ _FINAL_RESULT_EXIT_GRACE_SECONDS = 2.0
 _RUNTIME_OPTION_KEYS = ("run_heartbeat_seconds", "run_completion_min_seconds", "run_idle_timeout_seconds", "show_reasoning_details", "show_tool_calls")
 LOCAL_AGENT_ENV_FILENAME = ".agent-env.local.md"
 LOCAL_AGENT_EXCLUDE_LINES = (LOCAL_AGENT_ENV_FILENAME, ".venv/")
+_DEFAULT_AGENT_ENV_TEMPLATE = Path(__file__).resolve().parents[2] / ".agent-env.local.sample.md"
+_AGENT_ENV_TOOL_RE = re.compile(r"\{\{TOOL:([^}]+)\}\}")
+_AGENT_ENV_REPO_TOOL_RE = re.compile(r"\{\{REPO_TOOL:([^}]+)\}\}")
 _AGENT_ENV_AGENTS_NOTE = """## Local Environment
 
 - Check `.agent-env.local.md` for machine-local tooling and runtime notes.
@@ -1000,82 +1003,22 @@ class Router:
             env_path.write_text(self._render_agent_env_content(repo), encoding="utf-8")
 
     @classmethod
-    def _agent_env_content(cls, repo: Path) -> str:
-        checked = datetime.now(timezone.utc).date().isoformat()
-        return f"""# Local Agent Environment
-
-This gitignored file is local memory for agents running in this pycodebridge
-checkout. Agents may update it with environment hints that should not be
-committed, such as missing toolchains, available virtualenvs, or local runtime
-caveats.
-
-## Session
-
-- Runtime: PyCodeBridge managed repo
-- Last checked: {checked}
-
-## Repo Tooling
-
-- `./.venv/bin/python`: {cls._repo_tool_status(repo, ".venv/bin/python")}
-- `./.venv/bin/pip`: {cls._repo_tool_status(repo, ".venv/bin/pip")}
-- `./.venv/bin/pytest`: {cls._repo_tool_status(repo, ".venv/bin/pytest")}
-- Python virtualenv policy: create `.venv` only when this repo needs Python
-  tooling, and keep it gitignored.
-
-## External Tooling
-
-- `git`: {cls._external_tool_status("git")}
-- `gh`: {cls._external_tool_status("gh")}
-- `docker`: {cls._external_tool_status("docker")}
-- `mise`: {cls._external_tool_status("mise")}
-- `ruby`: {cls._external_tool_status("ruby")}
-- `bundle`: {cls._external_tool_status("bundle")}
-- `node`: {cls._external_tool_status("node")}
-- `npm`: {cls._external_tool_status("npm")}
-
-## Notes
-
-- Verify relevant commands in the current session before relying on this file.
-- Update this file with repo-specific setup notes, missing tools, and working
-  verification commands.
-"""
-
-    @classmethod
-    def _agent_env_template_vars(cls, repo: Path) -> dict[str, str]:
-        checked = datetime.now(timezone.utc).date().isoformat()
-        return {
-            "CHECKED_DATE": checked,
-            "PYTHON_STATUS": cls._repo_tool_detail(repo, ".venv/bin/python", ["--version"]),
-            "PIP_STATUS": cls._repo_tool_detail(repo, ".venv/bin/pip", ["--version"]),
-            "PYTEST_STATUS": cls._repo_tool_detail(repo, ".venv/bin/pytest"),
-            "RUFF_VENV_STATUS": cls._repo_tool_detail(repo, ".venv/bin/ruff", ["--version"]),
-            "GIT_STATUS": cls._external_tool_detail("git", ["--version"]),
-            "GH_STATUS": cls._gh_tool_detail(),
-            "UV_STATUS": cls._external_tool_detail("uv", ["--version"]),
-            "PYTHON3_STATUS": cls._external_tool_detail("python3", ["--version"]),
-            "RUFF_SYSTEM_STATUS": cls._external_tool_detail("ruff", ["--version"]),
-            "DOCKER_STATUS": cls._external_tool_detail("docker", ["--version"]),
-            "MISE_STATUS": cls._external_tool_detail("mise", ["--version"]),
-            "RUBY_STATUS": cls._external_tool_detail("ruby", ["--version"]),
-            "BUNDLE_STATUS": cls._external_tool_detail("bundle", ["--version"]),
-            "NODE_STATUS": cls._external_tool_detail("node", ["--version"]),
-            "NPM_STATUS": cls._external_tool_detail("npm", ["--version"]),
-            "NODE_NPM_STATUS": cls._combined_tool_detail(("node", ["--version"]), ("npm", ["--version"])),
-        }
-
-    @classmethod
     def _render_agent_env_template(cls, template: str, repo: Path) -> str:
-        content = template
-        for key, value in cls._agent_env_template_vars(repo).items():
-            content = content.replace(f"{{{{{key}}}}}", value)
+        checked = datetime.now(timezone.utc).date().isoformat()
+        content = template.replace("{{CHECKED_DATE}}", checked)
+        content = _AGENT_ENV_TOOL_RE.sub(
+            lambda m: cls._external_tool_status(m.group(1).strip()), content
+        )
+        content = _AGENT_ENV_REPO_TOOL_RE.sub(
+            lambda m: cls._repo_tool_status(repo, m.group(1).strip()), content
+        )
         return content
 
     def _render_agent_env_content(self, repo: Path) -> str:
         tmpl = (self.cfg.repo_bootstrap.agent_env_template or "").strip()
-        if tmpl:
-            data = Path(tmpl).read_text(encoding="utf-8")
-            return self._render_agent_env_template(data, repo)
-        return self._agent_env_content(repo)
+        template_path = Path(tmpl) if tmpl else _DEFAULT_AGENT_ENV_TEMPLATE
+        data = template_path.read_text(encoding="utf-8")
+        return self._render_agent_env_template(data, repo)
 
     @staticmethod
     def _repo_tool_status(repo: Path, rel_path: str) -> str:
@@ -1091,36 +1034,6 @@ caveats.
     @staticmethod
     def _external_tool_status(command: str) -> str:
         return "available" if shutil.which(command) else "missing"
-
-    @classmethod
-    def _repo_tool_detail(cls, repo: Path, rel_path: str, version_args: Optional[list[str]] = None) -> str:
-        base = cls._repo_tool_status(repo, rel_path)
-        return base
-
-    @classmethod
-    def _external_tool_detail(cls, command: str, version_args: Optional[list[str]] = None) -> str:
-        base = cls._external_tool_status(command)
-        if base != "available":
-            return "unavailable"
-        return "available"
-
-    @classmethod
-    def _combined_tool_detail(
-        cls,
-        first: tuple[str, list[str]],
-        second: tuple[str, list[str]],
-    ) -> str:
-        first_name, first_args = first
-        second_name, second_args = second
-        first_detail = cls._external_tool_detail(first_name, first_args)
-        second_detail = cls._external_tool_detail(second_name, second_args)
-        if first_detail == second_detail:
-            return first_detail
-        return f"{first_name}: {first_detail}; {second_name}: {second_detail}"
-
-    @classmethod
-    def _gh_tool_detail(cls) -> str:
-        return cls._external_tool_detail("gh", ["--version"])
 
     @staticmethod
     def _git_info_exclude_path(repo: Path) -> Optional[Path]:
