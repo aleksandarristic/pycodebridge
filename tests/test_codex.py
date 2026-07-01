@@ -259,6 +259,69 @@ def test_runner_parses_each_stdout_line_once(tmp_path, monkeypatch):
     assert evt is not None and evt.type == "item.completed"
 
 
+def test_runner_survives_oversized_stdout_line(tmp_path, monkeypatch):
+    # A single JSONL line (e.g. a command_execution result embedding a large
+    # tool output) that exceeds the stream buffer used to abort the whole run
+    # with a misleading codex.exit error. Force a tiny limit here so a short
+    # line reproduces the overrun without generating megabytes of test data.
+    import codebridge.agents.base as base_mod
+
+    monkeypatch.setattr(base_mod, "_STREAM_LIMIT", 200)
+
+    fake_codex = tmp_path / "codex_fake.py"
+    fake_codex.write_text(
+        "import json\n"
+        "print(json.dumps({"
+        "'type': 'item.completed', "
+        "'item': {'type': 'agent_message', 'text': 'x' * 500}"
+        "}), flush=True)\n"
+        "print(json.dumps({"
+        "'type': 'item.completed', "
+        "'thread_id': 't-2', "
+        "'item': {'type': 'agent_message', 'text': 'hi'}"
+        "}), flush=True)\n",
+        encoding="utf-8",
+    )
+
+    received: list[tuple[str, object]] = []
+    exits: list[tuple[object, int]] = []
+
+    async def on_jsonl(line, evt):
+        received.append((line, evt))
+
+    async def on_exit(err, rc):
+        exits.append((err, rc))
+
+    runner = Runner(sys.executable, "danger-full-access", {}, "")
+
+    async def run() -> int:
+        proc = await runner.run(
+            Options(
+                repo_path=str(tmp_path),
+                args=[str(fake_codex)],
+                env={},
+                on_jsonl=on_jsonl,
+                on_exit=on_exit,
+            )
+        )
+        rc = await proc.wait()
+        # on_exit fires from a background task once stdout/stderr draining
+        # finishes; give it a few loop iterations to run before asserting.
+        for _ in range(200):
+            if exits:
+                break
+            await asyncio.sleep(0.01)
+        return rc
+
+    assert asyncio.run(run()) == 0
+    # The oversized first line is skipped rather than aborting the run; the
+    # following line is still parsed normally and the run exits cleanly.
+    assert len(received) == 1
+    line, evt = received[0]
+    assert evt is not None and evt.session_id == "t-2"
+    assert exits and exits[0][0] is None
+
+
 def test_toml_string_escapes_control_chars():
     rendered = _toml_string('a"b\nc\\d')
     assert rendered.startswith('"')

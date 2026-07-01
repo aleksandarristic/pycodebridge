@@ -12,6 +12,7 @@ argument-building and :meth:`AgentBackend.parse` methods; the streaming
 """
 
 import asyncio
+import logging
 import os
 import signal
 import subprocess
@@ -27,7 +28,14 @@ except ImportError:  # pragma: no cover - Windows fallback.
 from ..util.ansi import strip_control_codes
 from ..util.prompt import needs_user_input
 
+_log = logging.getLogger(__name__)
+
 _background_tasks: set[asyncio.Task[Any]] = set()
+
+# asyncio's default stream buffer is 64 KiB; a single Codex JSONL line (e.g. a
+# command_execution result embedding a large tool output) can exceed that and
+# would otherwise abort the whole run with a misleading "codex.exit" error.
+_STREAM_LIMIT = 10 * 1024 * 1024
 
 
 @dataclass
@@ -195,6 +203,7 @@ class AgentBackend(ABC):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 creationflags=creationflags,
+                limit=_STREAM_LIMIT,
             )
         finally:
             if stdin_slave_fd is not None:
@@ -209,7 +218,18 @@ class AgentBackend(ABC):
             if not proc.stdout:
                 return RuntimeError("agent process has no stdout")
             try:
-                async for raw in proc.stdout:
+                while True:
+                    try:
+                        raw = await proc.stdout.readline()
+                    except ValueError as exc:
+                        # StreamReader.readline() raises ValueError (not
+                        # LimitOverrunError) once it has already resynced its
+                        # internal buffer past the oversized line, so it is
+                        # safe to skip and keep reading.
+                        _log.warning("agent stdout line exceeded stream limit, skipping: %s", exc)
+                        continue
+                    if not raw:
+                        break
                     line = raw.decode("utf-8", errors="replace").rstrip("\n")
                     # Parse once; the parsed event is reused by every consumer
                     # below (on_jsonl, thread-id capture, on_output).
@@ -236,7 +256,14 @@ class AgentBackend(ABC):
             if not proc.stderr:
                 return None
             try:
-                async for raw in proc.stderr:
+                while True:
+                    try:
+                        raw = await proc.stderr.readline()
+                    except ValueError as exc:
+                        _log.warning("agent stderr line exceeded stream limit, skipping: %s", exc)
+                        continue
+                    if not raw:
+                        break
                     line = raw.decode("utf-8", errors="replace").rstrip("\n")
                     if opts.on_stderr:
                         await opts.on_stderr(line)
