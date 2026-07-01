@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+import os
 from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
@@ -12,6 +14,22 @@ if TYPE_CHECKING:
     from ..sessions.coordinator import SessionCoordinator
 
 _log = logging.getLogger(__name__)
+
+_GIT_TIMEOUT_SECONDS = 60.0
+
+
+def _git_env() -> dict:
+    """Env for git subprocesses: disable interactive credential prompts.
+
+    Computed fresh per call (not frozen at import time) so it always
+    reflects the current process env, including PATH.
+    """
+    return {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+
+
+def _gh_env() -> dict:
+    """Env for gh subprocesses: disable interactive prompts."""
+    return {**os.environ, "GH_PROMPT_DISABLED": "1", "GIT_TERMINAL_PROMPT": "0"}
 
 
 class TaskCloseError(Exception):
@@ -114,13 +132,31 @@ class TaskCloser:
 # Helpers
 # ------------------------------------------------------------------
 
+async def _communicate_with_timeout(proc: "asyncio.subprocess.Process", label: str, timeout: float) -> tuple[bytes, bytes]:
+    """Run proc.communicate() with a hard timeout, killing the process on expiry.
+
+    Without this, a stalled network op or an unexpected credential prompt
+    (git/gh waiting on stdin) hangs the awaiting task forever since
+    communicate() has no timeout of its own.
+    """
+    try:
+        return await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        with contextlib.suppress(ProcessLookupError):
+            proc.kill()
+        with contextlib.suppress(Exception):
+            await proc.wait()
+        raise TaskCloseError(f"{label} timed out after {timeout:.0f}s")
+
+
 async def _git(repo_path: str, args: List[str]) -> None:
     proc = await asyncio.create_subprocess_exec(
         "git", "-C", repo_path, *args,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env=_git_env(),
     )
-    _, stderr_bytes = await proc.communicate()
+    _, stderr_bytes = await _communicate_with_timeout(proc, f"git {' '.join(args)}", _GIT_TIMEOUT_SECONDS)
     if proc.returncode != 0:
         stderr = (stderr_bytes or b"").decode("utf-8", errors="replace").strip()
         raise TaskCloseError(f"git {' '.join(args)} failed: {stderr}")
@@ -131,8 +167,9 @@ async def _git_output(repo_path: str, args: List[str]) -> str:
         "git", "-C", repo_path, *args,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env=_git_env(),
     )
-    stdout_bytes, _ = await proc.communicate()
+    stdout_bytes, _ = await _communicate_with_timeout(proc, f"git {' '.join(args)}", _GIT_TIMEOUT_SECONDS)
     return (stdout_bytes or b"").decode("utf-8", errors="replace")
 
 
@@ -142,8 +179,9 @@ async def _gh_output(repo_path: str, args: List[str]) -> str:
         cwd=repo_path,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env=_gh_env(),
     )
-    stdout_bytes, stderr_bytes = await proc.communicate()
+    stdout_bytes, stderr_bytes = await _communicate_with_timeout(proc, f"gh {' '.join(args)}", _GIT_TIMEOUT_SECONDS)
     if proc.returncode != 0:
         stderr = (stderr_bytes or b"").decode("utf-8", errors="replace").strip()
         raise TaskCloseError(f"gh {' '.join(args)} failed: {stderr}")

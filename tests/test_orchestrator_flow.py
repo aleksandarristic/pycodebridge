@@ -11,8 +11,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from codebridge.dispatch import orchestrator as orchestrator_module
 from codebridge.dispatch.orchestrator import (
     Orchestrator,
+    OrchestratorError,
+    _git,
     _make_task_branch_name,
     _branch_to_slug,
     _make_worker_branch_name,
@@ -432,3 +435,17 @@ def test_successful_worker_uncommitted_change_is_preserved_on_worker_branch(monk
     assert "worker.txt" not in task_tree.splitlines()
     assert "worker.txt" in worker_tree.splitlines()
     assert any("1 file(s) changed" in msg for msg in sink.messages)
+
+
+def test_git_command_times_out_instead_of_hanging_forever(tmp_path, monkeypatch):
+    """A stalled/prompting git process must be killed, not hang the awaiting task forever."""
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    fake_git = fake_bin / "git"
+    fake_git.write_text("#!/bin/sh\nsleep 5\n")
+    fake_git.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ['PATH']}")
+    monkeypatch.setattr(orchestrator_module, "_GIT_TIMEOUT_SECONDS", 0.2)
+
+    with pytest.raises(OrchestratorError, match="timed out"):
+        run(_git(str(tmp_path), ["status"]))

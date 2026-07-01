@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from dataclasses import dataclass, field
 from typing import List
 from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
 
-from codebridge.dispatch.closer import TaskCloser, TaskCloseError, parse_close_mode
+from codebridge.dispatch import closer as closer_module
+from codebridge.dispatch.closer import TaskCloser, TaskCloseError, _git, parse_close_mode
 
 
 def run(coro):
@@ -169,3 +171,17 @@ def test_cleanup_called_after_close(monkeypatch):
     run(closer.close("chan1", "default", "/repo", "pr", sink))
 
     assert cleaned == ["task/myrepo/20260623-150000"]
+
+
+def test_git_command_times_out_instead_of_hanging_forever(tmp_path, monkeypatch):
+    """A stalled/prompting git process must be killed, not hang the awaiting task forever."""
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    fake_git = fake_bin / "git"
+    fake_git.write_text("#!/bin/sh\nsleep 5\n")
+    fake_git.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ['PATH']}")
+    monkeypatch.setattr(closer_module, "_GIT_TIMEOUT_SECONDS", 0.2)
+
+    with pytest.raises(TaskCloseError, match="timed out"):
+        run(_git(str(tmp_path), ["status"]))

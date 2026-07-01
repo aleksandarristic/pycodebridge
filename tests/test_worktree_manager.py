@@ -6,10 +6,12 @@ import subprocess
 
 import pytest
 
+from codebridge.services import worktree as worktree_module
 from codebridge.services.worktree import (
     WorktreeError,
     WorktreeManager,
     _count_session_worktrees,
+    _git,
     _safe_slug,
 )
 
@@ -151,6 +153,20 @@ def test_safe_slug_replaces_special_chars():
 
 def test_safe_slug_truncates_at_40():
     assert len(_safe_slug("a" * 100)) == 40
+
+
+def test_git_command_times_out_instead_of_hanging_forever(tmp_path, monkeypatch):
+    """A stalled/prompting git process must be killed, not hang the awaiting task forever."""
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    fake_git = fake_bin / "git"
+    fake_git.write_text("#!/bin/sh\nsleep 5\n")
+    fake_git.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fake_bin}:{os.environ['PATH']}")
+    monkeypatch.setattr(worktree_module, "_GIT_TIMEOUT_SECONDS", 0.2)
+
+    with pytest.raises(WorktreeError, match="timed out"):
+        run(_git(str(tmp_path), ["status"]))
 
 
 def test_count_session_worktrees_parses_porcelain():

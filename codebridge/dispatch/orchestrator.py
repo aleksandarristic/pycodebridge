@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import re
@@ -25,6 +26,16 @@ _log = logging.getLogger(__name__)
 
 _SAFE_RE = re.compile(r"[^A-Za-z0-9._-]")
 _TASK_BRANCH_PREFIX = "task/"
+_GIT_TIMEOUT_SECONDS = 60.0
+
+
+def _git_env() -> dict:
+    """Env for git subprocesses: disable interactive credential prompts.
+
+    Computed fresh per call (not frozen at import time) so it always
+    reflects the current process env, including PATH.
+    """
+    return {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
 
 
 class OrchestratorError(Exception):
@@ -317,7 +328,7 @@ async def _count_changed_files(wt_path: str, base_branch: str) -> int:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )
-        stdout, _ = await proc.communicate()
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=_GIT_TIMEOUT_SECONDS)
         if proc.returncode != 0:
             return 0
         lines = [l for l in stdout.decode("utf-8", errors="replace").splitlines() if l.strip()]
@@ -347,14 +358,32 @@ async def _commit_dirty_worktree(wt_path: str, agent: str) -> bool:
     return True
 
 
+async def _communicate_with_timeout(proc: "asyncio.subprocess.Process", args: List[str], timeout: float) -> tuple[bytes, bytes]:
+    """Run proc.communicate() with a hard timeout, killing the process on expiry.
+
+    Without this, a stalled network op or an unexpected credential prompt
+    (git/gh waiting on stdin) hangs the awaiting task forever since
+    communicate() has no timeout of its own.
+    """
+    try:
+        return await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        with contextlib.suppress(ProcessLookupError):
+            proc.kill()
+        with contextlib.suppress(Exception):
+            await proc.wait()
+        raise OrchestratorError(f"git {' '.join(args)} timed out after {timeout:.0f}s")
+
+
 async def _git(repo_path: str, args: List[str]) -> None:
     """Run a git command and raise OrchestratorError on failure."""
     proc = await asyncio.create_subprocess_exec(
         "git", "-C", repo_path, *args,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env=_git_env(),
     )
-    _, stderr_bytes = await proc.communicate()
+    _, stderr_bytes = await _communicate_with_timeout(proc, args, _GIT_TIMEOUT_SECONDS)
     if proc.returncode != 0:
         stderr = (stderr_bytes or b"").decode("utf-8", errors="replace").strip()
         raise OrchestratorError(f"git {' '.join(args)} failed: {stderr}")
@@ -366,8 +395,9 @@ async def _git_output(repo_path: str, args: List[str]) -> str:
         "git", "-C", repo_path, *args,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env=_git_env(),
     )
-    stdout_bytes, stderr_bytes = await proc.communicate()
+    stdout_bytes, stderr_bytes = await _communicate_with_timeout(proc, args, _GIT_TIMEOUT_SECONDS)
     if proc.returncode != 0:
         stderr = (stderr_bytes or b"").decode("utf-8", errors="replace").strip()
         raise OrchestratorError(f"git {' '.join(args)} failed: {stderr}")
