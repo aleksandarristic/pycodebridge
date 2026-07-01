@@ -2026,7 +2026,7 @@ def test_integration_run_heartbeat_message(tmp_path, monkeypatch):
 
     asyncio.run(run())
     texts = [msg for msg, _, _ in sink.sent]
-    assert any("working for" in t for t in texts)
+    assert any(t.startswith("⏱️ ") and "working for" in t for t in texts)
 
 
 def test_integration_doctor_reports_stuck_run_diagnostics(tmp_path):

@@ -3037,7 +3037,7 @@ class Router:
             display = (backend_name or "agent").capitalize()
             if model:
                 display = f"{display} ({model})"
-            msg = f"{display} working for {self._format_duration(elapsed)}"
+            msg = f"⏱️ {display} working for {self._format_duration(elapsed)}"
             if reasoning_effort and (backend_name or "").lower() != "gemini":
                 msg += f" with {reasoning_effort} effort"
             if session and session != DEFAULT_SESSION:
