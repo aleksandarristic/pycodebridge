@@ -159,20 +159,29 @@ class ChunkingSink:
 
 
 class LockStateSink:
-    """Wrap a sink and prefix messages with lock-state emoji."""
+    """Wrap a sink and prefix the first message with lock-state emoji."""
 
     def __init__(self, sink: ResponseSink, emoji: str, max_chars: int) -> None:
         self._sink = sink
         self._emoji = emoji
         self._max_chars = max_chars
+        self._prefix_pending = True
         self.channel_id = sink.channel_id
 
     async def send(self, content: str, thread_id: str | None = None, reply_to_id: str | None = None) -> None:
         text = content or ""
         prefix = f"{self._emoji} "
-        budget = max(self._max_chars - len(prefix), 1)
-        for chunk in chunk_text(text, budget):
-            await self._sink.send(f"{prefix}{chunk}", thread_id=thread_id, reply_to_id=reply_to_id)
+        if self._prefix_pending:
+            self._prefix_pending = False
+            budget = max(self._max_chars - len(prefix), 1)
+            chunks = chunk_text(text, budget)
+            first, rest = chunks[0], chunks[1:]
+            await self._sink.send(f"{prefix}{first}", thread_id=thread_id, reply_to_id=reply_to_id)
+            for chunk in rest:
+                await self._sink.send(chunk, thread_id=thread_id, reply_to_id=reply_to_id)
+            return
+        for chunk in chunk_text(text, self._max_chars):
+            await self._sink.send(chunk, thread_id=thread_id, reply_to_id=reply_to_id)
 
     def capabilities(self) -> Capabilities:
         return self._sink.capabilities()

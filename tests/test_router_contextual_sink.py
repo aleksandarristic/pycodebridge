@@ -125,6 +125,36 @@ def test_contextual_sink_overrides_channel_scope_for_thread_rooms():
     assert wrapped.channel_id == "discord:parent:thread-1"
 
 
+def test_contextual_sink_lock_prefix_only_applies_to_first_output_message():
+    sink = _FakeSink(Capabilities(threads=False, replies=True, uploads=False, downloads=False, typing=False))
+    event = MessageEvent(
+        platform="discord",
+        content="hi",
+        channel_id="chan",
+        channel_name="code-repo",
+        author_id="user",
+        author_is_bot=False,
+        is_dm=False,
+        message_id="msg-1",
+        platform_thread_id="",
+        guild_id="guild",
+    )
+    wrapped = build_contextual_sink(event, sink, max_chars=10, lock_emoji="🔒")
+
+    async def run():
+        await wrapped.send("abcdefghijk")
+        await wrapped.send("second")
+
+    asyncio.run(run())
+    assert sink.sent == [
+        ("🔒 abcdefgh", None, "msg-1"),
+        ("ij", None, "msg-1"),
+        ("k", None, "msg-1"),
+        ("second", None, "msg-1"),
+    ]
+    assert all(len(content) <= 10 for content, _, _ in sink.sent)
+
+
 def test_normalize_event_context_uses_parent_channel_metadata_for_threads():
     parent = _FakeDiscordChannel(is_private=True, channel_id="chan-parent", channel_name="code-repo")
     thread = _FakeDiscordChannel(

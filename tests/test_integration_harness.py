@@ -27,6 +27,7 @@ from types import MethodType
 from types import SimpleNamespace
 
 from codebridge import config as cfgmod
+from codebridge.agents.base import NormalizedEvent
 from codebridge.agents.claude import ClaudeBackend
 from codebridge.agents.gemini import GeminiBackend
 from codebridge.codex import CodexBackend, Options, Runner
@@ -2172,6 +2173,30 @@ def test_run_codex_success_without_output_sends_terminal_notice(tmp_path):
     assert any("Use `!c logs` for raw details." in t for t in texts)
 
 
+def test_streamed_answer_and_thinking_outputs_are_emoji_prefixed(tmp_path):
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    evt = NormalizedEvent(type="message", texts=["Here is the answer."], thinking=["checking context"])
+
+    async def run():
+        await router.on_jsonl(
+            sink,
+            "chan",
+            "default",
+            "repo",
+            None,
+            "{}",
+            True,
+            evt=evt,
+            coalescer=None,
+        )
+
+    asyncio.run(run())
+    texts = [msg for msg, _, _ in sink.sent]
+    assert "💬 Here is the answer." in texts
+    assert "💭 *thinking: checking context*" in texts
+
+
 def test_integration_budget_notice_precedes_terminal_summary(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -3111,7 +3136,8 @@ def test_integration_repo_help_chunks_stay_within_limit_with_lock_prefix(tmp_pat
     texts = [msg for msg, _, _ in sink.sent]
     assert len(texts) > 1
     assert all(len(t) <= 120 for t in texts)
-    assert all(t.startswith("🔒 ") for t in texts if t)
+    assert texts[0].startswith("🔒 ")
+    assert all(not t.startswith("🔒 ") for t in texts[1:] if t)
 
 
 def test_integration_contextual_sink_chunks_raw_send_globally(tmp_path):

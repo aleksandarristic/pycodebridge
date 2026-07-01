@@ -135,6 +135,8 @@ _CLAUDE_UTC_RESET_RE = re.compile(
 _CENTRAL_EUROPE_TZ = ZoneInfo("Europe/Berlin")
 
 _TOOL_CALL_LABEL_KEYS = ("command", "file_path", "path", "url", "query", "description", "prompt")
+_ANSWER_PREFIX = "💬 "
+_THINKING_PREFIX = "💭 "
 
 
 def _format_tool_call_label(name: str, inp: Dict[str, Any]) -> str:
@@ -3505,6 +3507,8 @@ class Router:
             if relay_output:
                 # Flush prompts immediately so the user is not left waiting on
                 # the idle window while Codex blocks for input.
+                if not awaiting:
+                    text = f"{_ANSWER_PREFIX}{text}"
                 await self._emit_output(
                     sink, channel_id, session, repo_name, entry, text, coalescer, flush=awaiting
                 )
@@ -3526,7 +3530,7 @@ class Router:
                 if relay_output:
                     await self._emit_output(
                         sink, channel_id, session, repo_name, entry,
-                        f"*thinking: {text[:800]}*", coalescer,
+                        f"{_THINKING_PREFIX}*thinking: {text[:800]}*", coalescer,
                     )
 
     def _mark_stream_result_terminal(
