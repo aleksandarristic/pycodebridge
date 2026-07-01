@@ -2,12 +2,14 @@
 
 import asyncio
 import contextlib
+import io
 import os
 import re
 import shutil
 import shlex
 import subprocess
 import time
+from collections import deque
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -331,6 +333,12 @@ class Router:
             cooldown_seconds=cfg.discord.totp_cooldown_seconds,
         )
         self._codex_error_log_path = os.path.join(self.cfg.state.log_dir, "codex_errors.log") if self.cfg.state.log_dir else ""
+        self._loop_monitor_task: Optional[asyncio.Task] = None
+        self._loop_lag_last: float = 0.0
+        self._loop_lag_last_at: float = 0.0
+        self._loop_lag_max: float = 0.0
+        self._loop_lag_max_at: float = 0.0
+        self._loop_lag_spikes: deque = deque(maxlen=10)
         self._budget_usage_channel: Dict[str, int] = {}
         self._budget_usage_user: Dict[str, int] = {}
         self._budget_thresholds_channel: Dict[str, tuple[int, int]] = {}
@@ -361,6 +369,7 @@ class Router:
         """Handle an incoming message event."""
         if event.author_is_bot:
             return
+        self._ensure_loop_monitor()
         event = normalize_event_context(event)
         await self._migrate_legacy_thread_scope(event)
         lock_emoji = ""
@@ -2174,8 +2183,121 @@ caveats.
             return
         await self.reply(sink, f"Agent is running for session '{session}'.")
 
-    async def handle_doctor(self, sink: ResponseSink, session: str, repo_name: str, repo_path: str) -> None:
-        """Show bridge-local diagnostics for a potentially stuck session."""
+    _LOOP_MONITOR_INTERVAL_SECONDS = 2.0
+    _LOOP_LAG_SPIKE_THRESHOLD_SECONDS = 0.5
+
+    def _ensure_loop_monitor(self) -> None:
+        """Lazily start the event-loop lag sampler on the first handled message."""
+        if self._loop_monitor_task is not None and not self._loop_monitor_task.done():
+            return
+        try:
+            self._loop_monitor_task = asyncio.create_task(self._loop_health_monitor())
+        except RuntimeError:
+            # No running event loop (e.g. constructed outside async context); skip.
+            pass
+
+    async def _loop_health_monitor(self) -> None:
+        """Sample event-loop scheduling lag so doctor can report stalls after the fact.
+
+        A blocking (synchronous) call anywhere delays every other task on this
+        single-threaded loop, including this sampler. Comparing actual vs.
+        requested sleep duration turns that delay into a measurable signal.
+        """
+        loop = asyncio.get_running_loop()
+        while True:
+            target = self._LOOP_MONITOR_INTERVAL_SECONDS
+            t0 = loop.time()
+            await asyncio.sleep(target)
+            lag = max(0.0, (loop.time() - t0) - target)
+            now = time.time()
+            self._loop_lag_last = lag
+            self._loop_lag_last_at = now
+            if lag > self._loop_lag_max:
+                self._loop_lag_max = lag
+                self._loop_lag_max_at = now
+            if lag >= self._LOOP_LAG_SPIKE_THRESHOLD_SECONDS:
+                self._loop_lag_spikes.append((now, lag))
+                self.logger.warning("loop.lag_spike", extra={"lag_seconds": round(lag, 3)})
+
+    def _loop_health_text(self) -> str:
+        if self._loop_lag_last_at <= 0:
+            return "no samples yet"
+        last_ago = time.time() - self._loop_lag_last_at
+        parts = [f"last {self._loop_lag_last * 1000:.0f}ms ({self._format_duration(int(last_ago))} ago)"]
+        if self._loop_lag_max > 0:
+            max_ago = time.time() - self._loop_lag_max_at
+            parts.append(f"worst {self._loop_lag_max * 1000:.0f}ms ({self._format_duration(int(max_ago))} ago)")
+        if self._loop_lag_spikes:
+            spikes = [
+                f"{self._format_duration(int(time.time() - ts))} ago={lag * 1000:.0f}ms"
+                for ts, lag in list(self._loop_lag_spikes)[-3:]
+            ]
+            parts.append("recent spikes: " + ", ".join(spikes))
+        return "; ".join(parts)
+
+    @staticmethod
+    def _task_frame_desc(task: "asyncio.Task") -> str:
+        stack = task.get_stack(limit=1)
+        if not stack:
+            return "no frame (awaiting a future/lock)"
+        frame = stack[0]
+        return f"{os.path.basename(frame.f_code.co_filename)}:{frame.f_lineno} in {frame.f_code.co_name}()"
+
+    def _asyncio_task_overview(self, limit: int = 6) -> tuple[int, list[str]]:
+        """Return (pending task count, short 'where is it parked' lines) excluding this task."""
+        current = asyncio.current_task()
+        pending = [t for t in asyncio.all_tasks() if t is not current and not t.done()]
+        lines = [f"{t.get_name()}: {self._task_frame_desc(t)}" for t in sorted(pending, key=lambda t: t.get_name())[:limit]]
+        return len(pending), lines
+
+    def _asyncio_task_full_dump(self) -> str:
+        """Render full stacks for every live task, for the doctor dump file."""
+        current = asyncio.current_task()
+        buf = io.StringIO()
+        for t in sorted(asyncio.all_tasks(), key=lambda t: t.get_name()):
+            marker = " (this doctor-dump task)" if t is current else ""
+            buf.write(f"=== task {t.get_name()}{marker} done={t.done()} ===\n")
+            try:
+                t.print_stack(file=buf)
+            except Exception as exc:
+                buf.write(f"<failed to print stack: {exc}>\n")
+            buf.write("\n")
+        return buf.getvalue()
+
+    @staticmethod
+    def _tail_text_file(path: Path, max_lines: int = 200, max_bytes: int = 131072) -> str:
+        """Read up to the last max_bytes of a file without loading it whole."""
+        try:
+            size = path.stat().st_size
+            with path.open("rb") as fh:
+                if size > max_bytes:
+                    fh.seek(size - max_bytes)
+                data = fh.read()
+        except FileNotFoundError:
+            return f"(not found: {path})"
+        except Exception as exc:
+            return f"(failed to read {path}: {exc})"
+        lines = data.decode("utf-8", errors="replace").splitlines()
+        return "\n".join(lines[-max_lines:])
+
+    def _tail_bridge_log(self, max_lines: int = 200) -> str:
+        log_dir = self.cfg.state.log_dir
+        if not log_dir:
+            return "(state.log_dir not configured)"
+        return self._tail_text_file(Path(log_dir) / "bridge.log", max_lines=max_lines)
+
+    def _tail_latest_session_log(self, channel_id: str, session: str, repo_name: str, max_lines: int = 200) -> str:
+        paths = self._session_log.session_paths(channel_id, session, repo_name=repo_name)
+        for path in reversed(paths):
+            try:
+                if path.exists():
+                    return self._tail_text_file(path, max_lines=max_lines)
+            except Exception:
+                continue
+        return "(no session log file found)"
+
+    async def _doctor_report_lines(self, sink: ResponseSink, session: str, repo_name: str, repo_path: str) -> list[str]:
+        """Build the bridge-local diagnostics lines shared by `!c doctor` and `!c doctor dump`."""
         session = normalize_session(session or DEFAULT_SESSION)
         channel_id = sink.channel_id
         state = self.state.load()
@@ -2242,8 +2364,16 @@ caveats.
                 f"suppressed_progress={run_state.suppressed_progress_events}"
             )
 
+        pending_task_count, pending_task_lines = self._asyncio_task_overview()
+        loop_lag_recent = self._loop_lag_max > 0 and (time.time() - self._loop_lag_max_at) < 900
+
         next_step = "No obvious bridge-local fault."
-        if active is not None and not waiting and last_activity_idle >= 300:
+        if loop_lag_recent and self._loop_lag_max >= self._LOOP_LAG_SPIKE_THRESHOLD_SECONDS:
+            next_step = (
+                "The bridge event loop stalled recently (see event loop health below) — a blocking call is likely "
+                "the culprit, not this specific run. Run `!c doctor dump` for full task stacks to find it."
+            )
+        elif active is not None and not waiting and last_activity_idle >= 300:
             next_step = "Likely stuck with no recent agent events. Try `!c interrupt`, then `!c stop`, then `!c kill`, then `!c reset`."
         elif active is None and run_state is not None:
             next_step = "Tracked process is gone but run relay still exists. `!c kill` or `!c reset` should clear stale state."
@@ -2273,9 +2403,52 @@ caveats.
             f"- Usage: input {usage.input_tokens}, output {usage.output_tokens}, total {usage.total_tokens}" if usage else "- Usage: n/a",
             f"- Session logs: {', '.join(latest_session_paths)}" if latest_session_paths else "- Session logs: none found",
             f"- Latest audit: {latest_audit}",
+            f"- Event loop health: {self._loop_health_text()}",
+            f"- Other live tasks: {pending_task_count} pending"
+            + ("".join(f"\n  - {line}" for line in pending_task_lines) if pending_task_lines else ""),
             f"- Suggested next step: {next_step}",
         ]
+        return lines
+
+    async def handle_doctor(self, sink: ResponseSink, session: str, repo_name: str, repo_path: str) -> None:
+        """Show bridge-local diagnostics for a potentially stuck session."""
+        lines = await self._doctor_report_lines(sink, session, repo_name, repo_path)
         await self.reply(sink, "\n".join(lines))
+
+    async def handle_doctor_dump(self, sink: ResponseSink, session: str, repo_name: str, repo_path: str) -> None:
+        """Write a full diagnostic bundle (doctor fields + task stacks + log tails) to a file.
+
+        Meant to be copy/pasted or forwarded to an agent outside the bridge for
+        triage, so it favors completeness over Discord message-length limits.
+        """
+        session = normalize_session(session or DEFAULT_SESSION)
+        lines = await self._doctor_report_lines(sink, session, repo_name, repo_path)
+        bundle = io.StringIO()
+        bundle.write("\n".join(lines))
+        bundle.write("\n\n")
+        bundle.write(f"Bridge commit: {self._commit}\n")
+        bundle.write(f"Generated at: {datetime.now(timezone.utc).isoformat()}\n")
+        bundle.write("\n=== Live asyncio tasks (full stacks) ===\n")
+        bundle.write(self._asyncio_task_full_dump())
+        bundle.write("\n=== Recent bridge log tail ===\n")
+        bundle.write(self._tail_bridge_log())
+        bundle.write("\n=== Recent session log tail ===\n")
+        bundle.write(self._tail_latest_session_log(sink.channel_id, session, repo_name))
+        text = bundle.getvalue()
+
+        if not sink.capabilities().downloads:
+            await self.reply(sink, text)
+            return
+        fd, tmp_path = tempfile.mkstemp(prefix="doctor-dump-", suffix=".txt")
+        os.close(fd)
+        try:
+            Path(tmp_path).write_text(text, encoding="utf-8")
+            filename = f"doctor-{session}-{int(time.time())}.txt"
+            await self.reply(sink, f"Doctor dump for session '{session}' attached ({len(text)} bytes).")
+            await sink.send_file(tmp_path, filename)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(tmp_path)
 
     async def send_status(self, event: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str) -> None:
         """Send status summary for the channel and sessions."""

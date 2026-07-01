@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0132] Long-running Discord session can stay in "working for ..." state without meaningful output and without enough evidence to explain why.
+  - Completed: 2026-07-01
+  - Notes: Extended `!c doctor` with a live asyncio task/stack overview and an event-loop lag monitor (lazily started on first handled message, samples every 2s, tracks last/worst lag and recent spikes) so a bridge-wide stall is now visible and dated instead of just guessed at; the "suggested next step" heuristic now calls out a recent loop stall explicitly. Added `!c doctor dump [session]` which bundles the doctor fields, full per-task stack traces (`task.print_stack`), a bridge.log tail, and the session's JSONL tail into one file sent via the existing `send_file`/download capability (falls back to plain text if the transport lacks upload support) — meant to be copy/pasted or forwarded to an agent outside the bridge for triage.
+
 - [TASK-0131] Make single-mode repo execution direct by default.
   - Completed: 2026-06-29
   - Notes: Split regular-session worktree policy from dispatch by adding `worktrees.session_isolation` (default `false`). Ordinary chat, `start`, and `resume` now run in the mapped repo checkout unless that flag is explicitly enabled, while `@agent` dispatch still uses isolated task/worker worktrees. Added a direct-checkout repo conflict guard across channel/thread scopes, an explicit `!c feature <branch-name>` helper for optional branch creation, updated config/help/docs to explain the new policy, and covered the behavior with focused config, router, git-helper, command, and integration tests.

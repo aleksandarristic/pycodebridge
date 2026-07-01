@@ -378,7 +378,7 @@ def build_registry() -> Tuple[Dict[str, CommandSpec], List[CommandSpec]]:
             aliases=("budgets",),
         ),
         CommandSpec("peek", "peek [session]", "show active status and last output time", "General", _cmd_peek, AUTH_OPEN, aliases=("pk",)),
-        CommandSpec("doctor", "doctor [session]", "show stuck-run diagnostics for a session", "General", _cmd_doctor, AUTH_UNLOCK),
+        CommandSpec("doctor", "doctor [session] | doctor dump [session]", "show stuck-run diagnostics, or attach a full diagnostic dump", "General", _cmd_doctor, AUTH_UNLOCK),
         CommandSpec(
             "updates",
             "updates",
@@ -654,10 +654,16 @@ async def _cmd_peek(router: Any, message: MessageEvent, sink: ResponseSink, repo
 
 
 async def _cmd_doctor(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:
-    session = await _resolve_session_name(router, message, sink, rest.strip())
+    tokens = rest.strip().split(None, 1)
+    dump = bool(tokens) and tokens[0].lower() == "dump"
+    session_arg = tokens[1] if dump and len(tokens) > 1 else ("" if dump else rest.strip())
+    session = await _resolve_session_name(router, message, sink, session_arg)
     if not session:
         return
-    await router.handle_doctor(sink, session, repo_name, repo_path)
+    if dump:
+        await router.handle_doctor_dump(sink, session, repo_name, repo_path)
+    else:
+        await router.handle_doctor(sink, session, repo_name, repo_path)
 
 
 async def _cmd_unlock(router: Any, message: MessageEvent, sink: ResponseSink, repo_name: str, repo_path: str, rest: str) -> None:

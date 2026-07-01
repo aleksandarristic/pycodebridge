@@ -2053,7 +2053,66 @@ def test_integration_doctor_reports_stuck_run_diagnostics(tmp_path):
     assert any("- Queue status: none" in t for t in texts)
     assert any("- Run relay: present" in t for t in texts)
     assert any("- Session logs:" in t for t in texts)
+    assert any("- Event loop health:" in t for t in texts)
+    assert any("- Other live tasks:" in t for t in texts)
     assert any("- Suggested next step:" in t for t in texts)
+
+
+def test_integration_doctor_dump_sends_diagnostic_file(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    class _CapturingSink(_FakeSink):
+        def __init__(self, caps: Capabilities) -> None:
+            super().__init__(caps)
+            self.file_contents: str | None = None
+
+        async def send_file(self, path, filename, thread_id=None, reply_to_id=None):
+            with open(path, "r", encoding="utf-8") as fh:
+                self.file_contents = fh.read()
+            await super().send_file(path, filename, thread_id=thread_id, reply_to_id=reply_to_id)
+
+    router, _ = _build_router(tmp_path)
+    sink = _CapturingSink(Capabilities(threads=True, uploads=True, downloads=True, typing=True))
+    router.update_state("chan", "default", "repo", str(repo), "thread-1", "", "")
+    router._begin_run_relay("chan", "default")
+    router._session_log.append("chan", "default", "run.start", {"ok": True}, repo_name="repo")
+
+    async def run():
+        await router.handle_message(_discord_event("!c doctor dump", "code-repo"), sink)
+
+    asyncio.run(run())
+    assert len(sink.files) == 1
+    path, filename, _, _ = sink.files[0]
+    assert filename.startswith("doctor-default-")
+    assert not os.path.exists(path)  # temp file is cleaned up after sending
+    assert sink.file_contents is not None
+    assert "Doctor for session 'default':" in sink.file_contents
+    assert "Bridge commit:" in sink.file_contents
+    assert "=== Live asyncio tasks (full stacks) ===" in sink.file_contents
+    assert "=== Recent bridge log tail ===" in sink.file_contents
+    assert "=== Recent session log tail ===" in sink.file_contents
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("Doctor dump for session 'default' attached" in t for t in texts)
+
+
+def test_integration_doctor_dump_falls_back_to_text_without_downloads(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+
+    router, _ = _build_router(tmp_path)
+    sink = _FakeSink(Capabilities(threads=True, uploads=True, downloads=False, typing=True))
+    router.update_state("chan", "default", "repo", str(repo), "thread-1", "", "")
+
+    async def run():
+        await router.handle_message(_discord_event("!c doctor dump", "code-repo"), sink)
+
+    asyncio.run(run())
+    assert sink.files == []
+    texts = [msg for msg, _, _ in sink.sent]
+    assert any("=== Live asyncio tasks (full stacks) ===" in t for t in texts)
 
 
 def test_integration_late_progress_is_suppressed_after_terminal_summary(tmp_path):

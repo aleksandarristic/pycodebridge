@@ -234,7 +234,7 @@ TOTP not required (open in channel):
 - `!c stats [session]`
 - `!c budget [status]`
 - `!c peek [session]`
-- `!c doctor [session]`
+- `!c doctor [session]` / `!c doctor dump [session]`
 - `!c updates`
 - `!c agents`
 - `!c which-agent [session]`

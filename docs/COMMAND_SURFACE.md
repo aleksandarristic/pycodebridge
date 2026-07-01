@@ -32,7 +32,7 @@ Source of truth: `codebridge/commands/registry.py`.
 | `stats [session]` | `usage` | Channel | repo channel/thread | open | audit/state | likely redundant |
 | `budget ...` | `budgets` | Channel | repo channel/thread | open | audit/state | admin-only |
 | `peek [session]` | `pk` | Channel | repo channel/thread | open | state | likely redundant |
-| `doctor [session]` | none | Channel | repo channel/thread | open | bridge-local | convenience |
+| `doctor [session] \| doctor dump [session]` | none | Channel | repo channel/thread | unlock/default | bridge-local | convenience |
 | `updates` | `update`, `version`, `u` | Channel | repo channel/thread | open | bridge-local | convenience |
 | `health` | `diag` | Channel | repo channel/thread | open | bridge-local | convenience |
 | `config` | `cfg` | Channel | repo channel/thread | unlock/default | bridge-local | admin-only |
