@@ -9,6 +9,10 @@ Format:
 - [TASK-0000] Short task title.
   - Completed: YYYY-MM-DD
 
+- [TASK-0134] Add developer tooling to the pycodebridge container image.
+  - Completed: 2026-07-01
+  - Notes: Added `build-essential`, `python3-dev`, and `pkg-config` (native npm/pip builds were previously silently unsupported), `git-delta` (readable diffs), `tree`, `zip`/`unzip` (previously missing entirely), `sqlite3`, and `vim` (no editor/vi fallback existed) to the apt install list in `Dockerfile`. Verified all packages resolve against the image's current Debian base (trixie, via `python:3.12-slim`) and confirmed each binary installs and runs with a local `docker build`.
+
 - [TASK-0132] Long-running Discord session can stay in "working for ..." state without meaningful output and without enough evidence to explain why.
   - Completed: 2026-07-01
   - Notes: Extended `!c doctor` with a live asyncio task/stack overview and an event-loop lag monitor (lazily started on first handled message, samples every 2s, tracks last/worst lag and recent spikes) so a bridge-wide stall is now visible and dated instead of just guessed at; the "suggested next step" heuristic now calls out a recent loop stall explicitly. Added `!c doctor dump [session]` which bundles the doctor fields, full per-task stack traces (`task.print_stack`), a bridge.log tail, and the session's JSONL tail into one file sent via the existing `send_file`/download capability (falls back to plain text if the transport lacks upload support) — meant to be copy/pasted or forwarded to an agent outside the bridge for triage. Also see [TASK-0133], a concrete hang cause found during this investigation.
